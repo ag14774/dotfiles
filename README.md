@@ -12,10 +12,14 @@ exec zsh
 ```
 
 `install.sh` (idempotent) installs `Brewfile` packages + Python/JS language
-servers, fetches the zjstatus plugin and the Yazi flavor, symlinks `config/`
-into `~/.config` via GNU Stow, and appends a small managed block to `~/.zshrc`
-(sets `EDITOR=hx`, sources `~/.config/zsh/secrets.zsh`, and loads the
-`shell/*.zsh` functions).
+servers and the Yazi flavor, symlinks `config/` into `~/.config` via GNU Stow,
+and appends a small managed block to `~/.zshrc` (sets `EDITOR=hx`, sources
+`~/.config/zsh/secrets.zsh`, and loads the `shell/*.zsh` functions).
+
+The top bar (zjstatus) is loaded by `dev.kdl` straight from its release URL, so
+the first time you must grant its plugin permission once (the installer prints
+this): inside a zellij session run
+`zellij plugin -f "<zjstatus-url>"`, press `y`, then close that pane.
 
 ## Layout
 
