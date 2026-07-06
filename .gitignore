@@ -1,0 +1,8 @@
+# never commit secrets
+secrets.zsh
+# editor / OS cruft
+.DS_Store
+# backups
+*.bak
+*.bak.*
+*.bak-*

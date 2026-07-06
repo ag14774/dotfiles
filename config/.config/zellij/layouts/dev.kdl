@@ -1,0 +1,74 @@
+layout {
+    // The "ui" template wraps every arrangement with the top (zjstatus) + bottom
+    // (status-bar) bars; `children` marks where content panes go. Using it for both
+    // the base and the swap layout means the bars are defined once and kept on swap.
+    tab_template name="ui" {
+    // TOP BAR: zjstatus. Glyphs taken byte-exact from the xtrasmal gist.
+    // left = mode (skull locked / smiley unlocked) + tabs | center = session | right = heart + date
+    pane size=1 borderless=true {
+        plugin location="file:/Users/ageorgiou/.config/zellij/plugins/zjstatus.wasm" {
+            format_left   "{mode}{tabs}#[fg=#585b70]  +⌥t "
+            format_center "#[fg=#cba6f7,bold]{session}"
+            format_right  "#[fg=#cba6f7,bold] {datetime}#[fg=#94e2d5]↖ "
+            format_space  ""
+
+            border_enabled             "false"
+            hide_frame_for_single_pane "false"
+
+            mode_locked  "#[fg=#f38ba8,bold]  "
+            mode_normal  "#[fg=#f9e2af,bold]  "
+            mode_pane    "#[fg=#f9e2af,bold]  "
+            mode_tab     "#[fg=#f9e2af,bold]  "
+            mode_resize  "#[fg=#f9e2af,bold]  "
+            mode_move    "#[fg=#f9e2af,bold]  "
+            mode_scroll  "#[fg=#f9e2af,bold]  "
+            mode_search  "#[fg=#f9e2af,bold]  "
+            mode_session "#[fg=#f9e2af,bold]  "
+            mode_tmux    "#[fg=#f9e2af,bold]  "
+
+            tab_normal    "#[fg=#6C7086] {name} "
+            tab_active    "#[fg=#89b4fa,bold] {name} "
+            tab_separator "#[fg=#94e2d5,bold]⋮"
+
+            datetime          "#[fg=#6C7086,bold] {format} "
+            datetime_format   "%A, %d %b %Y %H:%M"
+            datetime_timezone "Europe/Zurich"
+        }
+    }
+
+    // content panes flow in between the two bars
+    children
+
+    // BOTTOM BAR: zellij keybinding hints
+    pane size=1 borderless=true {
+        plugin location="zellij:status-bar"
+    }
+    } // end tab_template "ui"
+
+    // BASE (4 panes = 2 bars + 2 content): main shell (left ~70%) | opencode (right 30%).
+    // This is what launches opencode; swap layouts only rearrange, they don't run commands.
+    ui {
+        pane split_direction="vertical" {
+            pane name="main" focus=true
+            pane name="opencode" size="30%" {
+                command "zsh"
+                args "-i" "-c" "opencode"
+                close_on_exit true
+            }
+        }
+    }
+
+    // When Helix opens, pane count hits 5 (2 bars + editor + main + opencode) and
+    // zellij snaps to this: editor top 70% / main bottom 30%; opencode stays put.
+    swap_tiled_layout name="with-editor" {
+        ui min_panes=5 {
+            pane split_direction="vertical" {
+                pane split_direction="horizontal" {
+                    pane name="editor"
+                    pane name="main" size="30%"
+                }
+                pane name="opencode" size="30%"
+            }
+        }
+    }
+}

@@ -1,0 +1,208 @@
+# worktree.plugin.zsh
+# Bare-repo + git worktree helpers for parallel development.
+#
+# Layout produced by `wtclone`:
+#   <proj>/.bare       the bare repo (shared history/objects; no working tree)
+#   <proj>/.git        a FILE: "gitdir: ./.bare"  (makes <proj> act as the repo root)
+#   <proj>/<branch>/   one working tree per branch (created by `wt`)
+#
+# Commands:
+#   wtclone <url> [dir]   set up a bare repo + worktree layout from a remote
+#   wt <branch> [base]    create/reuse a worktree for <branch> and cd into it
+#   wtrm <branch>         remove a worktree
+#   wtls                  list worktrees
+#   wtconvert [-y]        convert a normal clone (CWD) into this bare/worktree layout
+#   wthelp                show help for these commands
+
+# --- internal helpers (shared by wtclone + wtconvert so the two can't drift) ---
+# configure a .bare repo for the worktree workflow (run BEFORE fetching)
+_wt_setup_bare() {   # $1 = project dir that contains .bare
+  local d=$1
+  git --git-dir="$d/.bare" config core.bare true
+  git --git-dir="$d/.bare" config core.logallrefupdates true
+  git --git-dir="$d/.bare" config --unset core.worktree 2>/dev/null
+  git --git-dir="$d/.bare" config remote.origin.fetch '+refs/heads/*:refs/remotes/origin/*'
+}
+# after fetching: set origin/HEAD, then point the bare HEAD at the default branch
+_wt_finish_bare() {  # $1 = project dir that contains .bare
+  local d=$1 def
+  git -C "$d" remote set-head origin --auto 2>/dev/null
+  def=$(git --git-dir="$d/.bare" symbolic-ref --quiet refs/remotes/origin/HEAD 2>/dev/null)
+  def=${def#refs/remotes/origin/}
+  [[ -n $def ]] && git --git-dir="$d/.bare" symbolic-ref HEAD "refs/heads/$def"
+}
+
+# set up a bare repo + worktree layout from a remote (no local branches until `wt`)
+wtclone() {
+  emulate -L zsh
+  local url="$1" dir="${2:-$(basename "${1%.git}")}"
+  [[ -z "$url" ]] && { print -u2 "usage: wtclone <url> [dir]"; return 1; }
+  git init -q --bare "$dir/.bare" || return 1
+  print 'gitdir: ./.bare' > "$dir/.git"
+  git --git-dir="$dir/.bare" remote add origin "$url"
+  _wt_setup_bare "$dir"
+  git -C "$dir" fetch origin || { print -u2 "wtclone: fetch failed"; return 1; }
+  _wt_finish_bare "$dir"
+  print "worktree repo ready → cd ${dir} && wt <branch>"
+}
+
+# create/reuse a worktree for <branch> and cd into it
+wt() {
+  emulate -L zsh
+  local branch="$1" base="${2:-origin/HEAD}"
+  [[ -z "$branch" ]] && { print -u2 "usage: wt <branch> [base]"; return 1; }
+  local common proj wtdir
+  common=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null) \
+    || { print -u2 "wt: not inside a git repo"; return 1; }
+  proj=${common:h}
+  wtdir="$proj/${branch//\//-}"
+  if [[ ! -d "$wtdir" ]]; then
+    git -C "$proj" fetch -q origin
+    if git -C "$proj" show-ref -q --verify "refs/heads/$branch"; then
+      git -C "$proj" worktree add "$wtdir" "$branch" || return 1                               # existing local branch
+    elif git -C "$proj" show-ref -q --verify "refs/remotes/origin/$branch"; then
+      git -C "$proj" worktree add --track -b "$branch" "$wtdir" "origin/$branch" || return 1   # new branch tracking origin
+    else
+      git -C "$proj" worktree add -b "$branch" "$wtdir" "$base" || return 1                    # brand-new branch
+    fi
+  fi
+  cd "$wtdir"
+}
+
+# remove a worktree
+wtrm() {
+  emulate -L zsh
+  local branch="$1"
+  [[ -z "$branch" ]] && { print -u2 "usage: wtrm <branch>"; return 1; }
+  local common proj
+  common=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null) \
+    || { print -u2 "wtrm: not inside a git repo"; return 1; }
+  proj=${common:h}
+  git -C "$proj" worktree remove "$proj/${branch//\//-}" && print "removed ${branch//\//-}"
+}
+
+# list worktrees
+wtls() { git worktree list; }
+
+# convert a NORMAL clone (in the CWD) into the bare + worktree layout `wtclone` makes.
+# Safe by default: refuses a dirty tree, relocates ignored files into the new worktree,
+# and only deletes top-level TRACKED files (which are committed -> recoverable).
+#   wtconvert         convert, with a confirmation prompt
+#   wtconvert -y      convert without prompting
+wtconvert() {
+  emulate -L zsh
+
+  local yes=0
+  [[ $1 == (-y|--yes) ]] && { yes=1; shift }
+
+  # must be inside a normal (non-bare) work tree
+  [[ $(git rev-parse --is-inside-work-tree 2>/dev/null) == true ]] \
+    || { print -u2 "wtconvert: run this inside a normal (non-bare) git clone"; return 1 }
+  local root branch branchdir
+  root=$(git rev-parse --show-toplevel) || return 1
+  branch=$(git symbolic-ref --quiet --short HEAD) \
+    || { print -u2 "wtconvert: detached HEAD -- check out a branch first"; return 1 }
+  branchdir=${branch//\//-}
+  git -C "$root" remote get-url origin >/dev/null 2>&1 \
+    || { print -u2 "wtconvert: no 'origin' remote found"; return 1 }
+  [[ -d $root/.git ]] \
+    || { print -u2 "wtconvert: $root/.git is not a repo dir (already converted?)"; return 1 }
+
+  # refuse if not clean; ignored files are fine (relocated into the worktree below)
+  if [[ -n "$(git -C "$root" status --porcelain --untracked-files=all)" ]]; then
+    print -u2 "wtconvert: working tree is dirty -- commit or stash changes first:"
+    git -C "$root" status --short >&2
+    return 1
+  fi
+
+  # ignored paths to preserve (e.g. .env, node_modules/); whole ignored dirs come collapsed
+  local ig
+  ig=$(git -C "$root" -c core.quotePath=false status --ignored --porcelain 2>/dev/null \
+        | awk '/^!! /{print substr($0,4)}')
+  local -a ignored; ignored=(${(f)ig})
+
+  print "convert to worktree layout:"
+  print "  repo:   $root"
+  print "  branch: $branch  ->  $root/$branchdir"
+  (( $#ignored )) && print "  keep:   $#ignored ignored path(s) -> moved into the worktree"
+  if (( ! yes )); then
+    print -n "proceed? [y/N] "; local reply; read -r reply
+    [[ $reply == [yY]* ]] || { print "aborted"; return 1 }
+  fi
+
+  # 1) .git dir -> bare .bare, plus the "gitdir: ./.bare" pointer file, then set up
+  #    the bare repo exactly like wtclone does (shared helpers => identical result)
+  mv "$root/.git" "$root/.bare" || return 1
+  print 'gitdir: ./.bare' > "$root/.git"
+  _wt_setup_bare "$root"
+  git -C "$root" fetch origin 2>/dev/null || print -u2 "wtconvert: warning: fetch failed (using existing refs)"
+  _wt_finish_bare "$root"
+
+  # 2) recreate the current branch as a real worktree (fresh checkout of tracked files)
+  git -C "$root" worktree add "$root/$branchdir" "$branch" || {
+    print -u2 "wtconvert: 'worktree add' failed; repo is bare at $root (your files are still there)"; return 1
+  }
+
+  # 3) relocate preserved ignored files into the new worktree
+  local rel src dst
+  for rel in $ignored; do
+    rel=${rel%/}
+    src="$root/$rel"; dst="$root/$branchdir/$rel"
+    [[ -e $src ]] || continue
+    [[ -e $dst ]] && { print -u2 "  skip (already in worktree): $rel"; continue }
+    mkdir -p "${dst:h}" && mv "$src" "$dst"
+  done
+
+  # 4) drop the now-redundant top-level tracked files (all committed -> recoverable)
+  local entry
+  for entry in "$root"/*(DN); do
+    case ${entry:t} in
+      .bare|.git|$branchdir) continue ;;
+      *) rm -rf -- "$entry" ;;
+    esac
+  done
+
+  cd "$root/$branchdir"
+  print "done -> $PWD   (try: wtls, or wt <other-branch>)"
+}
+
+# show help for the worktree commands
+wthelp() {
+  emulate -L zsh
+  print -r -- 'worktree commands (bare repo + git worktrees):
+  wtclone <url> [dir]   bare-clone a repo and set it up for worktrees
+  wt <branch> [base]    create/reuse a worktree for <branch> and cd into it
+                        (base defaults to origin/HEAD; tab-completes branches)
+  wtrm <branch>         remove a worktree            (tab-completes worktrees)
+  wtls                  list worktrees
+  wtconvert [-y]        convert a normal clone (CWD) into the bare/worktree layout
+                        (needs a clean tree; keeps ignored files; stashes survive)
+  wthelp                show this help'
+}
+
+# ---- completions -------------------------------------------------------------
+# oh-my-zsh adds this plugin dir to $fpath and runs `compinit` BEFORE it sources
+# plugins, so `compdef` already exists here. `compdef _fn cmd` registers: "to
+# complete `cmd`, run the shell function `_fn`". Inside _fn we build an array of
+# candidates and hand them to `compadd`, which shows/inserts them.
+
+# complete `wt` with local + origin/* branch names
+_wt() {
+  local -a branches
+  branches=(${(f)"$(git for-each-ref --format='%(refname:short)' refs/heads refs/remotes/origin 2>/dev/null)"})
+  branches=(${branches:#origin/HEAD})   # drop the origin/HEAD symref first...
+  branches=(${branches#origin/})        # ...then strip the "origin/" prefix
+  compadd -a -- ${(u)branches}          # (u) = keep unique names only
+}
+(( $+functions[compdef] )) && compdef _wt wt
+
+# complete `wtrm` with the names of EXISTING worktrees (minus the bare repo)
+_wtrm() {
+  local -a wts
+  wts=(${(f)"$(git worktree list --porcelain 2>/dev/null | awk '/^worktree /{print $2}')"})
+  wts=(${wts:t})                        # :t = basename of each worktree path
+  compadd -a -- ${wts:#.bare}           # drop the ".bare" repo itself
+}
+(( $+functions[compdef] )) && compdef _wtrm wtrm
+
+true  # ensure the plugin always sources with a success status

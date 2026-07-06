@@ -1,0 +1,47 @@
+# ~/.config/helix/config.toml
+theme = "catppuccin_mocha"
+
+[editor]
+line-number = "relative"
+mouse = true
+cursorline = true
+color-modes = true          # colored mode indicator in the statusline
+true-color = true
+bufferline = "multiple"     # show the bufferline only when >1 buffer is open
+rulers = [100]
+text-width = 100
+end-of-line-diagnostics = "hint"
+
+[editor.statusline]
+left = ["mode", "spinner", "version-control", "file-name", "read-only-indicator", "file-modification-indicator"]
+center = []
+right = ["diagnostics", "selections", "position", "file-encoding", "file-type"]
+
+[editor.cursor-shape]
+insert = "bar"
+normal = "block"
+select = "underline"
+
+[editor.file-picker]
+hidden = false              # show dotfiles in the built-in picker (space+f)
+
+[editor.lsp]
+display-inlay-hints = true
+display-messages = true
+
+[editor.inline-diagnostics]
+cursor-line = "warning"
+other-lines = "error"
+
+[editor.soft-wrap]
+enable = true
+
+[editor.indent-guides]
+render = true
+character = "╎"
+
+# NOTE: no file-picker keybind here on purpose.
+# Yazi is summoned from zellij (Alt-y) and routes files into this instance,
+# so the editor needs no picker config. Built-in fallbacks remain:
+#   space+f  fuzzy file picker      space+b  buffer picker
+#   space+e  file explorer (25.07)  space+/  global search

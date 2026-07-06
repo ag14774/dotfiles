@@ -1,0 +1,11 @@
+# ~/.config/yazi/yazi.toml
+[mgr]
+show_hidden   = false
+sort_dir_first = true
+# Mouse click + scroll. When Yazi is summoned inside Helix, the picker script
+# resets Helix's mouse state on return so the two don't fight.
+mouse_events = ["click", "scroll"]
+
+# Standalone file opening (Enter on a file when NOT in --chooser-file mode)
+# uses $EDITOR, which we set to `hx`. The picker flow uses --chooser-file and
+# bypasses this entirely.
