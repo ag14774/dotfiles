@@ -182,7 +182,7 @@ keybinds clear-defaults=true {
         // The script routes the chosen file into the Helix "editor" pane,
         // lazy-spawning one if none exists yet.
         bind "Alt y" {
-            Run "bash" "/Users/ageorgiou/.config/zellij/yazi-picker.sh" {
+            Run "bash" "-c" "$HOME/.config/zellij/yazi-picker.sh" {
                 floating true
                 close_on_exit true
                 name "yazi"

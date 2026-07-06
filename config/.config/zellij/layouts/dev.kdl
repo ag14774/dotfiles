@@ -6,7 +6,7 @@ layout {
     // TOP BAR: zjstatus. Glyphs taken byte-exact from the xtrasmal gist.
     // left = mode (skull locked / smiley unlocked) + tabs | center = session | right = heart + date
     pane size=1 borderless=true {
-        plugin location="file:/Users/ageorgiou/.config/zellij/plugins/zjstatus.wasm" {
+        plugin location="https://github.com/dj95/zjstatus/releases/download/v0.23.0/zjstatus.wasm" {
             format_left   "{mode}{tabs}#[fg=#585b70]  +⌥t "
             format_center "#[fg=#cba6f7,bold]{session}"
             format_right  "#[fg=#cba6f7,bold] {datetime}#[fg=#94e2d5]↖ "

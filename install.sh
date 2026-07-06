@@ -3,9 +3,9 @@
 #
 #   git clone <repo> ~/dotfiles && ~/dotfiles/install.sh && exec zsh
 #
-# It: installs Brewfile packages + language servers, fetches the zjstatus plugin
-# and Yazi flavor, symlinks config/ into ~/.config via stow, and appends a small
-# idempotent managed block to ~/.zshrc.
+# It installs Brewfile packages + language servers and the Yazi flavor, symlinks
+# config/ into ~/.config via stow, and appends a small idempotent managed block
+# to ~/.zshrc. (zjstatus is loaded by dev.kdl directly from its release URL.)
 set -euo pipefail
 
 DOTFILES="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -25,12 +25,6 @@ uv tool install basedpyright 2>/dev/null || uv tool upgrade basedpyright 2>/dev/
 
 echo "==> JS-based language servers (npm -g)"
 npm install -g bash-language-server yaml-language-server vscode-langservers-extracted >/dev/null 2>&1 || true
-
-echo "==> zjstatus plugin"
-mkdir -p "$HOME/.config/zellij/plugins"
-[ -f "$HOME/.config/zellij/plugins/zjstatus.wasm" ] ||
-	curl -fsSL -o "$HOME/.config/zellij/plugins/zjstatus.wasm" \
-		"https://github.com/dj95/zjstatus/releases/latest/download/zjstatus.wasm"
 
 echo "==> Symlink config/ into ~/.config (stow)"
 mkdir -p "$HOME/.config"
