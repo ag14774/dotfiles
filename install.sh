@@ -58,4 +58,4 @@ echo "==> Done. Run: exec zsh"
 echo
 echo "One-time: enable the zjstatus top bar (grant its plugin permission)."
 echo "  Inside a zellij session, run this once, press 'y' to grant, then close the pane:"
-echo "      zellij plugin -f \"https://github.com/dj95/zjstatus/releases/download/v0.23.0/zjstatus.wasm\""
+echo "      zellij plugin -f -- \"https://github.com/dj95/zjstatus/releases/download/v0.23.0/zjstatus.wasm\""

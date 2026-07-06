@@ -19,7 +19,7 @@ and appends a small managed block to `~/.zshrc` (sets `EDITOR=hx`, sources
 The top bar (zjstatus) is loaded by `dev.kdl` straight from its release URL, so
 the first time you must grant its plugin permission once (the installer prints
 this): inside a zellij session run
-`zellij plugin -f "<zjstatus-url>"`, press `y`, then close that pane.
+`zellij plugin -f -- "<zjstatus-url>"`, press `y`, then close that pane.
 
 ## Layout
 
