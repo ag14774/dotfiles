@@ -66,6 +66,7 @@ C-r = ":reload-all"
 f = ":format"                         # format the whole file (LSP)
 s = ":toggle soft-wrap.enable"        # soft-wrap on/off
 l = ":toggle lsp.display-inlay-hints" # inlay type hints on/off (can be noisy)
+d = ":toggle end-of-line-diagnostics hint disable" # show/hide end-of-line diagnostic text (harper grammar etc.)
 w = ":set whitespace.render all"      # show whitespace (tabs/spaces/newlines)
 W = ":set whitespace.render none"     # hide whitespace again
 
