@@ -4,8 +4,9 @@
 #   git clone <repo> ~/dotfiles && ~/dotfiles/install.sh && exec zsh
 #
 # It installs Brewfile packages + language servers and the Yazi flavor, symlinks
-# config/ into ~/.config via stow, and appends a small idempotent managed block
-# to ~/.zshrc. (zjstatus is loaded by dev.kdl directly from its release URL.)
+# config/ into ~/.config via stow, sets up zoxide (replacing autojump), and
+# appends a small idempotent managed block to ~/.zshrc. (zjstatus is loaded by
+# dev.kdl directly from its release URL.)
 set -euo pipefail
 
 DOTFILES="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -33,6 +34,12 @@ stow --no-folding -d "$DOTFILES" -t "$HOME" config
 echo "==> Yazi flavor (catppuccin-mocha, from package.toml)"
 ya pkg install >/dev/null 2>&1 || true
 
+echo "==> zoxide: seed from autojump history (one-time, if present)"
+if [ -f "$HOME/Library/autojump/autojump.txt" ] &&
+	[ "$(zoxide query -l 2>/dev/null | wc -l | tr -d ' ')" = "0" ]; then
+	zoxide import autojump <"$HOME/Library/autojump/autojump.txt" 2>/dev/null || true
+fi
+
 echo "==> secrets.zsh (from example, if missing)"
 mkdir -p "$HOME/.config/zsh"
 [ -f "$HOME/.config/zsh/secrets.zsh" ] || cp "$DOTFILES/secrets.zsh.example" "$HOME/.config/zsh/secrets.zsh"
@@ -48,6 +55,7 @@ fi
 	printf '%s\n' "$B"
 	printf 'export EDITOR=hx\n'
 	printf 'export VISUAL=hx\n'
+	printf 'eval "$(zoxide init zsh --cmd j)"\n' # zoxide replaces autojump (j / ji); also feeds yazi's z
 	printf '[ -f "$HOME/.config/zsh/secrets.zsh" ] && source "$HOME/.config/zsh/secrets.zsh"\n'
 	printf 'source "%s/shell/worktree.zsh"\n' "$DOTFILES"
 	printf 'source "%s/shell/ocreload.zsh"\n' "$DOTFILES"
