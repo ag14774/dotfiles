@@ -188,6 +188,19 @@ keybinds clear-defaults=true {
                 height "86%"
             }
         }
+        // Floating cheatsheet: glow-rendered CHEATSHEET.md (scroll, q closes).
+        // bash -c so $HOME expands (zellij doesn't expand it in layout paths).
+        bind "Alt /" {
+            Run "bash" "-c" "glow -p -s $HOME/.config/glow/catppuccin-mocha.json $HOME/dotfiles/CHEATSHEET.md" {
+                floating true
+                close_on_exit true
+                name "cheatsheet"
+                x "10%"
+                y "8%"
+                width "80%"
+                height "84%"
+            }
+        }
     }
     shared_except "locked" "renametab" "renamepane" {
         bind "Ctrl g" { SwitchToMode "locked"; }

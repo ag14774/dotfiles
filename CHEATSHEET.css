@@ -1,0 +1,48 @@
+/* Catppuccin Mocha styling for the cheatsheet when rendered to HTML via
+   `cheat --pretty` (pandoc). This is where headings get real font sizes -- the
+   thing a terminal can't do. */
+:root {
+  --base:#1e1e2e; --mantle:#181825; --crust:#11111b;
+  --surface0:#313244; --surface1:#45475a; --surface2:#585b70;
+  --overlay0:#6c7086; --text:#cdd6f4; --subtext0:#a6adc8; --subtext1:#bac2de;
+  --red:#f38ba8; --peach:#fab387; --yellow:#f9e2af; --green:#a6e3a1;
+  --sapphire:#74c7ec; --blue:#89b4fa; --lavender:#b4befe; --mauve:#cba6f7;
+  --pink:#f5c2e7; --maroon:#eba0ac;
+}
+* { box-sizing: border-box; }
+html { color-scheme: dark; }
+body {
+  background: var(--base); color: var(--text);
+  font-family: -apple-system, "SF Pro Text", "Segoe UI", system-ui, sans-serif;
+  font-size: 16px; line-height: 1.6;
+  max-width: 960px; margin: 2rem auto; padding: 0 1.5rem 4rem;
+}
+h1,h2,h3,h4,h5,h6 { font-weight: 700; line-height: 1.25; margin: 1.6em 0 .5em; }
+h1 { font-size: 2.4rem; color: var(--red);   border-bottom: 2px solid var(--surface1); padding-bottom: .3em; }
+h2 { font-size: 1.8rem; color: var(--peach); border-bottom: 1px solid var(--surface0); padding-bottom: .2em; }
+h3 { font-size: 1.35rem; color: var(--yellow); }
+h4 { font-size: 1.1rem;  color: var(--green); }
+a { color: var(--blue); text-decoration: none; }
+a:hover { text-decoration: underline; }
+strong { color: var(--lavender); }
+em { color: var(--subtext1); }
+hr { border: none; border-top: 1px solid var(--surface1); margin: 2em 0; }
+blockquote {
+  border-left: 3px solid var(--mauve); margin: 1em 0; padding: .2em 1em;
+  background: var(--mantle); color: var(--subtext1); border-radius: 4px;
+}
+code {
+  font-family: "JetBrainsMono Nerd Font", "SF Mono", ui-monospace, monospace;
+  font-size: .9em; background: var(--mantle); color: var(--maroon);
+  padding: .12em .4em; border-radius: 5px;
+}
+pre { background: var(--mantle); border: 1px solid var(--surface0); padding: 1em; border-radius: 8px; overflow-x: auto; }
+pre code { background: none; color: var(--text); padding: 0; }
+table { border-collapse: collapse; width: 100%; margin: 1em 0; font-size: .95rem; }
+th, td { text-align: left; padding: .5em .8em; border: 1px solid var(--surface0); vertical-align: top; }
+thead th { background: var(--surface0); color: var(--lavender); }
+tbody tr:nth-child(even) { background: var(--mantle); }
+tbody tr:hover { background: var(--surface0); }
+ul, ol { padding-left: 1.4em; }
+li { margin: .25em 0; }
+li::marker { color: var(--mauve); }

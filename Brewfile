@@ -32,3 +32,4 @@ brew "uv"   # basedpyright is installed as a uv tool in install.sh
 brew "stow"      # symlink manager for the config/ package
 brew "git-delta" # delta: syntax-highlighted git diffs for reviewing changes (see ~/.config/git/config)
 brew "glow"      # render markdown in the terminal (the `cheat` command -> CHEATSHEET.md)
+brew "pandoc"    # md -> styled HTML for `cheat --pretty` (opens in the browser)

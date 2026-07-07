@@ -1,7 +1,7 @@
 # Terminal IDE Cheatsheet
 
 Stack: **zellij** (multiplexer) + **Helix** (`hx`, editor) + **Yazi** (files) + **fzf** + **zoxide**.
-`★` = custom to this setup. Open this anytime: `hx ~/dotfiles/CHEATSHEET.md`.
+`★` = custom to this setup. Read it: `Alt-/` (floating) · `cheat` (pager) · `cheat --pretty` (browser, real fonts) · edit with `hx ~/dotfiles/CHEATSHEET.md`.
 
 > **You don't need to memorize most of this.** Each tool is self-documenting:
 > - Helix: press `Space`, `g`, `m`, `z`, `Ctrl-w`, or `+` and a menu pops up. `Space ?` = searchable command palette.
@@ -45,6 +45,7 @@ Stack: **zellij** (multiplexer) + **Helix** (`hx`, editor) + **Yazi** (files) + 
 | `Ctrl-g` | Lock ⇄ unlock (unlock to drive zellij directly) |
 | `Alt-h/j/k/l` or `Alt-←↓↑→` | Move focus between panes / switch tab |
 | ★ `Alt-y` | Yazi file picker (floating) |
+| ★ `Alt-/` | this cheatsheet (floating, glow-rendered; `q` closes) |
 | `Alt-f` | Toggle floating panes |
 | `Alt-n` / `Alt-t` | New pane / new tab |
 | `Alt-[` / `Alt-]` | Previous / next swap layout |
@@ -57,7 +58,11 @@ In pane mode: `n` new, `x` close, `d`/`r` split down/right, `f` fullscreen, `w` 
 
 ---
 
-## Helix — movement
+## Helix
+
+Modal, select→act. When stuck: `Space ?` = searchable command palette.
+
+### Movement
 
 | Key | Action |
 |---|---|
@@ -71,7 +76,7 @@ In pane mode: `n` new, `x` close, `d`/`r` split down/right, `f` fullscreen, `w` 
 | `Ctrl-o` / `Ctrl-i` | jumplist back / forward (great after `gd`) |
 | `%` | select whole file |
 
-## Helix — editing
+### Editing
 
 | Key | Action |
 |---|---|
@@ -88,7 +93,7 @@ In pane mode: `n` new, `x` close, `d`/`r` split down/right, `f` fullscreen, `w` 
 | `Ctrl-c` or `Space c` | toggle line comment (`Space C` = block comment) |
 | ★ `Ctrl-↑` / `Ctrl-↓` | move current line / selection up / down |
 
-## Helix — selection & multiple cursors (Helix is select→act)
+### Selection & multiple cursors
 
 | Key | Action |
 |---|---|
@@ -103,7 +108,7 @@ In pane mode: `n` new, `x` close, `d`/`r` split down/right, `f` fullscreen, `w` 
 **★ Select word → add each next occurrence (VSCode Ctrl-D):**
 `miw` (or double-click) → `*` → `v` → `n` `n` `n` … then `c`/`d` to edit them all.
 
-## Helix — search
+### Search
 
 | Key | Action |
 |---|---|
@@ -112,7 +117,7 @@ In pane mode: `n` new, `x` close, `d`/`r` split down/right, `f` fullscreen, `w` 
 | `*` | set search pattern to current selection |
 | `Space /` | global search across the workspace |
 
-## Helix — code intelligence (LSP)
+### Code intelligence (LSP)
 
 | Key | Action |
 |---|---|
@@ -124,7 +129,7 @@ In pane mode: `n` new, `x` close, `d`/`r` split down/right, `f` fullscreen, `w` 
 | `]d` / `[d` | next / previous diagnostic |
 | `Space d` / `Space D` | document / workspace diagnostics list |
 
-## Helix — files (buffers): switch / save / close
+### Files (buffers): switch / save / close
 
 | Key / cmd | Action |
 |---|---|
@@ -138,7 +143,7 @@ In pane mode: `n` new, `x` close, `d`/`r` split down/right, `f` fullscreen, `w` 
 | `:bco` | close all **other** files |
 | `:q` / `:q!` | close view / discard & close |
 
-## Helix — pickers (Space menu)
+### Pickers (Space menu)
 
 | Key | Action |
 |---|---|
@@ -150,7 +155,7 @@ In pane mode: `n` new, `x` close, `d`/`r` split down/right, `f` fullscreen, `w` 
 
 In a picker: `Ctrl-n`/`Ctrl-p` or arrows move · `Enter` open · `Ctrl-s`/`Ctrl-v` open in split · `Ctrl-t` toggle preview · `Esc` close.
 
-## Helix — ★ custom keys
+### ★ Custom keys
 
 | Key | Action |
 |---|---|
@@ -162,7 +167,7 @@ In a picker: `Ctrl-n`/`Ctrl-p` or arrows move · `Enter` open · `Ctrl-s`/`Ctrl-
 | ★ `+` `d` | toggle end-of-line diagnostics (harper grammar text) |
 | ★ `+` `w` / `+` `W` | show / hide whitespace |
 
-## Helix — reviewing git changes
+### Reviewing git changes
 
 - Change bars show in the gutter automatically (added / modified / deleted).
 - `]g` / `[g` — jump to next / previous change (`]G` / `[G` = last / first).
