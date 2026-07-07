@@ -1,0 +1,16 @@
+# ~/.config/git/config (XDG) -- stow-managed. Git merges this with ~/.gitconfig
+# (which holds your identity and is NOT tracked here). This only sets up delta as
+# the pager for reviewing diffs (e.g. opencode's edits): `git diff`, `git show`.
+[core]
+	pager = delta
+
+[interactive]
+	diffFilter = delta --color-only
+
+[delta]
+	navigate = true       # jump between files within a diff using n / N
+	line-numbers = true
+	side-by-side = true   # PyCharm-like; set to false for unified (better in narrow panes)
+
+[merge]
+	conflictstyle = zdiff3

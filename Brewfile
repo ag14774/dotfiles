@@ -29,4 +29,5 @@ brew "node" # provides npm for the JS-based LSPs (yaml/json/bash)
 
 # Tooling
 brew "uv"   # basedpyright is installed as a uv tool in install.sh
-brew "stow" # symlink manager for the config/ package
+brew "stow"      # symlink manager for the config/ package
+brew "git-delta" # delta: syntax-highlighted git diffs for reviewing changes (see ~/.config/git/config)

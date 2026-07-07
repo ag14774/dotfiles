@@ -9,3 +9,15 @@ mouse_events = ["click", "scroll"]
 # Standalone file opening (Enter on a file when NOT in --chooser-file mode)
 # uses $EDITOR, which we set to `hx`. The picker flow uses --chooser-file and
 # bypasses this entirely.
+
+# git.yazi fetchers -- compute per-file git status for the list (see init.lua).
+# `id` is omitted on purpose: Yazi 26.5.6 > v26.1.22, where it's deprecated.
+[[plugin.prepend_fetchers]]
+url   = "*"
+run   = "git"
+group = "git"
+
+[[plugin.prepend_fetchers]]
+url   = "*/"
+run   = "git"
+group = "git"
