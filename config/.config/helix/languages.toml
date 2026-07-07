@@ -29,9 +29,15 @@ typeCheckingMode = "standard"
 command = "ruff"
 args = ["server"]
 
+# Grammar/spell-checking for natural language in comments, docstrings, and prose.
+# Attach it to any language by adding "harper-ls" to that language's servers.
+[language-server.harper-ls]
+command = "harper-ls"
+args = ["--stdio"]
+
 [[language]]
 name = "python"
-language-servers = ["basedpyright", "ruff"]
+language-servers = ["basedpyright", "ruff", "harper-ls"]
 auto-format = true
 
 # ---------- Baseline languages ----------
@@ -56,3 +62,9 @@ auto-format = true
 name = "bash"
 auto-format = true
 formatter = { command = "shfmt", args = ["-i", "2", "-ci", "-"] }
+
+# ---------- Markdown ----------
+# marksman (built-in) + harper-ls for grammar/spelling in prose.
+[[language]]
+name = "markdown"
+language-servers = ["marksman", "harper-ls"]

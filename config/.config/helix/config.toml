@@ -11,11 +11,14 @@ bufferline = "multiple"     # show the bufferline only when >1 buffer is open
 rulers = [100]
 text-width = 100
 end-of-line-diagnostics = "hint"
+completion-replace = true        # accepting a completion replaces the whole word, not just inserts
+trim-trailing-whitespace = true  # strip trailing spaces (only on Helix's own saves)
 
 [editor.statusline]
 left = ["mode", "spinner", "version-control", "file-name", "read-only-indicator", "file-modification-indicator"]
 center = []
-right = ["diagnostics", "selections", "position", "file-encoding", "file-type"]
+right = ["diagnostics", "workspace-diagnostics", "selections", "register", "position", "total-line-numbers", "position-percentage", "file-encoding", "file-line-ending", "file-type"]
+separator = "│"
 
 [editor.cursor-shape]
 insert = "bar"
@@ -45,3 +48,27 @@ character = "╎"
 # so the editor needs no picker config. Built-in fallbacks remain:
 #   space+f  fuzzy file picker      space+b  buffer picker
 #   space+e  file explorer (25.07)  space+/  global search
+
+# ---------- Keybindings ----------
+# Move the current line -- or the whole selection -- up/down. Helix has no native
+# command for this, so it's the community delete+paste idiom (works for single
+# lines and multi-line selections; repeatable). Ctrl+arrows because zellij's
+# locked mode already owns Alt+h/j/k/l and Alt+arrows.
+# NOTE: this uses the default yank register, so it overwrites what you last yanked.
+[keys.normal]
+C-up   = ["extend_to_line_bounds", "delete_selection", "move_line_up", "paste_before"]
+C-down = ["extend_to_line_bounds", "delete_selection", "paste_after"]
+# Re-read files from disk (Helix has no autoreload) -- handy after opencode edits them.
+C-r = ":reload-all"
+
+# "+" opens a small toggles/tools menu (leaves the Space menu untouched).
+[keys.normal."+"]
+f = ":format"                         # format the whole file (LSP)
+s = ":toggle soft-wrap.enable"        # soft-wrap on/off
+l = ":toggle lsp.display-inlay-hints" # inlay type hints on/off (can be noisy)
+w = ":set whitespace.render all"      # show whitespace (tabs/spaces/newlines)
+W = ":set whitespace.render none"     # hide whitespace again
+
+[keys.select]
+C-up   = ["extend_to_line_bounds", "delete_selection", "move_line_up", "paste_before"]
+C-down = ["extend_to_line_bounds", "delete_selection", "paste_after"]

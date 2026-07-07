@@ -22,6 +22,7 @@ brew "zoxide"
 brew "ruff"
 brew "taplo"
 brew "marksman"
+brew "harper" # harper-ls: grammar/spell check in comments, docstrings & prose (Helix LSP)
 brew "shellcheck"
 brew "shfmt"
 brew "node" # provides npm for the JS-based LSPs (yaml/json/bash)
