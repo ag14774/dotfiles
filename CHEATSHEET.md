@@ -20,6 +20,7 @@ Stack: **zellij** (multiplexer) + **Helix** (`hx`, editor) + **Yazi** (files) + 
 | `gd` … `Ctrl-o` | Helix | Goto definition (incl. into `.venv` libs) … jump back |
 | `git diff` | terminal | Review changes (rendered by delta, side-by-side) |
 | ★ `j <dir>` / `ji` | shell | zoxide jump / interactive jump |
+| ★ `gcai` | git | AI commit msg (opencode) from staged diff → edit in Helix → commit (`gcai -y` = no edit) |
 
 ---
 
