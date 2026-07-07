@@ -164,7 +164,7 @@ In a picker: `Ctrl-n`/`Ctrl-p` or arrows move · `Enter` open · `Ctrl-s`/`Ctrl-
 | ★ `+` `f` | format the whole file |
 | ★ `+` `s` | toggle soft-wrap |
 | ★ `+` `l` | toggle inlay type hints |
-| ★ `+` `d` | toggle end-of-line diagnostics (harper grammar text) |
+| ★ `+` `d` | toggle end-of-line diagnostic text |
 | ★ `+` `w` / `+` `W` | show / hide whitespace |
 
 ### Reviewing git changes
