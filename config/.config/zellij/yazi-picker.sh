@@ -10,6 +10,12 @@
 # Debug: `touch ~/.cache/yazi-picker/DEBUG` to log to last-run.log; `rm` to silence.
 set -u
 
+# fzf's file-list config for Yazi's `z` (respect .gitignore; Alt-g toggles all>).
+# Sourced here because Alt-y runs this via `bash -c` with the zellij *session*
+# env, which predates ~/.zshrc's exports (zellij auto-starts before they run).
+# This guarantees Yazi's fzf sees them even in a pre-existing session.
+[ -f "$HOME/.config/fzf/fzf.env" ] && . "$HOME/.config/fzf/fzf.env"
+
 RESOLVE="$HOME/.config/zellij/pane-id.sh"
 CACHE="${XDG_CACHE_HOME:-$HOME/.cache}/yazi-picker"
 mkdir -p "$CACHE"

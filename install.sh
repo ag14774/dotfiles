@@ -55,7 +55,8 @@ fi
 	printf '%s\n' "$B"
 	printf 'export EDITOR=hx\n'
 	printf 'export VISUAL=hx\n'
-	printf 'eval "$(zoxide init zsh --cmd j)"\n' # zoxide replaces autojump (j / ji); also feeds yazi's z
+	printf 'eval "$(zoxide init zsh --cmd j)"\n'  # zoxide replaces autojump (j / ji); also feeds yazi's z
+	printf 'source "$HOME/.config/fzf/fzf.env"\n' # fzf file list: respect .gitignore (Alt-g toggles); also sourced by yazi-picker.sh
 	printf '[ -f "$HOME/.config/zsh/secrets.zsh" ] && source "$HOME/.config/zsh/secrets.zsh"\n'
 	printf 'source "%s/shell/worktree.zsh"\n' "$DOTFILES"
 	printf 'source "%s/shell/ocreload.zsh"\n' "$DOTFILES"
