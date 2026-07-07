@@ -60,6 +60,7 @@ fi
 	printf '[ -f "$HOME/.config/zsh/secrets.zsh" ] && source "$HOME/.config/zsh/secrets.zsh"\n'
 	printf 'source "%s/shell/worktree.zsh"\n' "$DOTFILES"
 	printf 'source "%s/shell/ocreload.zsh"\n' "$DOTFILES"
+	printf 'source "%s/shell/cheatsheet.zsh"\n' "$DOTFILES"
 	printf '%s\n' "$E"
 } >>"$ZSHRC"
 
