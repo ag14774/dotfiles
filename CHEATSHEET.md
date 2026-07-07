@@ -85,7 +85,7 @@ In pane mode: `n` new, `x` close, `d`/`r` split down/right, `f` fullscreen, `w` 
 | `>` / `<` / `=` | indent / unindent / format selection |
 | `~` | switch case |
 | `Space y` / `Space p` / `Space R` | yank / paste / **replace selection** — system clipboard |
-| `Space c` | toggle comment |
+| `Ctrl-c` or `Space c` | toggle line comment (`Space C` = block comment) |
 | ★ `Ctrl-↑` / `Ctrl-↓` | move current line / selection up / down |
 
 ## Helix — selection & multiple cursors (Helix is select→act)
