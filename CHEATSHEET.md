@@ -23,6 +23,21 @@ Stack: **zellij** (multiplexer) + **Helix** (`hx`, editor) + **Yazi** (files) + 
 
 ---
 
+## Common patterns (Helix)
+
+| Goal | Keys |
+|---|---|
+| Go **N lines** down / up (read the relative gutter number) | `Nj` / `Nk`  (e.g. `12j`) |
+| Jump to an absolute line | `:N`⏎  or  `NG` |
+| Select **N lines** from here (current line included) | `Nx`  (e.g. `5x`) — `x` grabs the current line; count/extra `x` adds lines below |
+| Select lines → **copy to another file** | `Nx` → `Space y` → `:open other`⏎ → `Space p` |
+| Move current line / selection **up / down** | ★ `Ctrl-↑` / `Ctrl-↓` |
+| Select a word → **every next occurrence** (multi-cursor) | `miw` (or double-click) → `*` → `v` → `n` `n` … then `c`/`d` |
+| Back to **one cursor** (drop the extras) | `,`  (keep primary) · `;` collapses a selection to a cursor |
+| Reload files opencode changed | ★ `Ctrl-r` |
+
+---
+
 ## Zellij  (default mode = **locked** → keys pass through to Helix/Yazi)
 
 | Key | Action |
@@ -47,6 +62,7 @@ In pane mode: `n` new, `x` close, `d`/`r` split down/right, `f` fullscreen, `w` 
 | Key | Action |
 |---|---|
 | `h j k l` | left / down / up / right |
+| `Nj` / `Nk` | go N lines down / up (matches the relative gutter number) |
 | `w` `b` `e` | next word start / prev word start / word end (`W B E` = WORD) |
 | `f`/`t` `<char>` | find / till char (`F`/`T` = backwards); `Alt-.` repeat |
 | `gg` / `ge` | top / bottom of file; `G` = go to line number |
@@ -62,12 +78,13 @@ In pane mode: `n` new, `x` close, `d`/`r` split down/right, `f` fullscreen, `w` 
 | `i` `a` / `I` `A` | insert before/after selection · at line start/end |
 | `o` / `O` | open line below / above |
 | `d` / `c` / `y` | delete / change / yank (to internal register) |
+| `Alt-d` / `Alt-c` | delete / change **without yanking** (keeps your register) |
 | `p` / `P` | paste after / before |
 | `r` / `R` | replace char / replace with yanked |
 | `u` / `U` | undo / redo |
 | `>` / `<` / `=` | indent / unindent / format selection |
 | `~` | switch case |
-| `Space y` / `Space p` | yank / paste **system clipboard** |
+| `Space y` / `Space p` / `Space R` | yank / paste / **replace selection** — system clipboard |
 | `Space c` | toggle comment |
 | ★ `Ctrl-↑` / `Ctrl-↓` | move current line / selection up / down |
 
@@ -107,12 +124,25 @@ In pane mode: `n` new, `x` close, `d`/`r` split down/right, `f` fullscreen, `w` 
 | `]d` / `[d` | next / previous diagnostic |
 | `Space d` / `Space D` | document / workspace diagnostics list |
 
+## Helix — files (buffers): switch / save / close
+
+| Key / cmd | Action |
+|---|---|
+| `Space b` | buffer picker — jump to any open file |
+| `gn` / `gp` | next / previous buffer |
+| `ga` | alternate file (jump back to the previous one) |
+| `:w` / `:wa` | save current file / save all |
+| `:wq` / `:x` | save & close view (quits Helix if it's the last) |
+| `:wqa` / `:xa` | save all & quit Helix (pane then auto-closes) |
+| `:bc` | close current file (`:bc!` discards unsaved) |
+| `:bco` | close all **other** files |
+| `:q` / `:q!` | close view / discard & close |
+
 ## Helix — pickers (Space menu)
 
 | Key | Action |
 |---|---|
 | `Space f` / `Space F` | file picker (workspace root / cwd) |
-| `Space b` | buffer picker |
 | `Space g` | changed-files picker (git) |
 | `Space e` | file explorer |
 | `Space '` | reopen last picker |

@@ -37,7 +37,7 @@ cursor-line = "warning"
 other-lines = "error"
 
 [editor.soft-wrap]
-enable = true
+enable = false
 
 [editor.indent-guides]
 render = true
