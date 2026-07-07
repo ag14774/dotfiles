@@ -83,8 +83,11 @@ if [ -n "$editor_id" ]; then
 else
 	# Spawn Helix. New panes land in the BOTTOM slot (existing panes fill earlier
 	# slots, by order not by name), so flip it to the top -- but only if needed.
-	log "spawn: new-pane -n editor -- hx ${files[*]}"
-	zellij action new-pane -n editor -- hx "${files[@]}" 2>>"$ERRTO"
+	log "spawn: new-pane --close-on-exit -n editor -- hx ${files[*]}"
+	# --close-on-exit: when Helix quits (:q), close the pane instead of leaving it
+	# in zellij's "exited, press Enter to rerun" state. The swap layout then reflows
+	# back to main|opencode.
+	zellij action new-pane --close-on-exit -n editor -- hx "${files[@]}" 2>>"$ERRTO"
 	eid=""
 	for ((i = 0; i < 40; i++)); do
 		eid="$(bash "$RESOLVE" editor 2>>"$ERRTO")"
