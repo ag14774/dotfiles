@@ -11,6 +11,7 @@ brew "sevenzip"
 brew "poppler"
 brew "imagemagick"
 brew "resvg"
+brew "chafa" # Unicode-block image preview; forced inside zellij (its Sixel is buggy). See yazi-picker.sh
 brew "jq"
 brew "fd"
 brew "ripgrep"

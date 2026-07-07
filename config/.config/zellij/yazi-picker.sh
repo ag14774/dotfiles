@@ -46,7 +46,12 @@ log "=== picker start === session=${ZELLIJ_SESSION_NAME:-<unset>}"
 chooser="$(mktemp "${TMPDIR:-/tmp}/yazi-picker.XXXXXX")"
 trap 'rm -f "$chooser"' EXIT
 
-yazi --chooser-file="$chooser"
+# Force Yazi's Chafa (Unicode-block) preview instead of zellij's Sixel, which is
+# buggy and smears/tears on scroll (e.g. PDFs). Posing as kitty makes Yazi try
+# the kitty graphics protocol, which zellij doesn't support, so it falls back to
+# Chafa -- plain text cells that render + clear correctly. Yazi runs chafa with
+# `-f symbols`, so this TERM doesn't make chafa emit real kitty graphics.
+TERM=xterm-kitty yazi --chooser-file="$chooser"
 log "chooser: [$(cat "$chooser" 2>/dev/null)]"
 [ -s "$chooser" ] || {
 	log "no selection -> exit"
