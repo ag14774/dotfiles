@@ -1,30 +1,26 @@
 layout {
-    // The "ui" template wraps every arrangement with the top (zjstatus) + bottom
-    // (status-bar) bars; `children` marks where content panes go. Using it for both
-    // the base and the swap layout means the bars are defined once and kept on swap.
-    tab_template name="ui" {
-    // TOP BAR: zjstatus. Glyphs taken byte-exact from the xtrasmal gist.
-    // left = mode (skull locked / smiley unlocked) + tabs | center = session | right = heart + date
-    pane size=1 borderless=true {
+    // ============================ Reusable pieces ============================
+    // TOP BAR: zjstatus (size is set where the template is used, not here).
+    pane_template name="zjbar" borderless=true {
         plugin location="https://github.com/dj95/zjstatus/releases/download/v0.23.0/zjstatus.wasm" {
             format_left   "{mode}{tabs}#[fg=#585b70]  +⌥t "
             format_center "#[fg=#cba6f7,bold]{session}"
-            format_right  "#[fg=#cba6f7,bold] {datetime}#[fg=#94e2d5]↖ "
+            format_right  "#[fg=#cba6f7,bold] {datetime}#[fg=#94e2d5]↖ "
             format_space  ""
 
             border_enabled             "false"
             hide_frame_for_single_pane "false"
 
-            mode_locked  "#[fg=#f38ba8,bold]  "
-            mode_normal  "#[fg=#f9e2af,bold]  "
-            mode_pane    "#[fg=#f9e2af,bold]  "
-            mode_tab     "#[fg=#f9e2af,bold]  "
-            mode_resize  "#[fg=#f9e2af,bold]  "
-            mode_move    "#[fg=#f9e2af,bold]  "
-            mode_scroll  "#[fg=#f9e2af,bold]  "
-            mode_search  "#[fg=#f9e2af,bold]  "
-            mode_session "#[fg=#f9e2af,bold]  "
-            mode_tmux    "#[fg=#f9e2af,bold]  "
+            mode_locked  "#[fg=#f38ba8,bold]  "
+            mode_normal  "#[fg=#f9e2af,bold]  "
+            mode_pane    "#[fg=#f9e2af,bold]  "
+            mode_tab     "#[fg=#f9e2af,bold]  "
+            mode_resize  "#[fg=#f9e2af,bold]  "
+            mode_move    "#[fg=#f9e2af,bold]  "
+            mode_scroll  "#[fg=#f9e2af,bold]  "
+            mode_search  "#[fg=#f9e2af,bold]  "
+            mode_session "#[fg=#f9e2af,bold]  "
+            mode_tmux    "#[fg=#f9e2af,bold]  "
 
             tab_normal    "#[fg=#6C7086] {name} "
             tab_active    "#[fg=#89b4fa,bold] {name} "
@@ -35,27 +31,40 @@ layout {
             datetime_timezone "Europe/Zurich"
         }
     }
-
-    // content panes flow in between the two bars
-    children
-
-    // BOTTOM BAR: zellij keybinding hints
-    pane size=1 borderless=true {
+    // BOTTOM BAR: zellij keybinding hints.
+    pane_template name="keyhints" borderless=true {
         plugin location="zellij:status-bar"
     }
-    } // end tab_template "ui"
-
-    // BASE (4 panes = 2 bars + 2 content): main shell (left ~70%) | opencode (right 30%).
-    // This is what launches opencode; swap layouts only rearrange, they don't run commands.
-    ui {
-        pane split_direction="vertical" {
-            pane name="main" focus=true
-            pane name="opencode" size="30%" {
-                command "zsh"
-                args "-i" "-c" "opencode"
-                close_on_exit true
-            }
+    // CONTENT: main shell (left ~70%) | opencode (right 30%).
+    pane_template name="workspace" split_direction="vertical" {
+        pane name="main" focus=true
+        pane name="opencode" size="30%" {
+            command "zsh"
+            args "-i" "-c" "opencode"
+            close_on_exit true
         }
+    }
+
+    // Wrapper (top bar + content + bottom bar). Used by the initial tab and the
+    // editor swap layout so the bars stay put when the arrangement changes.
+    tab_template name="ui" {
+        zjbar size=1
+        children
+        keyhints size=1
+    }
+
+    // ============================ Tabs ============================
+    // Initial tab.
+    ui {
+        workspace
+    }
+
+    // NEW tabs (Alt-t / tab-mode n): same dev env, bars included. new_tab_template
+    // is a full blueprint (no `children`), so main is named here too.
+    new_tab_template {
+        zjbar size=1
+        workspace
+        keyhints size=1
     }
 
     // When Helix opens, pane count hits 5 (2 bars + editor + main + opencode) and

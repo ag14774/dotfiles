@@ -38,10 +38,16 @@ dump() {
 	log "$1"
 	zellij action list-panes -c -g 2>>"$ERRTO" >>"$LOG"
 }
-# Row (Y) of the non-plugin pane named $1, or empty if not found.
-pane_y() { zellij action list-panes --json 2>>"$ERRTO" | jq -r --arg n "$1" '.[]|select(.is_plugin==false and .title==$n)|.pane_y' | head -n1; }
+# Row (Y) of the non-plugin pane named $1 in the current tab ($TAB), or empty.
+pane_y() { zellij action list-panes --json 2>>"$ERRTO" | jq -r --arg n "$1" --arg t "${TAB:-}" '.[]|select(.is_plugin==false and .title==$n)|select($t=="" or ((.tab_id|tostring)==$t))|.pane_y' | head -n1; }
 
 log "=== picker start === session=${ZELLIJ_SESSION_NAME:-<unset>}"
+
+# Scope everything to the tab Alt-y was pressed in: the picker runs in a floating
+# pane whose id is $ZELLIJ_PANE_ID; look it up to get our tab_id. This stops the
+# "editor" lookup from matching a Helix running in another tab. Empty => any tab.
+TAB="$(zellij action list-panes --json 2>>"$ERRTO" | jq -r --arg me "${ZELLIJ_PANE_ID:-}" '.[]|select((.id|tostring)==$me)|.tab_id' | head -n1)"
+log "current tab=[$TAB] (my pane_id=${ZELLIJ_PANE_ID:-<unset>})"
 
 chooser="$(mktemp "${TMPDIR:-/tmp}/yazi-picker.XXXXXX")"
 trap 'rm -f "$chooser"' EXIT
@@ -68,7 +74,7 @@ done <"$chooser"
 }
 log "files: ${files[*]}"
 
-editor_id="$(bash "$RESOLVE" editor 2>>"$ERRTO")"
+editor_id="$(bash "$RESOLVE" editor "$TAB" 2>>"$ERRTO")"
 log "resolved editor=[$editor_id]"
 
 if [ -n "$editor_id" ]; then
@@ -90,7 +96,7 @@ else
 	zellij action new-pane --close-on-exit -n editor -- hx "${files[@]}" 2>>"$ERRTO"
 	eid=""
 	for ((i = 0; i < 40; i++)); do
-		eid="$(bash "$RESOLVE" editor 2>>"$ERRTO")"
+		eid="$(bash "$RESOLVE" editor "$TAB" 2>>"$ERRTO")"
 		[ -n "$eid" ] && break
 		sleep 0.05
 	done
