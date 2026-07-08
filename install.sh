@@ -62,6 +62,7 @@ fi
 	printf 'source "%s/shell/ocreload.zsh"\n' "$DOTFILES"
 	printf 'source "%s/shell/cheatsheet.zsh"\n' "$DOTFILES"
 	printf 'source "%s/shell/gca.zsh"\n' "$DOTFILES"
+	printf 'source "%s/shell/reset.zsh"\n' "$DOTFILES"
 	printf '%s\n' "$E"
 } >>"$ZSHRC"
 
