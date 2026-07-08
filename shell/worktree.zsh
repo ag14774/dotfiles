@@ -9,6 +9,7 @@
 # Commands:
 #   wtclone <url> [dir]   set up a bare repo + worktree layout from a remote
 #   wt <branch> [base]    create/reuse a worktree for <branch> and cd into it
+#                         (seeds $WT_SEED files -- .env etc. -- into new worktrees)
 #   wtrm <branch>         remove a worktree
 #   wtls                  list worktrees
 #   wtconvert [-y]        convert a normal clone (CWD) into this bare/worktree layout
@@ -46,6 +47,29 @@ wtclone() {
   print "worktree repo ready → cd ${dir} && wt <branch>"
 }
 
+# Untracked/ignored files git won't carry into a new worktree but you want there
+# anyway (secrets, local config). Globs allowed; override in ~/.zshrc. Do NOT list
+# .venv/node_modules -- recreate those (uv sync / npm install), don't copy them.
+(( $+WT_SEED )) || typeset -ga WT_SEED=(.env '.env.*' .envrc)
+
+# copy WT_SEED matches from $1 (source worktree) into $2 (new worktree), skipping
+# any that already exist so each worktree keeps its own copies.
+_wt_seed() {
+  emulate -L zsh
+  setopt local_options null_glob
+  local src=$1 dest=$2 pat f rel n=0
+  [[ -n $src && -d $src && $src != $dest ]] || return 0
+  for pat in $WT_SEED; do
+    for f in $src/${~pat}; do
+      rel=${f#$src/}
+      [[ -e $dest/$rel ]] && continue
+      mkdir -p "$dest/${rel:h}" && cp -R "$f" "$dest/$rel" && (( n++ ))
+    done
+  done
+  (( n )) && print "wt: seeded $n local file(s) from ${src:t}/ (WT_SEED)"
+  return 0
+}
+
 # create/reuse a worktree for <branch> and cd into it
 wt() {
   emulate -L zsh
@@ -65,6 +89,10 @@ wt() {
     else
       git -C "$proj" worktree add --no-track -b "$branch" "$wtdir" "$base" || return 1         # brand-new branch: --no-track so it doesn't inherit the base's upstream; first push sets origin/<branch> (push.autoSetupRemote)
     fi
+    # seed untracked local files (.env, etc.) from the current (or any) worktree
+    local src; src=$(git rev-parse --show-toplevel 2>/dev/null)
+    [[ -z $src ]] && { local d; for d in $proj/*(N/); do [[ $d == $wtdir ]] || { src=$d; break }; done; }
+    _wt_seed "$src" "$wtdir"
   fi
   cd "$wtdir"
 }
@@ -172,7 +200,8 @@ wthelp() {
   print -r -- 'worktree commands (bare repo + git worktrees):
   wtclone <url> [dir]   bare-clone a repo and set it up for worktrees
   wt <branch> [base]    create/reuse a worktree for <branch> and cd into it
-                        (base defaults to origin/HEAD; tab-completes branches)
+                        (base defaults to origin/HEAD; tab-completes branches;
+                         seeds $WT_SEED files -- .env etc. -- into new worktrees)
   wtrm <branch>         remove a worktree            (tab-completes worktrees)
   wtls                  list worktrees
   wtconvert [-y]        convert a normal clone (CWD) into the bare/worktree layout
