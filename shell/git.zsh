@@ -1,14 +1,15 @@
-# ~/dotfiles/shell/gca.zsh
-# gcai -- "git commit, AI-drafted". Summarise the *staged* diff with opencode,
-#         then open the draft in $EDITOR (Helix) to review/edit before committing.
-#   gcai       draft -> edit in Helix -> commit (git aborts if you empty it)
-#   gcai -y    draft -> commit immediately (no edit)
-# Named gcai (not gca) because oh-my-zsh's git plugin already aliases `gca`.
-# Needs staged changes (`git add` first), opencode, and jq.
-# The Vertex project/location are taken from $GOOGLE_CLOUD_PROJECT / $VERTEX_LOCATION
-# if set, else the defaults below -- scoped to the opencode call only (no global
-# export, so gcloud etc. are unaffected). Change the defaults for another env.
-unalias gcai 2>/dev/null # guard against any alias of the same name
+# git.zsh -- our git shortcuts (we don't load omz's git plugin).
+# git_current_branch normally comes from omz's lib; fallback for when it doesn't.
+(( $+functions[git_current_branch] )) || git_current_branch() {
+  git symbolic-ref --quiet --short HEAD 2>/dev/null || git rev-parse --short HEAD 2>/dev/null
+}
+
+# push/pull the current branch to/from origin/<same-name>
+alias ggpush='git push origin "$(git_current_branch)"'
+alias ggpull='git pull origin "$(git_current_branch)"'
+
+# gcai -- draft a commit message from the staged diff via opencode, then edit in
+# Helix before committing (gcai -y skips the edit). Needs staged changes + jq.
 gcai() {
 	local edit=1
 	if [ "$1" = "-y" ] || [ "$1" = "--yes" ]; then edit=0; fi
@@ -39,7 +40,7 @@ gcai() {
 	f="$(mktemp)"
 	printf '%s\n' "$msg" >"$f"
 	if [ "$edit" = 1 ]; then
-		git commit -e -F "$f" # opens Helix with the draft + status; commits on save
+		git commit -e -F "$f"
 	else
 		git commit -F "$f"
 	fi

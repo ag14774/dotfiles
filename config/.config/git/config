@@ -43,3 +43,8 @@
 
 [merge]
 	conflictstyle = zdiff3
+
+[push]
+	# First push of a new branch auto-creates origin/<branch> and sets its upstream,
+	# so `ggpush` / `git push` "just work" -- esp. for `wt` branches (made --no-track).
+	autoSetupRemote = true

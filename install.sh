@@ -61,7 +61,7 @@ fi
 	printf 'source "%s/shell/worktree.zsh"\n' "$DOTFILES"
 	printf 'source "%s/shell/ocreload.zsh"\n' "$DOTFILES"
 	printf 'source "%s/shell/cheatsheet.zsh"\n' "$DOTFILES"
-	printf 'source "%s/shell/gca.zsh"\n' "$DOTFILES"
+	printf 'source "%s/shell/git.zsh"\n' "$DOTFILES" # ggpush/ggpull + gcai (we don't load omz's git plugin)
 	printf 'source "%s/shell/reset.zsh"\n' "$DOTFILES"
 	printf '%s\n' "$E"
 } >>"$ZSHRC"

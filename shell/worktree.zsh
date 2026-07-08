@@ -63,7 +63,7 @@ wt() {
     elif git -C "$proj" show-ref -q --verify "refs/remotes/origin/$branch"; then
       git -C "$proj" worktree add --track -b "$branch" "$wtdir" "origin/$branch" || return 1   # new branch tracking origin
     else
-      git -C "$proj" worktree add -b "$branch" "$wtdir" "$base" || return 1                    # brand-new branch
+      git -C "$proj" worktree add --no-track -b "$branch" "$wtdir" "$base" || return 1         # brand-new branch: --no-track so it doesn't inherit the base's upstream; first push sets origin/<branch> (push.autoSetupRemote)
     fi
   fi
   cd "$wtdir"
