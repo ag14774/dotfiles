@@ -87,8 +87,17 @@ if [ -n "$editor_id" ]; then
 	done
 	zellij action focus-pane-id "$editor_id" 2>>"$ERRTO"
 else
-	# Spawn Helix. New panes land in the BOTTOM slot (existing panes fill earlier
-	# slots, by order not by name), so flip it to the top -- but only if needed.
+	# Spawn Helix, then snap the tab into the `with-editor` swap layout.
+	#
+	# Why the explicit swap: zellij only AUTO-applies a swap layout when the tab's
+	# tiled layout is "clean". If it's been manually restructured -- e.g. you closed
+	# opencode (Ctrl-D) and `ocreload` re-created it with `new-pane --direction
+	# right` -- the tab is flagged swap-layout-dirty, so adding the editor pane no
+	# longer triggers `with-editor`; the pane just gets raw-split into a flat row.
+	# So: only when the editor lands WRONG (flat row, or below main) do we call
+	# `next-swap-layout` to re-apply the swap (placing editor/main/opencode by NAME,
+	# bars included) and clear the dirty flag; a clean auto-applied layout is left
+	# untouched. The move-pane check stays as a fallback net.
 	log "spawn: new-pane --close-on-exit -n editor -- hx ${files[*]}"
 	# --close-on-exit: when Helix quits (:q), close the pane instead of leaving it
 	# in zellij's "exited, press Enter to rerun" state. The swap layout then reflows
@@ -103,18 +112,34 @@ else
 	log "post-spawn editor=[$eid] after $i tries"
 	dump "geometry after spawn:"
 	if [ -n "$eid" ]; then
-		sleep 0.15 # let the swap finish positioning
+		sleep 0.15 # let any auto-layout settle first
 		ey="$(pane_y editor)"
 		my="$(pane_y main)"
 		log "positions: editor_y=$ey main_y=$my"
-		if [ -n "$ey" ] && [ -n "$my" ] && [ "$ey" -gt "$my" ] 2>/dev/null; then
-			zellij action move-pane --pane-id "$eid" up 2>>"$ERRTO"
-			log "editor was below main -> moved up rc=$?"
+		# Only intervene if the editor did NOT already land on top of main. In a
+		# CLEAN session zellij auto-applies `with-editor` (editor above main) and we
+		# must NOT touch it -- calling next-swap-layout there would cycle it AWAY.
+		# editor_y >= main_y means it's wrong: either the flat 3-column from the
+		# ocreload dirty-swap bug (editor_y == main_y, side by side) or editor below
+		# main. Re-apply the swap to snap panes into place by name and un-dirty.
+		if [ -n "$ey" ] && [ -n "$my" ] && [ "$ey" -ge "$my" ] 2>/dev/null; then
+			log "editor not on top (ey>=my) -> re-applying with-editor swap"
+			zellij action next-swap-layout 2>>"$ERRTO"
+			sleep 0.15
+			# Fallback net for the nested (editor-below-main) case, if the swap did
+			# not take: nudge the editor up so it stays the prominent pane.
+			ey="$(pane_y editor)"
+			my="$(pane_y main)"
+			log "after swap: editor_y=$ey main_y=$my"
+			if [ -n "$ey" ] && [ -n "$my" ] && [ "$ey" -gt "$my" ] 2>/dev/null; then
+				zellij action move-pane --pane-id "$eid" up 2>>"$ERRTO"
+				log "editor still below main -> moved up rc=$?"
+			fi
 		else
-			log "editor already on top (or positions unknown) -> no move"
+			log "editor already on top (or positions unknown) -> leaving as-is"
 		fi
 		zellij action focus-pane-id "$eid" 2>>"$ERRTO"
-		dump "geometry after move:"
+		dump "geometry after placement:"
 	fi
 fi
 log "=== done ==="
