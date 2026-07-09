@@ -32,6 +32,7 @@ Stack: **zellij** (multiplexer) + **Helix** (`hx`, editor) + **Yazi** (files) + 
 | Jump to an absolute line | `:N`⏎  or  `NG` |
 | Select **N lines** from here (current line included) | `Nx`  (e.g. `5x`) — `x` grabs the current line; count/extra `x` adds lines below |
 | Select lines → **copy to another file** | `Nx` → `Space y` → `:open other`⏎ → `Space p` |
+| Replace a config **value** (after `=`) with the clipboard | `gl` → `mie` → `Space R`  ·  `.env`/toml/yaml (tree-sitter); `gl` lands on the value, `mi"` keeps quotes |
 | Move current line / selection **up / down** | ★ `Ctrl-↑` / `Ctrl-↓` |
 | Select a word → **every next occurrence** (multi-cursor) | `miw` (or double-click) → `*` → `v` → `n` `n` … then `c`/`d` |
 | Back to **one cursor** (drop the extras) | `,`  (keep primary) · `;` collapses a selection to a cursor |
@@ -103,7 +104,7 @@ Modal, select→act. When stuck: `Space ?` = searchable command palette.
 | `s` | select all regex matches **inside** selection |
 | `C` / `Alt-C` | add cursor on next / previous line |
 | `,` / `;` | keep only primary cursor / collapse to single cursor |
-| `miw` / `maw` | select inside / around word (`m` = match mode; also `mi(`, `ma"`, …) |
+| `miw` / `maw` | select inside / around word (`m` = match mode; also `mi(`, `ma"`, `mie` = value of a `.env`/config entry, …) |
 | `ms<char>` / `mr<a><b>` / `md<char>` | surround add / replace / delete |
 
 **★ Select word → add each next occurrence (VSCode Ctrl-D):**
