@@ -1,5 +1,5 @@
 # ~/.config/helix/config.toml
-theme = "catppuccin_mocha"
+theme = "catppuccin_mocha_dim"
 
 [editor]
 line-number = "relative"

@@ -1,0 +1,19 @@
+# Catppuccin Mocha with softened Python docstrings.
+#
+# Inherits upstream catppuccin_mocha and only restyles documentation comments.
+# Python docstrings are re-scoped to `comment.block.documentation` by the custom
+# query in runtime/queries/python/highlights.scm, so this restyles only real
+# docstrings without touching `#` comments or ordinary triple-quoted strings.
+#
+# Terminal text has no real transparency, so a "faded green" is faked by blending
+# catppuccin's string green (#a6e3a1) onto the editor background (#1e1e2e). Lower
+# blend % looks more transparent/dimmer, higher looks closer to full green:
+#    40%  #546d5c   (very faded)
+#    47%  #5f7c65   (dimmer  <- used here)
+#    55%  #698a6d   (dim, faded)
+#    70%  #7ea87f   (a muted green already in catppuccin's palette)
+#    85%  #92c590   (light, gently faded)
+#   100%  #a6e3a1   (full string green, not faded)
+inherits = "catppuccin_mocha"
+
+"comment.block.documentation" = { fg = "#5f7c65", modifiers = ["italic"] }
