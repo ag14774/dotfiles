@@ -52,12 +52,29 @@ log "current tab=[$TAB] (my pane_id=${ZELLIJ_PANE_ID:-<unset>})"
 chooser="$(mktemp "${TMPDIR:-/tmp}/yazi-picker.XXXXXX")"
 trap 'rm -f "$chooser"' EXIT
 
+# Persist Yazi's last directory PER PROJECT so the next Alt-y reopens where you
+# left off (no re-walking deep folders for a sibling file). Key the state file by
+# the git root of this tab's `main` pane (fallback: the picker's own cwd), so each
+# repo/worktree remembers its own last folder. --cwd-file writes it back on exit.
+projdir="$(zellij action list-panes --json 2>>"$ERRTO" | jq -r --arg t "${TAB:-}" '.[]|select(.is_plugin==false and .title=="main")|select($t=="" or ((.tab_id|tostring)==$t))|.pane_cwd' | head -n1)"
+[ -n "$projdir" ] && [ -d "$projdir" ] || projdir="$PWD"
+projroot="$(git -C "$projdir" rev-parse --show-toplevel 2>/dev/null || printf '%s' "$projdir")"
+projkey="$(printf '%s' "$projroot" | cksum)"
+projkey="${projkey%% *}"
+cwdf="$CACHE/last-cwd-$projkey"
+log "project=[$projroot] cwd-state=[$cwdf]"
+start=""
+if [ -s "$cwdf" ]; then
+	d="$(cat "$cwdf")"
+	[ -d "$d" ] && start="$d"
+fi
+
 # Force Yazi's Chafa (Unicode-block) preview instead of zellij's Sixel, which is
 # buggy and smears/tears on scroll (e.g. PDFs). Posing as kitty makes Yazi try
 # the kitty graphics protocol, which zellij doesn't support, so it falls back to
 # Chafa -- plain text cells that render + clear correctly. Yazi runs chafa with
 # `-f symbols`, so this TERM doesn't make chafa emit real kitty graphics.
-TERM=xterm-kitty yazi --chooser-file="$chooser"
+TERM=xterm-kitty yazi ${start:+"$start"} --chooser-file="$chooser" --cwd-file="$cwdf"
 log "chooser: [$(cat "$chooser" 2>/dev/null)]"
 [ -s "$chooser" ] || {
 	log "no selection -> exit"
