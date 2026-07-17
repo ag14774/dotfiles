@@ -17,7 +17,7 @@ trim-trailing-whitespace = true  # strip trailing spaces (only on Helix's own sa
 [editor.statusline]
 left = ["mode", "spinner", "version-control", "file-name", "read-only-indicator", "file-modification-indicator"]
 center = []
-right = ["diagnostics", "workspace-diagnostics", "selections", "register", "position", "total-line-numbers", "position-percentage", "file-encoding", "file-line-ending", "file-type"]
+right = ["diagnostics", "selections", "register", "position", "total-line-numbers", "position-percentage", "file-encoding", "file-line-ending", "file-type"]
 separator = "│"
 
 [editor.cursor-shape]
@@ -33,7 +33,7 @@ display-inlay-hints = true
 display-messages = true
 
 [editor.inline-diagnostics]
-cursor-line = "warning"
+cursor-line = "hint"
 other-lines = "error"
 
 [editor.soft-wrap]
