@@ -191,7 +191,7 @@ keybinds clear-defaults=true {
         // Floating cheatsheet: glow-rendered CHEATSHEET.md (scroll, q closes).
         // bash -c so $HOME expands (zellij doesn't expand it in layout paths).
         bind "Alt /" {
-            Run "bash" "-c" "glow -p -s $HOME/.config/glow/catppuccin-mocha.json $HOME/dotfiles/CHEATSHEET.md" {
+            Run "bash" "-c" "glow -p -w 120 -s $HOME/.config/glow/catppuccin-mocha.json $HOME/dotfiles/CHEATSHEET.md" {
                 floating true
                 close_on_exit true
                 name "cheatsheet"

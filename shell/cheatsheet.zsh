@@ -17,6 +17,6 @@ cheat() {
 		return
 	fi
 	local f="${1:-$HOME/dotfiles/CHEATSHEET.md}"
-	command -v glow >/dev/null 2>&1 && { glow -p -s "$HOME/.config/glow/catppuccin-mocha.json" "$f"; return; }
+	command -v glow >/dev/null 2>&1 && { glow -p -w 120 -s "$HOME/.config/glow/catppuccin-mocha.json" "$f"; return; }
 	"${PAGER:-less}" "$f"
 }
