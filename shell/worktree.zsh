@@ -61,12 +61,33 @@ _wt_seed() {
   [[ -n $src && -d $src && $src != $dest ]] || return 0
   for pat in $WT_SEED; do
     for f in $src/${~pat}; do
+      [[ -e $f ]] || continue   # literal patterns (.env, .envrc) skip null_glob; drop them when the source lacks them
       rel=${f#$src/}
       [[ -e $dest/$rel ]] && continue
       mkdir -p "$dest/${rel:h}" && cp -R "$f" "$dest/$rel" && (( n++ ))
     done
   done
   (( n )) && print "wt: seeded $n local file(s) from ${src:t}/ (WT_SEED)"
+  return 0
+}
+
+# print the path of the worktree checked out on the repo's default branch
+# (origin/HEAD, e.g. develop or main), or nothing if it can't be found. Used as
+# the seed source when `wt` runs from the bare root, where there's no current
+# worktree to copy from.
+_wt_default_worktree() {
+  emulate -L zsh
+  local gitdir=$1 def line cur=
+  def=$(git --git-dir="$gitdir" symbolic-ref --quiet refs/remotes/origin/HEAD 2>/dev/null)
+  def=${def#refs/remotes/origin/}
+  [[ -z $def ]] && { def=$(git --git-dir="$gitdir" symbolic-ref --quiet HEAD 2>/dev/null); def=${def#refs/heads/}; }
+  [[ -z $def ]] && return 0
+  for line in ${(f)"$(git --git-dir="$gitdir" worktree list --porcelain 2>/dev/null)"}; do
+    case $line in
+      ("worktree "*) cur=${line#worktree } ;;
+      ("branch refs/heads/$def") print -r -- "$cur"; return 0 ;;
+    esac
+  done
   return 0
 }
 
@@ -89,9 +110,12 @@ wt() {
     else
       git -C "$proj" worktree add --no-track -b "$branch" "$wtdir" "$base" || return 1         # brand-new branch: --no-track so it doesn't inherit the base's upstream; first push sets origin/<branch> (push.autoSetupRemote)
     fi
-    # seed untracked local files (.env, etc.) from the current (or any) worktree
+    # seed untracked local files (.env, etc.) into the new worktree: prefer the
+    # worktree we're standing in; if we're not in one (e.g. run from the bare
+    # root), fall back to the default branch's worktree (origin/HEAD).
     local src; src=$(git rev-parse --show-toplevel 2>/dev/null)
-    [[ -z $src ]] && { local d; for d in $proj/*(N/); do [[ $d == $wtdir ]] || { src=$d; break }; done; }
+    [[ -z $src ]] && src=$(_wt_default_worktree "$common")
+    [[ $src == $wtdir ]] && src=   # never seed a worktree from itself
     _wt_seed "$src" "$wtdir"
   fi
   cd "$wtdir"
