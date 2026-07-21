@@ -22,7 +22,7 @@ The handful you reach for constantly. Each also has a home in its tool's section
 | `gd` → `Ctrl-o` | Goto definition (incl. `.venv` libs), then jump back |
 | ★ `j <dir>` · `ji` | zoxide jump · interactive jump (shell) |
 | `git diff` | Review changes (delta, side-by-side) |
-| ★ `gcai` | AI commit msg from staged diff → edit → commit (`gcai -y` = no edit) |
+| ★ `gcai` | AI commit msg from staged diff → edit → commit (`gcai -y` = no edit; optional free-text arg adds prompt hints, e.g. `gcai 'note X is a placeholder'`) |
 
 ---
 
