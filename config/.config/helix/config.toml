@@ -70,6 +70,20 @@ d = ":toggle end-of-line-diagnostics hint disable" # show/hide end-of-line diagn
 w = ":set whitespace.render all"      # show whitespace (tabs/spaces/newlines)
 W = ":set whitespace.render none"     # hide whitespace again
 
+# "g u" -- go up to the overridden method in the parent class (Python).
+# Helix has no LSP type-hierarchy jump, so this shells out to a small Jedi
+# script that walks the MRO and returns the ancestor's definition, then :open
+# jumps there. The script declares its deps inline (PEP 723) and runs via uv
+# (nothing to pre-install); it points Jedi at the project's .venv so base
+# classes from dependencies resolve too. :write first so Jedi reads on-disk
+# content; %{buffer_name} is relative to Helix's cwd, which the shell inherits.
+# No super-method found -> cursor stays put.
+[keys.normal.g]
+u = [
+  ":write",
+  ":open %sh{$HOME/.local/bin/uv run --script $HOME/.config/helix/goto-super.py '%{buffer_name}' %{cursor_line} %{cursor_column}}",
+]
+
 [keys.select]
 C-up   = ["extend_to_line_bounds", "delete_selection", "move_line_up", "paste_before"]
 C-down = ["extend_to_line_bounds", "delete_selection", "paste_after"]
