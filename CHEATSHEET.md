@@ -20,6 +20,7 @@ The handful you reach for constantly. Each also has a home in its tool's section
 | ★ `Alt-y` | Summon Yazi (zellij); the file you pick opens in the Helix pane |
 | ★ `Ctrl-r` | Reload files from disk in Helix (after opencode edits them) |
 | `gd` → `Ctrl-o` | Goto definition (incl. `.venv` libs), then jump back |
+| ★ `gu` → `Ctrl-o` | Goto **super-method** (parent class's override), then jump back |
 | ★ `j <dir>` · `ji` | zoxide jump · interactive jump (shell) |
 | `git diff` | Review changes (delta, side-by-side) |
 | ★ `gcai` | AI commit msg from staged diff → edit → commit (`gcai -y` = no edit; optional free-text arg adds prompt hints, e.g. `gcai 'note X is a placeholder'`) |
@@ -69,7 +70,8 @@ Modal: select → act. When stuck: `Space ?` (searchable command palette).
 | `G` · `:N`⏎ | go to line number N |
 | `gh` · `gl` · `gs` | line start · line end · first non-whitespace |
 | `Ctrl-d` · `Ctrl-u` | half-page down · up |
-| `Ctrl-o` · `Ctrl-i` | jumplist back · forward (great after `gd`) |
+| `Ctrl-o` · `Ctrl-i` | jumplist back · forward (after `gd`, `gr`, `/`, `G`, ★ `gu`) |
+| `Ctrl-s` | save the current spot to the jumplist |
 | `%` | select the whole file |
 
 ### Editing
@@ -146,6 +148,7 @@ Prefix a yank/paste/delete with `"<reg>` (normal mode). Insert a register's text
 |---|---|
 | `gd` · `gy` | goto definition · type-definition |
 | `gr` · `gi` | goto references · implementation |
+| ★ `gu` | goto **super-method**: the overridden method in the parent class (Python) |
 | `Space k` | hover docs / type |
 | `Space a` | code action |
 | `Space r` | rename symbol (project-wide) |
@@ -200,6 +203,7 @@ Change bars (added / modified / deleted) show in the gutter automatically. See t
 | ★ `+` `l` | toggle inlay type hints |
 | ★ `+` `d` | toggle end-of-line diagnostic text |
 | ★ `+` `w` · `+` `W` | show · hide whitespace |
+| ★ `gu` | goto super-method — the overridden method's parent (Python; see Recipes) |
 
 ---
 
@@ -254,6 +258,8 @@ Multi-step workflows and the reasoning. The individual keys are in the tables ab
 **Sort imports + drop unused (Python):** `Space a` → *Ruff: Organize imports* (or *Fix all*) → `:w`. On `:w`, ruff only **formats** (like Black); it does not sort or prune imports. To automate, chain `ruff check --fix` into `ruff format` via `formatter` in `~/.config/helix/languages.toml`.
 
 **Registers hiding in the tables above:** `Space y`/`Space p`/`Space R` are the `+` clipboard register. `R` *reads* the `"` register; `Alt-d`/`Alt-c` delete/change *without writing* `"` (same effect as `"_d`/`"_c`).
+
+**Jump to an overridden method, and back:** ★ `gu` on (or inside) an overriding `def` jumps to the parent class's version — following the MRO across files and into `.venv` libraries (e.g. a `rich` or `pydantic` base class). It's a small Jedi script (`~/.config/helix/goto-super.py`) wired to `:open` via `%sh{}`, since Helix has no LSP type-hierarchy jump yet; if there's no super-method it leaves the cursor put. `Ctrl-o` jumps back, `Ctrl-i` forward — the jumplist also records `gd`/`gr`/`/`/`G`, and `Ctrl-s` bookmarks the current spot (per split).
 
 ### Reviewing opencode's changes
 
