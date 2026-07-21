@@ -50,7 +50,7 @@ wtclone() {
 # Untracked/ignored files git won't carry into a new worktree but you want there
 # anyway (secrets, local config). Globs allowed; override in ~/.zshrc. Do NOT list
 # .venv/node_modules -- recreate those (uv sync / npm install), don't copy them.
-(( $+WT_SEED )) || typeset -ga WT_SEED=(.env '.env.*' .envrc)
+(( $+WT_SEED )) || typeset -ga WT_SEED=(.env '.env.*' .envrc pyrightconfig.json)
 
 # copy WT_SEED matches from $1 (source worktree) into $2 (new worktree), skipping
 # any that already exist so each worktree keeps its own copies.
