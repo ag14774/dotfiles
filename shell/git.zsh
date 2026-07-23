@@ -10,6 +10,9 @@ alias ggpull='git pull origin "$(git_current_branch)"'
 
 # gcai -- draft a commit message from the staged diff via opencode, then edit in
 # Helix before committing (gcai -y skips the edit). Needs staged changes + jq.
+# Uses whatever provider/model opencode is configured with; no provider is
+# hardcoded here. If that's Google Vertex, export GOOGLE_CLOUD_PROJECT (and
+# optionally VERTEX_LOCATION) in ~/.config/zsh/secrets.zsh -- see secrets.zsh.example.
 # An optional free-text arg adds extra instructions for the prompt, e.g.
 #   gcai 'mention that function X is a placeholder, implemented in a later PR'
 #   gcai -y 'note this is a breaking change'
@@ -40,15 +43,12 @@ Additional instructions from the user (incorporate these): $extra"
 	local msg f
 	msg="$(
 		{ git diff --cached --stat; echo; git diff --cached; } |
-			GOOGLE_CLOUD_PROJECT="${GOOGLE_CLOUD_PROJECT:-your-gcp-project-id}" \
-				VERTEX_LOCATION="${VERTEX_LOCATION:-global}" \
-				opencode run --format json \
-				"$prompt" \
+			opencode run --format json "$prompt" \
 				2>/dev/null | jq -rj 'select(.type=="text").part.text'
 	)"
 
 	if [ -z "${msg//[[:space:]]/}" ]; then
-		printf 'gcai: opencode returned no message (check your Vertex env / auth)\n' >&2
+		printf 'gcai: opencode returned no message (check your opencode auth/model)\n' >&2
 		return 1
 	fi
 
