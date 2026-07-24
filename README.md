@@ -29,6 +29,61 @@ this): inside a zellij session run
 - `secrets.zsh.example` — template; real secrets live in
   `~/.config/zsh/secrets.zsh` (gitignored, never committed)
 
+## Changing the theme
+
+Everything is **Catppuccin Mocha**, applied per tool. Because `config/` is
+stowed (symlinked), editing these files changes the live config directly — no
+reinstall needed, aside from the "apply" step noted below. Changes are of two
+kinds: **(A)** rename a named theme, **(B)** recolor a handcrafted palette. (The
+base 16 terminal colors come from your terminal app, not this repo.)
+
+Switching to another **Catppuccin flavour** (Frappé/Macchiato/Latte) = do the
+(A) renames + find/replace the Mocha hex with the target flavour's hex
+(palettes at <https://catppuccin.com/palette>). A non-Catppuccin theme = (A)
+renames + recolour the (B) files by hand.
+
+### A. Named themes (rename, then apply)
+
+| Tool | File | Setting | Apply |
+| --- | --- | --- | --- |
+| Helix | `config/.config/helix/config.toml` | `theme = "catppuccin_mocha_dim"` | `:config-reload` (or `:theme <name>` to preview) |
+| Zellij | `config/.config/zellij/config.kdl` | `theme "catppuccin-mocha"` (built-in) | start a new zellij session |
+| Yazi | `config/.config/yazi/package.toml` **and** `config/.config/yazi/theme.toml` | flavour name in **both** | `ya pkg install`, restart yazi |
+| delta (git diff syntax) | `config/.config/git/config` | `syntax-theme = Catppuccin Mocha` | next `git diff` |
+
+Helix's `catppuccin_mocha_dim` is a **local** theme (see B) that only inherits
+the stock `catppuccin_mocha`. Point `theme` at any bundled name (e.g.
+`catppuccin_macchiato`, `dracula`) to switch outright — the local file is then
+just unused.
+
+### B. Handcrafted palettes (edit the colours)
+
+| What | File | Notes |
+| --- | --- | --- |
+| Helix docstring dim | `config/.config/helix/themes/catppuccin_mocha_dim.toml` | change `inherits` + the single `#5f7c65` green (blend recipe is in the file's comments); or delete the file and drop `_dim` in `config.toml` |
+| delta UI (diff gutters, blame) | `config/.config/git/config` → `[delta "catppuccin-mocha"]` block | hardcoded hex: `blame-palette`, the `*-style` lines, `map-styles` |
+| glow (the `cheat` pager) | `config/.config/glow/catppuccin-mocha.json` | full markdown palette. **Also referenced by** `shell/cheatsheet.zsh` and `config/.config/zellij/config.kdl` (the cheatsheet pane) — edit in place, or rename the file and update both refs |
+| `cheat --pretty` HTML | `CHEATSHEET.css` | Catppuccin CSS vars at the top (`--base`, `--text`, `--red`, …) |
+| zjstatus top bar | `config/.config/zellij/layouts/dev.kdl` | hex inside the `format_*` / `mode_*` / `tab_*` strings; independent of Zellij's `theme` |
+| Zellij `onedark-custom` | `config/.config/zellij/config.kdl`, `themes {}` block | an **unused** custom theme (RGB triplets) — only matters if you set `theme` to it |
+
+Not themed here (they follow the terminal palette): `fzf`
+(`config/.config/fzf/*`), and plain `yazi.toml` / `init.lua`.
+
+Cosmetic name-only mentions (don't affect colours, but update if you rename so
+docs don't drift): the `README.md` intro, the Yazi-flavour echo in `install.sh`,
+and the `catppuccin*` comments in `config/.config/git/config`, `CHEATSHEET.css`,
+and `shell/cheatsheet.zsh`.
+
+### Catppuccin Mocha hex (for find/replace)
+
+`base #1e1e2e` · `mantle #181825` · `crust #11111b` · `surface0 #313244` ·
+`surface1 #45475a` · `surface2 #585b70` · `overlay0 #6c7086` · `text #cdd6f4` ·
+`subtext0 #a6adc8` · `subtext1 #bac2de` · `red #f38ba8` · `maroon #eba0ac` ·
+`peach #fab387` · `yellow #f9e2af` · `green #a6e3a1` · `teal #94e2d5` ·
+`sky #89dceb` · `sapphire #74c7ec` · `blue #89b4fa` · `lavender #b4befe` ·
+`mauve #cba6f7` · `pink #f5c2e7`
+
 ## Notes
 
 - The two `shell/*.zsh` files are plain zsh functions (not oh-my-zsh plugins);
