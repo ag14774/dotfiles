@@ -14,12 +14,22 @@ set -u
 # Sourced here because Alt-y runs this via `bash -c` with the zellij *session*
 # env, which predates ~/.zshrc's exports (zellij auto-starts before they run).
 # This guarantees Yazi's fzf sees them even in a pre-existing session.
+# shellcheck source=/dev/null
 [ -f "$HOME/.config/fzf/fzf.env" ] && . "$HOME/.config/fzf/fzf.env"
 
 RESOLVE="$HOME/.config/zellij/pane-id.sh"
 CACHE="${XDG_CACHE_HOME:-$HOME/.cache}/yazi-picker"
 mkdir -p "$CACHE"
 LOG="$CACHE/last-run.log"
+
+if command -v hx >/dev/null 2>&1; then
+	HELIX="$(command -v hx)"
+elif command -v helix >/dev/null 2>&1; then
+	HELIX="$(command -v helix)"
+else
+	printf 'yazi-picker: Helix executable not found (tried hx and helix)\n' >&2
+	exit 1
+fi
 
 DEBUG=0
 [ -f "$CACHE/DEBUG" ] && DEBUG=1
@@ -115,11 +125,11 @@ else
 	# `next-swap-layout` to re-apply the swap (placing editor/main/opencode by NAME,
 	# bars included) and clear the dirty flag; a clean auto-applied layout is left
 	# untouched. The move-pane check stays as a fallback net.
-	log "spawn: new-pane --close-on-exit -n editor -- hx ${files[*]}"
+	log "spawn: new-pane --close-on-exit -n editor -- $HELIX ${files[*]}"
 	# --close-on-exit: when Helix quits (:q), close the pane instead of leaving it
 	# in zellij's "exited, press Enter to rerun" state. The swap layout then reflows
 	# back to main|opencode.
-	zellij action new-pane --close-on-exit -n editor -- hx "${files[@]}" 2>>"$ERRTO"
+	zellij action new-pane --close-on-exit -n editor -- "$HELIX" "${files[@]}" 2>>"$ERRTO"
 	eid=""
 	for ((i = 0; i < 40; i++)); do
 		eid="$(bash "$RESOLVE" editor "$TAB" 2>>"$ERRTO")"

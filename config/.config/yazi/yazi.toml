@@ -7,8 +7,8 @@ sort_dir_first = true
 mouse_events = ["click", "scroll"]
 
 # Standalone file opening (Enter on a file when NOT in --chooser-file mode)
-# uses $EDITOR, which we set to `hx`. The picker flow uses --chooser-file and
-# bypasses this entirely.
+# uses $EDITOR, which is set to the installed Helix executable (`hx` or
+# `helix`). The picker flow uses --chooser-file and bypasses this entirely.
 
 # git.yazi fetchers -- compute per-file git status for the list (see init.lua).
 # `id` is omitted on purpose: Yazi 26.5.6 > v26.1.22, where it's deprecated.

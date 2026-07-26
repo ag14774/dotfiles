@@ -5,7 +5,7 @@
 #
 # Pane names are set via layout `name=`, `new-pane -n`, or `rename-pane`, and are
 # STICKY: once a pane is named, zellij ignores the app's OSC title changes, so the
-# lookup stays reliable even when hx/opencode set their own titles.
+# lookup stays reliable even when Helix/opencode set their own titles.
 set -u
 name="${1:-}"
 tab="${2:-}"

@@ -3,7 +3,7 @@
 # Global default for Python = basedpyright (types) + ruff (lint/format).
 # Both respect each project's own config: ruff reads pyproject.toml/ruff.toml,
 # basedpyright reads [tool.basedpyright]/pyrightconfig.json and AUTO-DETECTS the
-# project's ./.venv -- so `cd <worktree>; hx .` picks up the right interpreter
+# project's ./.venv -- so `cd <worktree>; $EDITOR .` picks up the right interpreter
 # with no direnv.
 #
 # Per-repo override: drop a `.helix/languages.toml` in a repo (it's merged with
