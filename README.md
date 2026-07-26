@@ -1,7 +1,8 @@
 # dotfiles
 
-Personal macOS terminal setup: **Helix + Yazi + Zellij** (Catppuccin Mocha),
-plus a couple of zsh helper functions (git-worktree workflow, opencode reload).
+Personal terminal setup for macOS (**iTerm2**) and Manjaro/Arch Linux
+(**Ghostty**): **Helix + Yazi + Zellij** (Catppuccin Mocha), plus zsh helper
+functions (git-worktree workflow, opencode reload, and more).
 
 ## Install
 
@@ -11,10 +12,23 @@ git clone <this-repo> ~/dotfiles
 exec zsh
 ```
 
-`install.sh` (idempotent) installs `Brewfile` packages + Python/JS language
-servers and the Yazi flavor, symlinks `config/` into `~/.config` via GNU Stow,
-and appends a small managed block to `~/.zshrc` (sets `EDITOR=hx`, sources
-`~/.config/zsh/secrets.zsh`, and loads the `shell/*.zsh` functions).
+`install.sh` (safe to rerun) selects Homebrew on macOS or Pacman on Linux,
+installs the platform packages plus Python/JS language servers and the Yazi
+flavor, symlinks `config/` into `~/.config` via GNU Stow, and appends a small
+configuration block to `~/.zshrc` (adds `~/.local/bin` to `PATH`, sets
+`EDITOR` to the available Helix executable, sources
+`~/.config/zsh/secrets.zsh`, and loads the `shell/*.zsh` functions). A separate
+managed preamble is kept at the beginning for Zellij autostart.
+
+Homebrew must already be installed on macOS. The Linux backend currently
+supports Pacman-based distributions such as Manjaro and Arch Linux.
+
+Zellij autostarts from a pre-Oh My Zsh preamble in both iTerm2 and Ghostty, so
+the outer shell immediately becomes Zellij without initializing the framework
+twice. Ghostty hides its own tab bar and disables its tab and split creation
+shortcuts; use Zellij (`Alt-t` for a tab, `Alt-n` for a pane) for all
+multiplexing. Set `ZELLIJ_AUTO_START=false` before launching zsh when a bare
+shell is needed.
 
 The top bar (zjstatus) is loaded by `dev.kdl` straight from its release URL, so
 the first time you must grant its plugin permission once (the installer prints
@@ -23,9 +37,10 @@ this): inside a zellij session run
 
 ## Layout
 
-- `config/.config/{zellij,helix,yazi}/` — stowed into `~/.config`
-- `shell/{worktree,ocreload}.zsh` — sourced directly by the `.zshrc` block
-- `Brewfile` — Homebrew dependencies
+- `config/.config/{ghostty,zellij,helix,yazi}/` — stowed into `~/.config`
+- `shell/*.zsh` — sourced directly by the `.zshrc` block
+- `install/{brew,pacman}.sh` — platform package installation backends
+- `Brewfile` — Homebrew package manifest
 - `secrets.zsh.example` — template; real secrets live in
   `~/.config/zsh/secrets.zsh` (gitignored, never committed)
 
@@ -86,7 +101,7 @@ and `shell/cheatsheet.zsh`.
 
 ## Notes
 
-- The two `shell/*.zsh` files are plain zsh functions (not oh-my-zsh plugins);
+- The `shell/*.zsh` files are plain zsh functions (not oh-my-zsh plugins);
   completions register via `compdef` if `compinit` has run.
 - Zellij: `Alt-y` summons a Yazi picker that opens files into a named `editor`
   (Helix) pane; `dev.kdl` uses a swap layout (editor top / terminal bottom /
