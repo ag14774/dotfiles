@@ -5,9 +5,9 @@ theme = "catppuccin_mocha_dim"
 line-number = "relative"
 mouse = true
 cursorline = true
-color-modes = true          # colored mode indicator in the statusline
+color-modes = true               # colored mode indicator in the statusline
 true-color = true
-bufferline = "multiple"     # show the bufferline only when >1 buffer is open
+bufferline = "multiple"          # show the bufferline only when >1 buffer is open
 rulers = [100]
 text-width = 100
 end-of-line-diagnostics = "hint"
@@ -15,9 +15,26 @@ completion-replace = true        # accepting a completion replaces the whole wor
 trim-trailing-whitespace = true  # strip trailing spaces (only on Helix's own saves)
 
 [editor.statusline]
-left = ["mode", "spinner", "version-control", "file-name", "read-only-indicator", "file-modification-indicator"]
+left = [
+  "mode",
+  "spinner",
+  "version-control",
+  "file-name",
+  "read-only-indicator",
+  "file-modification-indicator",
+]
 center = []
-right = ["diagnostics", "selections", "register", "position", "total-line-numbers", "position-percentage", "file-encoding", "file-line-ending", "file-type"]
+right = [
+  "diagnostics",
+  "selections",
+  "register",
+  "position",
+  "total-line-numbers",
+  "position-percentage",
+  "file-encoding",
+  "file-line-ending",
+  "file-type",
+]
 separator = "│"
 
 [editor.cursor-shape]
@@ -26,7 +43,7 @@ normal = "block"
 select = "underline"
 
 [editor.file-picker]
-hidden = false              # show dotfiles in the built-in picker (space+f)
+hidden = false # show dotfiles in the built-in picker (space+f)
 
 [editor.lsp]
 display-inlay-hints = true
@@ -56,19 +73,24 @@ character = "╎"
 # locked mode already owns Alt+h/j/k/l and Alt+arrows.
 # NOTE: this uses the default yank register, so it overwrites what you last yanked.
 [keys.normal]
-C-up   = ["extend_to_line_bounds", "delete_selection", "move_line_up", "paste_before"]
+C-up = [
+  "extend_to_line_bounds",
+  "delete_selection",
+  "move_line_up",
+  "paste_before",
+]
 C-down = ["extend_to_line_bounds", "delete_selection", "paste_after"]
 # Re-read files from disk (Helix has no autoreload) -- handy after opencode edits them.
 C-r = ":reload-all"
 
 # "+" opens a small toggles/tools menu (leaves the Space menu untouched).
 [keys.normal."+"]
-f = ":format"                         # format the whole file (LSP)
-s = ":toggle soft-wrap.enable"        # soft-wrap on/off
-l = ":toggle lsp.display-inlay-hints" # inlay type hints on/off (can be noisy)
+f = ":format"                                      # format the whole file (LSP)
+s = ":toggle soft-wrap.enable"                     # soft-wrap on/off
+l = ":toggle lsp.display-inlay-hints"              # inlay type hints on/off (can be noisy)
 d = ":toggle end-of-line-diagnostics hint disable" # show/hide end-of-line diagnostic text (harper grammar etc.)
-w = ":set whitespace.render all"      # show whitespace (tabs/spaces/newlines)
-W = ":set whitespace.render none"     # hide whitespace again
+w = ":set whitespace.render all"                   # show whitespace (tabs/spaces/newlines)
+W = ":set whitespace.render none"                  # hide whitespace again
 
 # "g u" -- go up to the overridden method in the parent class (Python).
 # Helix has no LSP type-hierarchy jump, so this shells out to a small Jedi
@@ -81,9 +103,14 @@ W = ":set whitespace.render none"     # hide whitespace again
 [keys.normal.g]
 u = [
   ":write",
-  ":open %sh{$HOME/.local/bin/uv run --script $HOME/.config/helix/goto-super.py '%{buffer_name}' %{cursor_line} %{cursor_column}}",
+  ":open %sh{uv run --script $HOME/.config/helix/goto-super.py '%{buffer_name}' %{cursor_line} %{cursor_column}}",
 ]
 
 [keys.select]
-C-up   = ["extend_to_line_bounds", "delete_selection", "move_line_up", "paste_before"]
+C-up = [
+  "extend_to_line_bounds",
+  "delete_selection",
+  "move_line_up",
+  "paste_before",
+]
 C-down = ["extend_to_line_bounds", "delete_selection", "paste_after"]
