@@ -426,9 +426,9 @@ pane_frames false
 // otherwise this will error if such a session exists.
 // Default: <RANDOM>
 // 
-// Single fixed session: every terminal attaches to "main" (with
-// attach_to_session below), so all iTerm tabs share ONE session and you use
-// zellij tabs instead. Reset it with `zreset` (see shell/reset.zsh).
+// Single fixed session: every terminal frontend attaches to "main" (with
+// attach_to_session below), and Zellij owns all tabs and panes. Reset it with
+// `zreset` (see shell/reset.zsh).
 session_name "main"
  
 // When `session_name` is provided, attaches to that session
@@ -451,7 +451,7 @@ attach_to_session true
 // 
 // Off: don't serialize/resurrect sessions. Stops the pile-up of "EXITED -
 // attach to resurrect" sessions and the resurrection bug where the editor pane
-// comes back running an LSP child (marksman/node) instead of hx, suspended.
+// comes back running an LSP child (marksman/node) instead of Helix, suspended.
 session_serialization false
  
 // Whether pane viewports are serialized along with the session, default is false

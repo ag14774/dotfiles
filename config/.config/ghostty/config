@@ -1,0 +1,12 @@
+# Zellij autostarts from the shared zsh configuration; Ghostty only provides
+# the terminal surface.
+window-show-tab-bar = never
+
+# Prevent Ghostty from creating its own tabs or splits. Unbinding forwards these
+# keys to Zellij or the application running inside it.
+keybind = ctrl+shift+t=unbind
+keybind = ctrl+shift+o=unbind
+keybind = ctrl+shift+e=unbind
+
+# The command palette also exposes Ghostty tab and split creation actions.
+keybind = ctrl+shift+p=unbind
