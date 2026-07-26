@@ -1,6 +1,7 @@
 # Brewfile -- `brew bundle --file Brewfile`
 
 # Core terminal IDE stack
+cask "iterm2"
 brew "helix"
 brew "yazi"
 brew "zellij"

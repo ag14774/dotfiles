@@ -9,11 +9,20 @@ cheat() {
 		local md="${2:-$HOME/dotfiles/CHEATSHEET.md}"
 		local out="${TMPDIR:-/tmp}/cheatsheet.html"
 		if ! command -v pandoc >/dev/null 2>&1; then
-			printf 'cheat --pretty needs pandoc (brew install pandoc)\n' >&2
+			printf 'cheat --pretty needs pandoc\n' >&2
+			return 1
+		fi
+		local opener
+		if command -v xdg-open >/dev/null 2>&1; then
+			opener=xdg-open
+		elif command -v open >/dev/null 2>&1; then
+			opener=open
+		else
+			printf 'cheat --pretty needs xdg-open or open\n' >&2
 			return 1
 		fi
 		pandoc "$md" -s --embed-resources --css "$HOME/dotfiles/CHEATSHEET.css" \
-			--metadata title="Terminal IDE Cheatsheet" -o "$out" && open "$out"
+			--metadata title="Terminal IDE Cheatsheet" -o "$out" && "$opener" "$out"
 		return
 	fi
 	local f="${1:-$HOME/dotfiles/CHEATSHEET.md}"
