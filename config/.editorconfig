@@ -1,0 +1,11 @@
+root = true
+
+# Stowed to ~/.editorconfig, so it applies to EVERY repo under $HOME, not just
+# this one. Shell scripts: match Helix's shfmt config (-i 2 -ci) so every tool
+# that runs shfmt (Helix on save, opencode's formatter, VSCode shell-format, ...)
+# produces identical output and .sh files stop churning across repos. shfmt reads
+# these keys when invoked without explicit -i flags (which is how opencode calls it).
+[*.sh]
+indent_style = space
+indent_size = 2
+switch_case_indent = true

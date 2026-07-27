@@ -23,30 +23,30 @@ mkdir -p "$CACHE"
 LOG="$CACHE/last-run.log"
 
 if command -v hx >/dev/null 2>&1; then
-	HELIX="$(command -v hx)"
+  HELIX="$(command -v hx)"
 elif command -v helix >/dev/null 2>&1; then
-	HELIX="$(command -v helix)"
+  HELIX="$(command -v helix)"
 else
-	printf 'yazi-picker: Helix executable not found (tried hx and helix)\n' >&2
-	exit 1
+  printf 'yazi-picker: Helix executable not found (tried hx and helix)\n' >&2
+  exit 1
 fi
 
 DEBUG=0
 [ -f "$CACHE/DEBUG" ] && DEBUG=1
 if [ "$DEBUG" = 1 ]; then
-	: >"$LOG"
-	ERRTO="$LOG"
+  : >"$LOG"
+  ERRTO="$LOG"
 else
-	ERRTO=/dev/null
+  ERRTO=/dev/null
 fi
 log() {
-	[ "$DEBUG" = 1 ] || return 0
-	printf '%s %s\n' "$(date +%H:%M:%S)" "$*" >>"$LOG"
+  [ "$DEBUG" = 1 ] || return 0
+  printf '%s %s\n' "$(date +%H:%M:%S)" "$*" >>"$LOG"
 }
 dump() {
-	[ "$DEBUG" = 1 ] || return 0
-	log "$1"
-	zellij action list-panes -c -g 2>>"$ERRTO" >>"$LOG"
+  [ "$DEBUG" = 1 ] || return 0
+  log "$1"
+  zellij action list-panes -c -g 2>>"$ERRTO" >>"$LOG"
 }
 # Row (Y) of the non-plugin pane named $1 in the current tab ($TAB), or empty.
 pane_y() { zellij action list-panes --json 2>>"$ERRTO" | jq -r --arg n "$1" --arg t "${TAB:-}" '.[]|select(.is_plugin==false and .title==$n)|select($t=="" or ((.tab_id|tostring)==$t))|.pane_y' | head -n1; }
@@ -75,8 +75,8 @@ cwdf="$CACHE/last-cwd-$projkey"
 log "project=[$projroot] cwd-state=[$cwdf]"
 start=""
 if [ -s "$cwdf" ]; then
-	d="$(cat "$cwdf")"
-	[ -d "$d" ] && start="$d"
+  d="$(cat "$cwdf")"
+  [ -d "$d" ] && start="$d"
 fi
 
 # Force Yazi's Chafa (Unicode-block) preview instead of zellij's Sixel, which is
@@ -87,17 +87,17 @@ fi
 TERM=xterm-kitty yazi ${start:+"$start"} --chooser-file="$chooser" --cwd-file="$cwdf"
 log "chooser: [$(cat "$chooser" 2>/dev/null)]"
 [ -s "$chooser" ] || {
-	log "no selection -> exit"
-	exit 0
+  log "no selection -> exit"
+  exit 0
 }
 
 files=()
 while IFS= read -r line || [ -n "$line" ]; do
-	[ -n "$line" ] && files+=("$line")
+  [ -n "$line" ] && files+=("$line")
 done <"$chooser"
 [ "${#files[@]}" -gt 0 ] || {
-	log "empty -> exit"
-	exit 0
+  log "empty -> exit"
+  exit 0
 }
 log "files: ${files[*]}"
 
@@ -105,68 +105,68 @@ editor_id="$(bash "$RESOLVE" editor "$TAB" 2>>"$ERRTO")"
 log "resolved editor=[$editor_id]"
 
 if [ -n "$editor_id" ]; then
-	# Route into the existing Helix instance.
-	log "route into $editor_id"
-	zellij action write --pane-id "$editor_id" 27 2>>"$ERRTO" # Esc -> normal mode
-	for f in "${files[@]}"; do
-		zellij action write-chars --pane-id "$editor_id" ":open \"$f\"" 2>>"$ERRTO"
-		zellij action write --pane-id "$editor_id" 13 2>>"$ERRTO" # Enter
-	done
-	zellij action focus-pane-id "$editor_id" 2>>"$ERRTO"
+  # Route into the existing Helix instance.
+  log "route into $editor_id"
+  zellij action write --pane-id "$editor_id" 27 2>>"$ERRTO" # Esc -> normal mode
+  for f in "${files[@]}"; do
+    zellij action write-chars --pane-id "$editor_id" ":open \"$f\"" 2>>"$ERRTO"
+    zellij action write --pane-id "$editor_id" 13 2>>"$ERRTO" # Enter
+  done
+  zellij action focus-pane-id "$editor_id" 2>>"$ERRTO"
 else
-	# Spawn Helix, then snap the tab into the `with-editor` swap layout.
-	#
-	# Why the explicit swap: zellij only AUTO-applies a swap layout when the tab's
-	# tiled layout is "clean". If it's been manually restructured -- e.g. you closed
-	# opencode (Ctrl-D) and `ocreload` re-created it with `new-pane --direction
-	# right` -- the tab is flagged swap-layout-dirty, so adding the editor pane no
-	# longer triggers `with-editor`; the pane just gets raw-split into a flat row.
-	# So: only when the editor lands WRONG (flat row, or below main) do we call
-	# `next-swap-layout` to re-apply the swap (placing editor/main/opencode by NAME,
-	# bars included) and clear the dirty flag; a clean auto-applied layout is left
-	# untouched. The move-pane check stays as a fallback net.
-	log "spawn: new-pane --close-on-exit -n editor -- $HELIX ${files[*]}"
-	# --close-on-exit: when Helix quits (:q), close the pane instead of leaving it
-	# in zellij's "exited, press Enter to rerun" state. The swap layout then reflows
-	# back to main|opencode.
-	zellij action new-pane --close-on-exit -n editor -- "$HELIX" "${files[@]}" 2>>"$ERRTO"
-	eid=""
-	for ((i = 0; i < 40; i++)); do
-		eid="$(bash "$RESOLVE" editor "$TAB" 2>>"$ERRTO")"
-		[ -n "$eid" ] && break
-		sleep 0.05
-	done
-	log "post-spawn editor=[$eid] after $i tries"
-	dump "geometry after spawn:"
-	if [ -n "$eid" ]; then
-		sleep 0.15 # let any auto-layout settle first
-		ey="$(pane_y editor)"
-		my="$(pane_y main)"
-		log "positions: editor_y=$ey main_y=$my"
-		# Only intervene if the editor did NOT already land on top of main. In a
-		# CLEAN session zellij auto-applies `with-editor` (editor above main) and we
-		# must NOT touch it -- calling next-swap-layout there would cycle it AWAY.
-		# editor_y >= main_y means it's wrong: either the flat 3-column from the
-		# ocreload dirty-swap bug (editor_y == main_y, side by side) or editor below
-		# main. Re-apply the swap to snap panes into place by name and un-dirty.
-		if [ -n "$ey" ] && [ -n "$my" ] && [ "$ey" -ge "$my" ] 2>/dev/null; then
-			log "editor not on top (ey>=my) -> re-applying with-editor swap"
-			zellij action next-swap-layout 2>>"$ERRTO"
-			sleep 0.15
-			# Fallback net for the nested (editor-below-main) case, if the swap did
-			# not take: nudge the editor up so it stays the prominent pane.
-			ey="$(pane_y editor)"
-			my="$(pane_y main)"
-			log "after swap: editor_y=$ey main_y=$my"
-			if [ -n "$ey" ] && [ -n "$my" ] && [ "$ey" -gt "$my" ] 2>/dev/null; then
-				zellij action move-pane --pane-id "$eid" up 2>>"$ERRTO"
-				log "editor still below main -> moved up rc=$?"
-			fi
-		else
-			log "editor already on top (or positions unknown) -> leaving as-is"
-		fi
-		zellij action focus-pane-id "$eid" 2>>"$ERRTO"
-		dump "geometry after placement:"
-	fi
+  # Spawn Helix, then snap the tab into the `with-editor` swap layout.
+  #
+  # Why the explicit swap: zellij only AUTO-applies a swap layout when the tab's
+  # tiled layout is "clean". If it's been manually restructured -- e.g. you closed
+  # opencode (Ctrl-D) and `ocreload` re-created it with `new-pane --direction
+  # right` -- the tab is flagged swap-layout-dirty, so adding the editor pane no
+  # longer triggers `with-editor`; the pane just gets raw-split into a flat row.
+  # So: only when the editor lands WRONG (flat row, or below main) do we call
+  # `next-swap-layout` to re-apply the swap (placing editor/main/opencode by NAME,
+  # bars included) and clear the dirty flag; a clean auto-applied layout is left
+  # untouched. The move-pane check stays as a fallback net.
+  log "spawn: new-pane --close-on-exit -n editor -- $HELIX ${files[*]}"
+  # --close-on-exit: when Helix quits (:q), close the pane instead of leaving it
+  # in zellij's "exited, press Enter to rerun" state. The swap layout then reflows
+  # back to main|opencode.
+  zellij action new-pane --close-on-exit -n editor -- "$HELIX" "${files[@]}" 2>>"$ERRTO"
+  eid=""
+  for ((i = 0; i < 40; i++)); do
+    eid="$(bash "$RESOLVE" editor "$TAB" 2>>"$ERRTO")"
+    [ -n "$eid" ] && break
+    sleep 0.05
+  done
+  log "post-spawn editor=[$eid] after $i tries"
+  dump "geometry after spawn:"
+  if [ -n "$eid" ]; then
+    sleep 0.15 # let any auto-layout settle first
+    ey="$(pane_y editor)"
+    my="$(pane_y main)"
+    log "positions: editor_y=$ey main_y=$my"
+    # Only intervene if the editor did NOT already land on top of main. In a
+    # CLEAN session zellij auto-applies `with-editor` (editor above main) and we
+    # must NOT touch it -- calling next-swap-layout there would cycle it AWAY.
+    # editor_y >= main_y means it's wrong: either the flat 3-column from the
+    # ocreload dirty-swap bug (editor_y == main_y, side by side) or editor below
+    # main. Re-apply the swap to snap panes into place by name and un-dirty.
+    if [ -n "$ey" ] && [ -n "$my" ] && [ "$ey" -ge "$my" ] 2>/dev/null; then
+      log "editor not on top (ey>=my) -> re-applying with-editor swap"
+      zellij action next-swap-layout 2>>"$ERRTO"
+      sleep 0.15
+      # Fallback net for the nested (editor-below-main) case, if the swap did
+      # not take: nudge the editor up so it stays the prominent pane.
+      ey="$(pane_y editor)"
+      my="$(pane_y main)"
+      log "after swap: editor_y=$ey main_y=$my"
+      if [ -n "$ey" ] && [ -n "$my" ] && [ "$ey" -gt "$my" ] 2>/dev/null; then
+        zellij action move-pane --pane-id "$eid" up 2>>"$ERRTO"
+        log "editor still below main -> moved up rc=$?"
+      fi
+    else
+      log "editor already on top (or positions unknown) -> leaving as-is"
+    fi
+    zellij action focus-pane-id "$eid" 2>>"$ERRTO"
+    dump "geometry after placement:"
+  fi
 fi
 log "=== done ==="
