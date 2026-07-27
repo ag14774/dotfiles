@@ -12,3 +12,14 @@ alias mv='mv -i'
 
 # --color=auto: colourise matches only when writing to a terminal (safe in pipes).
 alias grep='grep --color=auto'
+
+# Coloured `ls` (oh-my-zsh used to set this up). GNU ls (Linux) needs --color and
+# reads $LS_COLORS; BSD ls (macOS) colourises via $CLICOLOR / `-G` and $LSCOLORS.
+export CLICOLOR=1
+export LSCOLORS='Gxfxcxdxbxegedabagacad'
+if ls --color=auto -d . >/dev/null 2>&1; then
+	alias ls='ls --color=auto'
+	(( $+commands[dircolors] )) && eval "$(dircolors -b)"
+else
+	alias ls='ls -G'
+fi
