@@ -103,9 +103,10 @@ fi
   printf '  export EDITOR=helix\n'
   printf 'fi\n'
   printf 'export VISUAL="$EDITOR"\n'
-  printf 'source "%s/shell/init.zsh"\n' "$DOTFILES" # zsh framework: options, compinit, keybinds, starship, plugins (replaces oh-my-zsh)
-  printf 'eval "$(zoxide init zsh --cmd j)"\n'      # zoxide replaces autojump (j / ji); also feeds yazi's z
-  printf 'source "$HOME/.config/fzf/fzf.env"\n'     # fzf file list: respect .gitignore (Alt-g toggles); also sourced by yazi-picker.sh
+  printf 'source "%s/shell/init.zsh"\n' "$DOTFILES"        # zsh framework: options, compinit, keybinds, starship, plugins (replaces oh-my-zsh)
+  printf 'source "%s/shell/completions.zsh"\n' "$DOTFILES" # CLI completions that need compinit (opencode, ...)
+  printf 'eval "$(zoxide init zsh --cmd j)"\n'             # zoxide replaces autojump (j / ji); also feeds yazi's z
+  printf 'source "$HOME/.config/fzf/fzf.env"\n'            # fzf file list: respect .gitignore (Alt-g toggles); also sourced by yazi-picker.sh
   printf '[ -f "$HOME/.config/zsh/secrets.zsh" ] && source "$HOME/.config/zsh/secrets.zsh"\n'
   printf '[ -f "$HOME/.config/zsh/local.zsh" ] && source "$HOME/.config/zsh/local.zsh"\n' # machine-local, gitignored (e.g. work fns, tool completions); after compinit
   printf 'source "%s/shell/aliases.zsh"\n' "$DOTFILES"                                    # rm/cp/mv -i (we don't load omz's common-aliases plugin)
