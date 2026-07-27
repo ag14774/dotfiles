@@ -203,6 +203,7 @@ Change bars (added / modified / deleted) show in the gutter automatically. See t
 | ★ `+` `l` | toggle inlay type hints |
 | ★ `+` `d` | toggle end-of-line diagnostic text |
 | ★ `+` `w` · `+` `W` | show · hide whitespace |
+| ★ `+` `g` | peek the git-diff hunk under the cursor (floating pane, delta) |
 | ★ `gu` | goto super-method — the overridden method's parent (Python; see Recipes) |
 
 ---
@@ -266,4 +267,5 @@ Multi-step workflows and the reasoning. The individual keys are in the tables ab
 1. **What changed** — `Alt-y` (Yazi git signs) or `Space g` in Helix.
 2. **Open it** — pick the file, then ★ `Ctrl-r` to reload from disk.
 3. **What lines** — skim the gutter bars; `]g`/`[g` to hop between changes.
-4. **Exact diff** — `git diff` (or `git diff HEAD`) in a pane (delta, side-by-side).
+4. **Peek one block** — ★ `+` `g` on a changed line: a floating pane shows just that hunk (delta, vs HEAD); `q` closes it.
+5. **Exact diff** — `git diff` (or `git diff HEAD`) in a pane (delta, side-by-side).
