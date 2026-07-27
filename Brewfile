@@ -6,6 +6,11 @@ brew "helix"
 brew "yazi"
 brew "zellij"
 
+# Shell: zsh framework (we roll our own instead of oh-my-zsh -- see shell/init.zsh)
+brew "starship"                # prompt
+brew "zsh-autosuggestions"     # fish-style suggestions from history
+brew "zsh-syntax-highlighting" # command-line syntax colouring (sourced last)
+
 # Yazi preview / helper deps
 brew "ffmpeg"
 brew "sevenzip"

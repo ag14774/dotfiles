@@ -103,15 +103,18 @@ fi
   printf '  export EDITOR=helix\n'
   printf 'fi\n'
   printf 'export VISUAL="$EDITOR"\n'
-  printf 'eval "$(zoxide init zsh --cmd j)"\n'  # zoxide replaces autojump (j / ji); also feeds yazi's z
-  printf 'source "$HOME/.config/fzf/fzf.env"\n' # fzf file list: respect .gitignore (Alt-g toggles); also sourced by yazi-picker.sh
+  printf 'source "%s/shell/init.zsh"\n' "$DOTFILES" # zsh framework: options, compinit, keybinds, starship, plugins (replaces oh-my-zsh)
+  printf 'eval "$(zoxide init zsh --cmd j)"\n'      # zoxide replaces autojump (j / ji); also feeds yazi's z
+  printf 'source "$HOME/.config/fzf/fzf.env"\n'     # fzf file list: respect .gitignore (Alt-g toggles); also sourced by yazi-picker.sh
   printf '[ -f "$HOME/.config/zsh/secrets.zsh" ] && source "$HOME/.config/zsh/secrets.zsh"\n'
-  printf 'source "%s/shell/aliases.zsh"\n' "$DOTFILES" # rm/cp/mv -i (we don't load omz's common-aliases plugin)
+  printf '[ -f "$HOME/.config/zsh/local.zsh" ] && source "$HOME/.config/zsh/local.zsh"\n' # machine-local, gitignored (e.g. work fns, tool completions); after compinit
+  printf 'source "%s/shell/aliases.zsh"\n' "$DOTFILES"                                    # rm/cp/mv -i (we don't load omz's common-aliases plugin)
   printf 'source "%s/shell/worktree.zsh"\n' "$DOTFILES"
   printf 'source "%s/shell/ocreload.zsh"\n' "$DOTFILES"
   printf 'source "%s/shell/cheatsheet.zsh"\n' "$DOTFILES"
   printf 'source "%s/shell/git.zsh"\n' "$DOTFILES" # ggpush/ggpull + gcai (we don't load omz's git plugin)
   printf 'source "%s/shell/reset.zsh"\n' "$DOTFILES"
+  printf 'dotfiles_load_syntax_highlighting\n' # MUST stay last: highlighting wraps every widget/keybinding defined above
   printf '%s\n' "$E"
 } >"$ZSHRC.new"
 mv "$ZSHRC.new" "$ZSHRC"
