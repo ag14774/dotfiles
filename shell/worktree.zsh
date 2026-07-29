@@ -11,7 +11,8 @@
 #   wt <branch> [base]    create/reuse a worktree for <branch> and cd into it
 #                         (seeds $WT_SEED files -- .env etc. -- into new worktrees)
 #   wtrm <branch>         remove a worktree
-#   wtprune [-y] [-n]     wtrm every worktree whose remote branch was deleted ("gone")
+#   wtprune [-ynm]        wtrm worktrees whose remote branch was deleted ("gone");
+#                         -m/--merged also removes merged branches (GitHub via gh)
 #   wtls                  list worktrees
 #   wtconvert [-y]        convert a normal clone (CWD) into this bare/worktree layout
 #   wthelp                show help for these commands
@@ -137,21 +138,53 @@ wtrm() {
 # list worktrees
 wtls() { git worktree list; }
 
-# wtrm every worktree whose upstream branch was deleted on the remote ("gone").
-# Branches that never had an upstream are LEFT ALONE -- they may be new local work
-# you haven't pushed yet. Runs `git fetch --prune` first (skip with -n) so the
+# Is <branch> merged? Used by `wtprune --merged`. Sets $REPLY to a short reason.
+#   (1) OFFLINE, any remote: the branch tip is an ancestor of origin/<default>
+#       -- catches merge-commit / rebase / fast-forward merges.
+#   (2) GITHUB ONLY: for squash-merged and/or deleted branches (which leave no
+#       local trace), ask gh for a MERGED PR whose merged commit (headRefOid)
+#       EQUALS the branch tip. Matching the SHA -- not just the name -- avoids a
+#       false hit when a branch NAME was reused for new, unrelated work.
+_wtprune_merged() { # $1=proj  $2=default-branch  $3=gh_ok  $4=branch
+  emulate -L zsh
+  local proj=$1 def=$2 gh_ok=$3 b=$4 tip pr
+  if [[ -n $def ]] && git -C "$proj" merge-base --is-ancestor \
+    "refs/heads/$b" "refs/remotes/origin/$def" 2>/dev/null; then
+    REPLY="merged into $def"
+    return 0
+  fi
+  (( gh_ok )) || return 1
+  tip=$(git -C "$proj" rev-parse "refs/heads/$b" 2>/dev/null) || return 1
+  pr=$(cd "$proj" && gh pr list --head "$b" --state merged --json number,headRefOid \
+    --jq ".[] | select(.headRefOid==\"$tip\") | .number" 2>/dev/null | head -1)
+  [[ -n $pr ]] && { REPLY="merged PR #$pr"; return 0; }
+  return 1
+}
+
+# Remove worktrees you're done with. By DEFAULT that means the branch's upstream
+# was DELETED on the remote ("gone"): you were tracking origin/<b> and it's now
+# gone. Branches that never recorded an upstream are LEFT ALONE (they may be new
+# local work you haven't pushed). Runs `git fetch --prune` first (skip -n) so the
 # gone status is fresh, lists the matches, then confirms before removing.
-#   wtprune            fetch --prune, then prompt before removing gone worktrees
-#   wtprune -y         don't prompt
-#   wtprune -n         skip the fetch --prune (use current remote-tracking refs)
+#
+# With -m/--merged it ALSO removes worktrees whose branch has been MERGED:
+#   - offline, any remote: the branch is an ancestor of origin/HEAD; plus
+#   - GITHUB ONLY (needs `gh`): squash-merged and/or deleted branches, matched by
+#     commit SHA against a merged PR. On non-GitHub remotes or without `gh`, only
+#     the offline ancestry check runs (it says so).
+#   wtprune              remove worktrees whose tracked remote branch was deleted
+#   wtprune -m|--merged  ALSO remove worktrees whose branch has been merged
+#   wtprune -y           don't prompt
+#   wtprune -n           skip the fetch --prune
 wtprune() {
   emulate -L zsh
-  local yes=0 fetch=1 arg
+  local yes=0 fetch=1 merged=0 arg
   for arg in "$@"; do
     case $arg in
       -y|--yes) yes=1 ;;
       -n|--no-fetch) fetch=0 ;;
-      *) print -u2 "usage: wtprune [-y] [-n|--no-fetch]"; return 1 ;;
+      -m|--merged) merged=1 ;;
+      *) print -u2 "usage: wtprune [-y] [-n|--no-fetch] [-m|--merged]"; return 1 ;;
     esac
   done
 
@@ -166,6 +199,12 @@ wtprune() {
       || print -u2 "wtprune: fetch failed; continuing with cached remote-tracking refs"
   fi
 
+  # Default branch (origin/HEAD short name): the --merged ancestry target, and
+  # never a removal candidate itself.
+  local def
+  def=$(git -C "$proj" symbolic-ref --quiet refs/remotes/origin/HEAD 2>/dev/null)
+  def=${def#refs/remotes/origin/}
+
   # Branches whose upstream is configured but now gone (remote branch deleted).
   # Skips branches with no upstream ($up empty) -- those never had a remote.
   local -A gone
@@ -177,35 +216,51 @@ wtprune() {
     [[ -n $up && $track == *gone* ]] && gone[$br]=1
   done
 
-  # Walk the worktrees; a gone branch that has a worktree is a removal target
-  # (skip the one we're standing in -- git won't remove the current worktree).
+  # --merged needs gh for the squash-merged/deleted case (GitHub only).
+  local gh_ok=0
+  if (( merged )); then
+    if (( $+commands[gh] )); then
+      gh_ok=1
+    else
+      print -u2 "wtprune: --merged: gh not found -- using the offline ancestry check only"
+    fi
+  fi
+
+  # Walk the worktrees. A worktree is a target if its branch is gone, or (with
+  # --merged) merged. Skip the default branch and the one we're standing in.
   local curwt; curwt=$(git rev-parse --show-toplevel 2>/dev/null)
   local -a targets
+  local -A why
   local wtpath= b=
   for line in ${(f)"$(git -C "$proj" worktree list --porcelain 2>/dev/null)"}; do
     case $line in
       ("worktree "*) wtpath=${line#worktree }; b= ;;
       ("branch refs/heads/"*)
         b=${line#branch refs/heads/}
+        [[ $b == $def ]] && continue
+        if [[ -n $curwt && $wtpath == $curwt ]]; then
+          [[ -n ${gone[$b]} ]] && print -u2 "wtprune: skipping current worktree '$b' -- cd elsewhere and rerun"
+          continue
+        fi
         if [[ -n ${gone[$b]} ]]; then
-          if [[ -n $curwt && $wtpath == $curwt ]]; then
-            print -u2 "wtprune: skipping current worktree '$b' -- cd elsewhere and rerun to remove it"
-          else
-            targets+=$b
-          fi
+          targets+=$b
+          why[$b]="remote branch deleted"
+        elif (( merged )) && _wtprune_merged "$proj" "$def" "$gh_ok" "$b"; then
+          targets+=$b
+          why[$b]=$REPLY
         fi
         ;;
     esac
   done
 
   if (( ! $#targets )); then
-    print "wtprune: nothing to remove (no worktree tracks a deleted remote branch)."
+    print "wtprune: nothing to remove."
     return 0
   fi
 
-  print "wtprune: these worktrees track a remote branch that no longer exists:"
+  print "wtprune: worktrees to remove:"
   local t
-  for t in $targets; do print "  $t"; done
+  for t in $targets; do printf '  %-38s (%s)\n' "$t" "${why[$t]}"; done
   if (( ! yes )); then
     print -n "remove them? [y/N] "
     local reply; read -r reply
@@ -306,8 +361,10 @@ wthelp() {
                         (base defaults to origin/HEAD; tab-completes branches;
                          seeds $WT_SEED files -- .env etc. -- into new worktrees)
   wtrm <branch>         remove a worktree            (tab-completes worktrees)
-  wtprune [-y] [-n]     remove worktrees whose remote branch was deleted ("gone");
-                        leaves branches that never had a remote. -n skips fetch --prune
+  wtprune [-ynm]        remove worktrees whose remote branch was deleted ("gone");
+                        leaves branches that never had a remote. -n skips fetch --prune;
+                        -m/--merged also removes MERGED branches (ancestry offline;
+                        squash-merged/deleted via gh -- GitHub only)
   wtls                  list worktrees
   wtconvert [-y]        convert a normal clone (CWD) into the bare/worktree layout
                         (needs a clean tree; keeps ignored files; stashes survive)
@@ -340,7 +397,7 @@ _wtrm() {
 (( $+functions[compdef] )) && compdef _wtrm wtrm
 
 # complete `wtprune` with its flags
-_wtprune() { compadd -- -y --yes -n --no-fetch; }
+_wtprune() { compadd -- -y --yes -n --no-fetch -m --merged; }
 (( $+functions[compdef] )) && compdef _wtprune wtprune
 
 true  # ensure the plugin always sources with a success status
