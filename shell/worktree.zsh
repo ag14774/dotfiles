@@ -139,20 +139,16 @@ wtrm() {
 wtls() { git worktree list; }
 
 # Is <branch> merged? Used by `wtprune --merged`. Sets $REPLY to a short reason.
-#   (1) OFFLINE, any remote: the branch tip is an ancestor of origin/<default>
-#       -- catches merge-commit / rebase / fast-forward merges.
-#   (2) GITHUB ONLY: for squash-merged and/or deleted branches (which leave no
-#       local trace), ask gh for a MERGED PR whose merged commit (headRefOid)
-#       EQUALS the branch tip. Matching the SHA -- not just the name -- avoids a
-#       false hit when a branch NAME was reused for new, unrelated work.
-_wtprune_merged() { # $1=proj  $2=default-branch  $3=gh_ok  $4=branch
+# GITHUB ONLY: asks gh for a MERGED PR whose merged commit (headRefOid) EQUALS the
+# branch tip. The exact-SHA match matters for two reasons:
+#   - name reuse: a recycled branch name must not match an OLD merged PR; and
+#   - we deliberately do NOT use ancestry (`git branch --merged` / is-ancestor of
+#     origin/HEAD). A brand-new branch with no commits is trivially an ancestor of
+#     origin/HEAD, so ancestry can't tell an empty new branch from a merged one and
+#     would delete fresh work. A merged PR matched by SHA is the only safe signal.
+_wtprune_merged() { # $1=proj  $2=gh_ok  $3=branch
   emulate -L zsh
-  local proj=$1 def=$2 gh_ok=$3 b=$4 tip pr
-  if [[ -n $def ]] && git -C "$proj" merge-base --is-ancestor \
-    "refs/heads/$b" "refs/remotes/origin/$def" 2>/dev/null; then
-    REPLY="merged into $def"
-    return 0
-  fi
+  local proj=$1 gh_ok=$2 b=$3 tip pr
   (( gh_ok )) || return 1
   tip=$(git -C "$proj" rev-parse "refs/heads/$b" 2>/dev/null) || return 1
   pr=$(cd "$proj" && gh pr list --head "$b" --state merged --json number,headRefOid \
@@ -167,11 +163,11 @@ _wtprune_merged() { # $1=proj  $2=default-branch  $3=gh_ok  $4=branch
 # local work you haven't pushed). Runs `git fetch --prune` first (skip -n) so the
 # gone status is fresh, lists the matches, then confirms before removing.
 #
-# With -m/--merged it ALSO removes worktrees whose branch has been MERGED:
-#   - offline, any remote: the branch is an ancestor of origin/HEAD; plus
-#   - GITHUB ONLY (needs `gh`): squash-merged and/or deleted branches, matched by
-#     commit SHA against a merged PR. On non-GitHub remotes or without `gh`, only
-#     the offline ancestry check runs (it says so).
+# With -m/--merged it ALSO removes worktrees whose branch was MERGED via a PR --
+# detected GITHUB ONLY (needs `gh`): a merged PR whose merged commit matches the
+# branch tip by SHA. (No ancestry check: an empty new branch is trivially an
+# ancestor of origin/HEAD, so it can't be told apart from a merged one.) Without
+# `gh` / on non-GitHub remotes, --merged finds nothing extra and says so.
 #   wtprune              remove worktrees whose tracked remote branch was deleted
 #   wtprune -m|--merged  ALSO remove worktrees whose branch has been merged
 #   wtprune -y           don't prompt
@@ -199,8 +195,7 @@ wtprune() {
       || print -u2 "wtprune: fetch failed; continuing with cached remote-tracking refs"
   fi
 
-  # Default branch (origin/HEAD short name): the --merged ancestry target, and
-  # never a removal candidate itself.
+  # Default branch (origin/HEAD short name): never a removal candidate itself.
   local def
   def=$(git -C "$proj" symbolic-ref --quiet refs/remotes/origin/HEAD 2>/dev/null)
   def=${def#refs/remotes/origin/}
@@ -222,7 +217,7 @@ wtprune() {
     if (( $+commands[gh] )); then
       gh_ok=1
     else
-      print -u2 "wtprune: --merged: gh not found -- using the offline ancestry check only"
+      print -u2 "wtprune: --merged needs gh (GitHub CLI); without it, only deleted-remote branches are removed"
     fi
   fi
 
@@ -245,7 +240,7 @@ wtprune() {
         if [[ -n ${gone[$b]} ]]; then
           targets+=$b
           why[$b]="remote branch deleted"
-        elif (( merged )) && _wtprune_merged "$proj" "$def" "$gh_ok" "$b"; then
+        elif (( merged )) && _wtprune_merged "$proj" "$gh_ok" "$b"; then
           targets+=$b
           why[$b]=$REPLY
         fi
@@ -363,8 +358,8 @@ wthelp() {
   wtrm <branch>         remove a worktree            (tab-completes worktrees)
   wtprune [-ynm]        remove worktrees whose remote branch was deleted ("gone");
                         leaves branches that never had a remote. -n skips fetch --prune;
-                        -m/--merged also removes MERGED branches (ancestry offline;
-                        squash-merged/deleted via gh -- GitHub only)
+                        -m/--merged also removes branches merged via a PR
+                        (GitHub only, via gh; matched by commit SHA)
   wtls                  list worktrees
   wtconvert [-y]        convert a normal clone (CWD) into the bare/worktree layout
                         (needs a clean tree; keeps ignored files; stashes survive)
