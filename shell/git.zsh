@@ -4,8 +4,12 @@
   git symbolic-ref --quiet --short HEAD 2>/dev/null || git rev-parse --short HEAD 2>/dev/null
 }
 
-# push/pull the current branch to/from origin/<same-name>
-alias ggpush='git push origin "$(git_current_branch)"'
+# push/pull the current branch to/from origin/<same-name>.
+# ggpush uses -u so the branch records its upstream (an explicit `git push origin
+# <branch>` does NOT trigger push.autoSetupRemote). Without that upstream, once the
+# remote branch is later merged+deleted git keeps no trace it ever existed, so
+# `wtprune` can't tell the worktree from a never-pushed one.
+alias ggpush='git push -u origin "$(git_current_branch)"'
 alias ggpull='git pull origin "$(git_current_branch)"'
 
 # gcai -- draft a commit message from the staged diff via opencode, then edit in
