@@ -11,6 +11,7 @@
 #   wt <branch> [base]    create/reuse a worktree for <branch> and cd into it
 #                         (seeds $WT_SEED files -- .env etc. -- into new worktrees)
 #   wtrm <branch>         remove a worktree
+#   wtprune [-y] [-n]     wtrm every worktree whose remote branch was deleted ("gone")
 #   wtls                  list worktrees
 #   wtconvert [-y]        convert a normal clone (CWD) into this bare/worktree layout
 #   wthelp                show help for these commands
@@ -136,6 +137,84 @@ wtrm() {
 # list worktrees
 wtls() { git worktree list; }
 
+# wtrm every worktree whose upstream branch was deleted on the remote ("gone").
+# Branches that never had an upstream are LEFT ALONE -- they may be new local work
+# you haven't pushed yet. Runs `git fetch --prune` first (skip with -n) so the
+# gone status is fresh, lists the matches, then confirms before removing.
+#   wtprune            fetch --prune, then prompt before removing gone worktrees
+#   wtprune -y         don't prompt
+#   wtprune -n         skip the fetch --prune (use current remote-tracking refs)
+wtprune() {
+  emulate -L zsh
+  local yes=0 fetch=1 arg
+  for arg in "$@"; do
+    case $arg in
+      -y|--yes) yes=1 ;;
+      -n|--no-fetch) fetch=0 ;;
+      *) print -u2 "usage: wtprune [-y] [-n|--no-fetch]"; return 1 ;;
+    esac
+  done
+
+  local common proj
+  common=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null) \
+    || { print -u2 "wtprune: not inside a git repo"; return 1; }
+  proj=${common:h}
+
+  if (( fetch )); then
+    print "wtprune: git fetch --prune ..."
+    git -C "$proj" fetch --prune --quiet \
+      || print -u2 "wtprune: fetch failed; continuing with cached remote-tracking refs"
+  fi
+
+  # Branches whose upstream is configured but now gone (remote branch deleted).
+  # Skips branches with no upstream ($up empty) -- those never had a remote.
+  local -A gone
+  local line br rest up track
+  for line in ${(f)"$(git -C "$proj" for-each-ref \
+    --format='%(refname:short)%09%(upstream)%09%(upstream:track)' refs/heads 2>/dev/null)"}; do
+    br=${line%%$'\t'*}; rest=${line#*$'\t'}
+    up=${rest%%$'\t'*}; track=${rest#*$'\t'}
+    [[ -n $up && $track == *gone* ]] && gone[$br]=1
+  done
+
+  # Walk the worktrees; a gone branch that has a worktree is a removal target
+  # (skip the one we're standing in -- git won't remove the current worktree).
+  local curwt; curwt=$(git rev-parse --show-toplevel 2>/dev/null)
+  local -a targets
+  local wtpath= b=
+  for line in ${(f)"$(git -C "$proj" worktree list --porcelain 2>/dev/null)"}; do
+    case $line in
+      ("worktree "*) wtpath=${line#worktree }; b= ;;
+      ("branch refs/heads/"*)
+        b=${line#branch refs/heads/}
+        if [[ -n ${gone[$b]} ]]; then
+          if [[ -n $curwt && $wtpath == $curwt ]]; then
+            print -u2 "wtprune: skipping current worktree '$b' -- cd elsewhere and rerun to remove it"
+          else
+            targets+=$b
+          fi
+        fi
+        ;;
+    esac
+  done
+
+  if (( ! $#targets )); then
+    print "wtprune: nothing to remove (no worktree tracks a deleted remote branch)."
+    return 0
+  fi
+
+  print "wtprune: these worktrees track a remote branch that no longer exists:"
+  local t
+  for t in $targets; do print "  $t"; done
+  if (( ! yes )); then
+    print -n "remove them? [y/N] "
+    local reply; read -r reply
+    [[ $reply == [yY]* ]] || { print "aborted"; return 1; }
+  fi
+
+  for t in $targets; do wtrm "$t"; done
+}
+
 # convert a NORMAL clone (in the CWD) into the bare + worktree layout `wtclone` makes.
 # Safe by default: refuses a dirty tree, relocates ignored files into the new worktree,
 # and only deletes top-level TRACKED files (which are committed -> recoverable).
@@ -227,6 +306,8 @@ wthelp() {
                         (base defaults to origin/HEAD; tab-completes branches;
                          seeds $WT_SEED files -- .env etc. -- into new worktrees)
   wtrm <branch>         remove a worktree            (tab-completes worktrees)
+  wtprune [-y] [-n]     remove worktrees whose remote branch was deleted ("gone");
+                        leaves branches that never had a remote. -n skips fetch --prune
   wtls                  list worktrees
   wtconvert [-y]        convert a normal clone (CWD) into the bare/worktree layout
                         (needs a clean tree; keeps ignored files; stashes survive)
@@ -234,10 +315,10 @@ wthelp() {
 }
 
 # ---- completions -------------------------------------------------------------
-# oh-my-zsh adds this plugin dir to $fpath and runs `compinit` BEFORE it sources
-# plugins, so `compdef` already exists here. `compdef _fn cmd` registers: "to
-# complete `cmd`, run the shell function `_fn`". Inside _fn we build an array of
-# candidates and hand them to `compadd`, which shows/inserts them.
+# shell/init.zsh runs `compinit` before the ~/.zshrc block sources this file, so
+# `compdef` already exists here. `compdef _fn cmd` registers: "to complete `cmd`,
+# run the shell function `_fn`". Inside _fn we build an array of candidates and
+# hand them to `compadd`, which shows/inserts them.
 
 # complete `wt` with local + origin/* branch names
 _wt() {
@@ -257,5 +338,9 @@ _wtrm() {
   compadd -a -- ${wts:#.bare}           # drop the ".bare" repo itself
 }
 (( $+functions[compdef] )) && compdef _wtrm wtrm
+
+# complete `wtprune` with its flags
+_wtprune() { compadd -- -y --yes -n --no-fetch; }
+(( $+functions[compdef] )) && compdef _wtprune wtprune
 
 true  # ensure the plugin always sources with a success status
