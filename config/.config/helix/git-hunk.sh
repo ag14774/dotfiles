@@ -29,7 +29,7 @@ view() {
       show
     ')
     if printf '%s\n' "$hunk" | grep -q '^@@'; then
-      printf '%s\n' "$hunk" | delta --paging=always
+      printf '%s\n' "$hunk" | delta --paging=always --width="$(tput cols)"
       return 0
     fi
     printf 'git-hunk: no uncommitted change on line %s of %s.\n' "$line" "$file"
@@ -46,5 +46,6 @@ fi
 # Launcher (called from Helix): open the view in a floating zellij pane.
 file=${1:?usage: git-hunk.sh <file> <line>}
 line=${2:?usage: git-hunk.sh <file> <line>}
-zellij run --floating --close-on-exit --name "git-hunk" --cwd "$PWD" -- \
+zellij run --floating --close-on-exit --width 90% --height 90% \
+  --name "git-hunk" --cwd "$PWD" -- \
   bash "$0" --view "$file" "$line" >/dev/null 2>&1
