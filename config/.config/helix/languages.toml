@@ -39,7 +39,7 @@ auto-format = true
 # ---------- Jinja ----------
 [language-server.jinja-lsp]
 command = "jinja-lsp"
-config = { lang = "python" }
+config = { lang = "python", hide_undefined = true }
 timeout = 5
 
 [[language]]
