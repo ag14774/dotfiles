@@ -202,6 +202,7 @@ Change bars (added / modified / deleted) show in the gutter automatically. See t
 | ★ `+` `s` | toggle soft-wrap |
 | ★ `+` `l` | toggle inlay type hints |
 | ★ `+` `d` | toggle end-of-line diagnostic text |
+| ★ `+` `y` | copy diagnostic under the cursor to the system clipboard |
 | ★ `+` `w` · `+` `W` | show · hide whitespace |
 | ★ `+` `g` | peek the git-diff hunk under the cursor (floating pane, delta) |
 | ★ `gu` | goto super-method — the overridden method's parent (Python; see Recipes) |
