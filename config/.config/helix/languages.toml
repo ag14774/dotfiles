@@ -36,6 +36,16 @@ name = "python"
 language-servers = ["basedpyright", "ruff"]
 auto-format = true
 
+# ---------- Jinja ----------
+[language-server.jinja-lsp]
+command = "jinja-lsp"
+config = { lang = "python" }
+timeout = 5
+
+[[language]]
+name = "jinja"
+language-servers = ["jinja-lsp"]
+
 # ---------- Baseline languages ----------
 # Servers (taplo / yaml-language-server / vscode-json-language-server /
 # bash-language-server / marksman) come from Helix's built-in language config;

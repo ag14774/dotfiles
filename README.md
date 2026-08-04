@@ -13,15 +13,40 @@ exec zsh
 ```
 
 `install.sh` (safe to rerun) selects Homebrew on macOS or Pacman on Linux,
-installs the platform packages plus Python/JS language servers and the Yazi
+installs the platform packages plus developer tools/language servers and the Yazi
 flavor, symlinks `config/` into `~/.config` via GNU Stow, and appends a small
-configuration block to `~/.zshrc` (adds `~/.local/bin` to `PATH`, sets
+configuration block to `~/.zshrc` (adds the managed user-tool directories to `PATH`, sets
 `EDITOR` to the available Helix executable, sources
 `~/.config/zsh/secrets.zsh`, and loads the `shell/*.zsh` functions). A separate
 managed preamble is kept at the beginning for Zellij autostart.
 
 Homebrew must already be installed on macOS. The Linux backend currently
 supports Pacman-based distributions such as Manjaro and Arch Linux.
+
+### Managed developer tools
+
+The installer keeps user-level tools with the package manager for their
+ecosystem:
+
+| Manager | Installed by | Managed tools |
+| --- | --- | --- |
+| Homebrew/Pacman | platform backend | Node/npm, Ruff, Taplo, Marksman, ShellCheck, shfmt |
+| Official uv installer (`~/.local/bin`) | `install.sh` | uv |
+| `uv tool` | `install.sh` | basedpyright |
+| npm (`~/.local`) | `install.sh` | bash/yaml/json language servers |
+| Official OpenCode installer (`~/.opencode/bin`) | `install.sh` | OpenCode |
+| Official rustup installer (`~/.cargo`, `~/.rustup`) | `install.sh` | stable Rust toolchain and Cargo |
+| Cargo (`~/.cargo/bin`) | `install.sh` | `jinja-lsp` |
+
+Rerunning `install.sh` upgrades the user-level tools. Jinja projects can set
+their own template and backend paths in `pyproject.toml` when the defaults are
+not sufficient:
+
+```toml
+[tool.jinja-lsp]
+templates = "./templates"
+backend = ["./src"]
+```
 
 Zellij autostarts from a pre-Oh My Zsh preamble in both iTerm2 and Ghostty, so
 the outer shell immediately becomes Zellij without initializing the framework

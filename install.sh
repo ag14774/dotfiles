@@ -3,7 +3,7 @@
 #
 #   git clone <repo> ~/dotfiles && ~/dotfiles/install.sh && exec zsh
 #
-# It installs platform packages + language servers and the Yazi flavor,
+# It installs platform packages + developer tools/language servers and the Yazi flavor,
 # symlinks config/ into ~/.config via stow, sets up zoxide (replacing autojump),
 # maintains small idempotent blocks at the start and end of ~/.zshrc. (zjstatus
 # is loaded by dev.kdl directly from its release URL.)
@@ -38,6 +38,19 @@ esac
 
 bash "$DOTFILES/install/$PACKAGE_INSTALLER.sh"
 
+command -v curl >/dev/null 2>&1 || {
+  echo "curl is required to install uv, OpenCode, and rustup." >&2
+  exit 1
+}
+
+echo "==> uv (official installer)"
+if [ -x "$HOME/.local/bin/uv" ]; then
+  UV_NO_MODIFY_PATH=1 "$HOME/.local/bin/uv" self update >/dev/null
+else
+  curl -LsSf https://astral.sh/uv/install.sh | UV_NO_MODIFY_PATH=1 sh
+fi
+export PATH="$HOME/.local/bin:$PATH"
+
 echo "==> basedpyright (uv tool)"
 uv tool install --upgrade basedpyright >/dev/null
 
@@ -45,6 +58,21 @@ echo "==> JS-based language servers (npm -g)"
 # core-js's postinstall only prints its funding notice; allow that script explicitly.
 npm install --global --prefix "$HOME/.local" --allow-scripts=core-js \
   bash-language-server yaml-language-server vscode-langservers-extracted >/dev/null
+
+echo "==> OpenCode (official installer)"
+export PATH="$HOME/.opencode/bin:$PATH"
+curl -fsSL https://opencode.ai/install | bash -s -- --no-modify-path
+
+echo "==> Rust toolchain (rustup)"
+if [ ! -x "$HOME/.cargo/bin/rustup" ]; then
+  curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --no-modify-path
+fi
+export PATH="$HOME/.cargo/bin:$PATH"
+"$HOME/.cargo/bin/rustup" update stable >/dev/null
+"$HOME/.cargo/bin/rustup" default stable >/dev/null
+
+echo "==> Cargo-based language servers"
+cargo install jinja-lsp >/dev/null
 
 echo "==> Symlink config/ into ~/.config (stow)"
 mkdir -p "$HOME/.config"
@@ -96,7 +124,7 @@ fi
   printf '\n'
   printf '%s\n' "$B"
   printf 'typeset -U path PATH\n'
-  printf 'export PATH="$HOME/.local/bin:$PATH"\n'
+  printf 'export PATH="$HOME/.local/bin:$HOME/.opencode/bin:$HOME/.cargo/bin:$PATH"\n'
   printf 'if command -v hx >/dev/null 2>&1; then\n'
   printf '  export EDITOR=hx\n'
   printf 'else\n'

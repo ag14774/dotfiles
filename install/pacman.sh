@@ -2,6 +2,9 @@
 set -euo pipefail
 
 PACKAGES=(
+  # Native build toolchain (required by cargo install)
+  base-devel
+
   # Shell and core terminal IDE stack
   zsh
   starship                # prompt (we roll our own zsh setup, not oh-my-zsh)
@@ -35,7 +38,7 @@ PACKAGES=(
   npm
 
   # Tooling
-  uv
+  curl
   stow
   git-delta
   glow
