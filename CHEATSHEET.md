@@ -205,6 +205,7 @@ Change bars (added / modified / deleted) show in the gutter automatically. See t
 | ★ `+` `y` | copy diagnostic under the cursor to the system clipboard |
 | ★ `+` `w` · `+` `W` | show · hide whitespace |
 | ★ `+` `g` | peek the git-diff hunk under the cursor (floating pane, delta) |
+| ★ `+` `r` | run the whole buffer as Python, Bash, or JavaScript (floating pane) |
 | ★ `gu` | goto super-method — the overridden method's parent (Python; see Recipes) |
 
 ---
@@ -256,6 +257,8 @@ Multi-step workflows and the reasoning. The individual keys are in the tables ab
 **Select a function with its decorator:** `maf` → `Alt-o`. `maf` alone stops at the `def`; `Alt-o` grows to the decorated block. Repeat `Alt-o` to widen, `Alt-i` to shrink.
 
 **Read a long diagnostic cut off at the line end:** move the cursor onto that line and the full message wraps in below it. ★ `+` `d` toggles the end-of-line text. `Space d` only *jumps* to diagnostics. The statusline counts the current file only, so use `Space D` for the project-wide total.
+
+**Run a disposable scratch buffer:** `:new` → `:lang python` → write code → `Esc` → ★ `+` `r`. The whole buffer runs in a floating pane from Helix's current workspace; Python uses `uv run`, so the workspace project/virtualenv is discovered automatically. Use `:lang bash` or `:lang javascript` for the other runners. The temporary source is deleted when the pane closes, while the Helix buffer stays open for edits and re-runs.
 
 **Sort imports + drop unused (Python):** `Space a` → *Ruff: Organize imports* (or *Fix all*) → `:w`. On `:w`, ruff only **formats** (like Black); it does not sort or prune imports. To automate, chain `ruff check --fix` into `ruff format` via `formatter` in `~/.config/helix/languages.toml`.
 

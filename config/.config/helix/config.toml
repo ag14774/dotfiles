@@ -93,6 +93,12 @@ y = ":yank-diagnostic"                              # copy diagnostic under curs
 w = ":set whitespace.render all"                   # show whitespace (tabs/spaces/newlines)
 W = ":set whitespace.render none"                  # hide whitespace again
 g = ":sh bash $HOME/.config/helix/git-hunk.sh '%{buffer_name}' %{cursor_line}" # peek the git-diff hunk under the cursor (floating delta pane)
+r = [
+  "save_selection",
+  "select_all",
+  ":pipe-to bash $HOME/.config/helix/run-buffer.sh '%{language}'",
+  "jump_backward",
+] # run the whole buffer in its workspace (Python/Bash/JavaScript; floating pane)
 
 # "g u" -- go up to the overridden method in the parent class (Python).
 # Helix has no LSP type-hierarchy jump, so this shells out to a small Jedi
