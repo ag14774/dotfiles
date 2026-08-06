@@ -1,7 +1,7 @@
 # init.zsh -- interactive-shell framework. Replaces oh-my-zsh.
 #
 # Sourced early from the ~/.zshrc managed block. Sets zsh options, completion,
-# and keybindings, then loads direnv + zsh-autosuggestions + starship. It does
+# and keybindings, then loads zsh-autosuggestions + starship. It does
 # NOT load zsh-syntax-highlighting directly -- that must be sourced LAST (after
 # every widget/keybinding), so it exposes `dotfiles_load_syntax_highlighting`
 # which the managed block calls as its final line.
