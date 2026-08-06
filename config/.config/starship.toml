@@ -6,10 +6,14 @@ $os\
 $username\
 [](bg:peach fg:red)\
 $directory\
-[](bg:yellow fg:peach)\
+[](fg:peach bg:lavender)\
+$time\
+[ ](fg:lavender)\
+([](fg:yellow)\
 $git_branch\
 $git_status\
-[](fg:yellow bg:green)\
+[ ](fg:yellow))\
+([](fg:green)\
 $c\
 $rust\
 $golang\
@@ -20,11 +24,10 @@ $java\
 $kotlin\
 $haskell\
 $python\
-[](fg:green bg:sapphire)\
+[ ](fg:green))\
+([](fg:sapphire)\
 $conda\
-[](fg:sapphire bg:lavender)\
-$time\
-[ ](fg:lavender)\
+[ ](fg:sapphire))\
 $cmd_duration\
 $line_break\
 $character"""
@@ -132,9 +135,10 @@ style = "bg:green"
 format = '[[ $symbol( $version) ](fg:crust bg:green)]($style)'
 
 [python]
-symbol = ""
+symbol = ""
 style = "bg:green"
-format = '[[ $symbol( $version)(\(#$virtualenv\)) ](fg:crust bg:green)]($style)'
+format = '([  $version(\(#$virtualenv\)) ](fg:crust bg:green))'
+python_binary = ['./.venv/bin/python', 'python']
 
 [docker_context]
 symbol = ""
