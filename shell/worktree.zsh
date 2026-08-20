@@ -9,7 +9,7 @@
 # Commands:
 #   wtclone <url> [dir]   set up a bare repo + worktree layout from a remote
 #   wt <branch> [base]    create/reuse a worktree for <branch> and cd into it
-#                         (seeds $WT_SEED files -- .env etc. -- into new worktrees)
+#                         (seeds configured local files into new worktrees)
 #   wtrm <branch>         remove a worktree
 #   wtprune [-ynm]        wtrm worktrees whose remote branch was deleted ("gone");
 #                         -m/--merged also removes merged branches (GitHub via gh)
@@ -50,18 +50,48 @@ wtclone() {
 }
 
 # Untracked/ignored files git won't carry into a new worktree but you want there
-# anyway (secrets, local config). Globs allowed; override in ~/.zshrc. Do NOT list
-# .venv/node_modules -- recreate those (uv sync / npm install), don't copy them.
+# anyway (secrets, local config). Globs allowed; override in ~/.zshrc. A readable
+# <git-common-dir>/wt-seed replaces these defaults for one repository, and
+# WT_SEED_FILE can select an explicit manifest. Do NOT list .venv/node_modules --
+# recreate those (uv sync / npm install), don't copy them.
 (( $+WT_SEED )) || typeset -ga WT_SEED=(.env '.env.*' .envrc pyrightconfig.json)
 
-# copy WT_SEED matches from $1 (source worktree) into $2 (new worktree), skipping
-# any that already exist so each worktree keeps its own copies.
+# Copy configured matches from $1 (source worktree) into $2 (new worktree),
+# skipping any that already exist so each worktree keeps its own copies. $3 is
+# the git common dir. A seed manifest contains one relative path/glob per line;
+# blank lines and comments are ignored.
 _wt_seed() {
   emulate -L zsh
-  setopt local_options null_glob
-  local src=$1 dest=$2 pat f rel n=0
+  setopt local_options extended_glob null_glob
+  local src=$1 dest=$2 common=$3 pat f rel line n=0
+  local seed_file="${WT_SEED_FILE:-$common/wt-seed}"
+  local seed_label=WT_SEED
+  local -a patterns
+
+  if [[ -n ${WT_SEED_FILE:-} && ! -r $seed_file ]]; then
+    print -u2 "wt: WT_SEED_FILE is not readable: $seed_file"
+    return 1
+  fi
+
+  if [[ -r $seed_file ]]; then
+    while IFS= read -r line || [[ -n $line ]]; do
+      pat=${line%$'\r'}
+      pat=${pat##[[:space:]]#}
+      pat=${pat%%[[:space:]]#}
+      [[ -z $pat || $pat == \#* ]] && continue
+      if [[ $pat == /* || $pat == .. || $pat == ../* || $pat == */../* || $pat == */.. ]]; then
+        print -u2 "wt: unsafe seed pattern in $seed_file: $pat"
+        return 1
+      fi
+      patterns+=("$pat")
+    done < "$seed_file"
+    seed_label=$seed_file
+  else
+    patterns=("${WT_SEED[@]}")
+  fi
+
   [[ -n $src && -d $src && $src != $dest ]] || return 0
-  for pat in $WT_SEED; do
+  for pat in "${patterns[@]}"; do
     for f in $src/${~pat}; do
       [[ -e $f ]] || continue   # literal patterns (.env, .envrc) skip null_glob; drop them when the source lacks them
       rel=${f#$src/}
@@ -69,7 +99,7 @@ _wt_seed() {
       mkdir -p "$dest/${rel:h}" && cp -R "$f" "$dest/$rel" && (( n++ ))
     done
   done
-  (( n )) && print "wt: seeded $n local file(s) from ${src:t}/ (WT_SEED)"
+  (( n )) && print "wt: seeded $n local file(s) from ${src:t}/ ($seed_label)"
   return 0
 }
 
@@ -104,6 +134,9 @@ wt() {
   proj=${common:h}
   wtdir="$proj/${branch//\//-}"
   if [[ ! -d "$wtdir" ]]; then
+    # Validate an explicit/per-repo manifest before creating anything. _wt_seed
+    # returns after parsing when source/destination are empty.
+    _wt_seed "" "" "$common" || return 1
     git -C "$proj" fetch -q origin
     if git -C "$proj" show-ref -q --verify "refs/heads/$branch"; then
       git -C "$proj" worktree add "$wtdir" "$branch" || return 1                               # existing local branch
@@ -118,7 +151,7 @@ wt() {
     local src; src=$(git rev-parse --show-toplevel 2>/dev/null)
     [[ -z $src ]] && src=$(_wt_default_worktree "$common")
     [[ $src == $wtdir ]] && src=   # never seed a worktree from itself
-    _wt_seed "$src" "$wtdir"
+    _wt_seed "$src" "$wtdir" "$common" || return 1
   fi
   cd "$wtdir"
 }
@@ -354,7 +387,8 @@ wthelp() {
   wtclone <url> [dir]   bare-clone a repo and set it up for worktrees
   wt <branch> [base]    create/reuse a worktree for <branch> and cd into it
                         (base defaults to origin/HEAD; tab-completes branches;
-                         seeds $WT_SEED files -- .env etc. -- into new worktrees)
+                         seeds local files configured by $WT_SEED, the common-dir
+                         wt-seed manifest, or $WT_SEED_FILE)
   wtrm <branch>         remove a worktree            (tab-completes worktrees)
   wtprune [-ynm]        remove worktrees whose remote branch was deleted ("gone");
                         leaves branches that never had a remote. -n skips fetch --prune;
@@ -363,6 +397,8 @@ wthelp() {
   wtls                  list worktrees
   wtconvert [-y]        convert a normal clone (CWD) into the bare/worktree layout
                         (needs a clean tree; keeps ignored files; stashes survive)
+  <common-dir>/wt-seed  one relative path/glob per line; replaces $WT_SEED
+  WT_SEED_FILE=<path>   use an explicit seed manifest for the next `wt`
   wthelp                show this help'
 }
 
