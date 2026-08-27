@@ -17,3 +17,4 @@
 inherits = "catppuccin_mocha"
 
 "comment.block.documentation" = { fg = "#5f7c65", modifiers = ["italic"] }
+"diagnostic.warning" = {}

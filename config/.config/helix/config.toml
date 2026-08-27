@@ -10,7 +10,7 @@ true-color = true
 bufferline = "multiple"          # show the bufferline only when >1 buffer is open
 rulers = [100]
 text-width = 100
-end-of-line-diagnostics = "hint"
+end-of-line-diagnostics = "disable"
 completion-replace = true        # accepting a completion replaces the whole word, not just inserts
 trim-trailing-whitespace = true  # strip trailing spaces (only on Helix's own saves)
 
@@ -50,8 +50,9 @@ display-inlay-hints = true
 display-messages = true
 
 [editor.inline-diagnostics]
-cursor-line = "hint"
+cursor-line = "warning"
 other-lines = "error"
+max-diagnostics = 10
 
 [editor.soft-wrap]
 enable = false
@@ -88,7 +89,7 @@ C-r = ":reload-all"
 f = ":format"                                      # format the whole file (LSP)
 s = ":toggle soft-wrap.enable"                     # soft-wrap on/off
 l = ":toggle lsp.display-inlay-hints"              # inlay type hints on/off (can be noisy)
-d = ":toggle end-of-line-diagnostics hint disable" # show/hide end-of-line diagnostic text (harper grammar etc.)
+d = ":toggle inline-diagnostics.other-lines error disable" # toggle persistent errors; cursor-line messages remain visible
 y = ":yank-diagnostic"                              # copy diagnostic under cursor to the system clipboard
 w = ":set whitespace.render all"                   # show whitespace (tabs/spaces/newlines)
 W = ":set whitespace.render none"                  # hide whitespace again
