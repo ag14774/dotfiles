@@ -62,12 +62,19 @@ this): inside a zellij session run
 
 ## Layout
 
-- `config/.config/{ghostty,zellij,helix,yazi}/` — stowed into `~/.config`
+- `config/.config/{ghostty,zellij,helix,yazi,opencode}/` — stowed into `~/.config`
 - `shell/*.zsh` — sourced directly by the `.zshrc` block
 - `install/{brew,pacman}.sh` — platform package installation backends
 - `Brewfile` — Homebrew package manifest
 - `secrets.zsh.example` — template; real secrets live in
   `~/.config/zsh/secrets.zsh` (gitignored, never committed)
+
+### OpenCode BTW
+
+The OpenCode TUI plugin provides `/btw`, which opens a dialog for a side
+question. It sends a bounded text-only snapshot of the current conversation to
+a temporary read-only session, displays the answer in a modal, and deletes the
+temporary session. The active session is never prompted or modified.
 
 ## Changing the theme
 

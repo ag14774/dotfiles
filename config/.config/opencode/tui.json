@@ -1,0 +1,22 @@
+{
+  "$schema": "https://opencode.ai/tui.json",
+  "theme": "opencode",
+  "leader_timeout": 2000,
+  "keybinds": {
+    "leader": "ctrl+x",
+    "command_list": "ctrl+p"
+  },
+  "scroll_speed": 3,
+  "scroll_acceleration": {
+    "enabled": false
+  },
+  "diff_style": "auto",
+  "mouse": true,
+  "attention": {
+    "enabled": true,
+    "notifications": true,
+    "sound": true,
+    "volume": 0.4
+  },
+  "plugin": ["./tui-plugins/btw.ts"]
+}
