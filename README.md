@@ -73,8 +73,10 @@ this): inside a zellij session run
 
 The OpenCode TUI plugin provides `/btw`, which opens a dialog for a side
 question. It sends a bounded text-only snapshot of the current conversation to
-a temporary read-only session, displays the answer in a modal, and deletes the
-temporary session. The active session is never prompted or modified.
+a temporary read-only session and displays a scrollable side-conversation above
+a follow-up input. The temporary session persists for follow-up questions until
+the modal closes, then it is deleted. The active session is never prompted or
+modified.
 
 ## Changing the theme
 
