@@ -32,7 +32,7 @@ ecosystem:
 | --- | --- | --- |
 | Homebrew/Pacman | platform backend | Node/npm, Ruff, Taplo, Marksman, ShellCheck, shfmt |
 | Official uv installer (`~/.local/bin`) | `install.sh` | uv |
-| `uv tool` | `install.sh` | basedpyright |
+| `uv tool` | `install.sh` | Pyright |
 | npm (`~/.local`) | `install.sh` | bash/yaml/json language servers |
 | Official OpenCode installer (`~/.opencode/bin`) | `install.sh` | OpenCode |
 | Official rustup installer (`~/.cargo`, `~/.rustup`) | `install.sh` | stable Rust toolchain and Cargo |

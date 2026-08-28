@@ -1,8 +1,8 @@
 # ~/.config/helix/languages.toml
 #
-# Global default for Python = basedpyright (types) + ruff (lint/format).
+# Global default for Python = pyright (types) + ruff (lint/format).
 # Both respect each project's own config: ruff reads pyproject.toml/ruff.toml,
-# basedpyright reads [tool.basedpyright]/pyrightconfig.json and AUTO-DETECTS the
+# pyright reads [tool.pyright]/pyrightconfig.json and AUTO-DETECTS the
 # project's ./.venv -- so `cd <worktree>; $EDITOR .` picks up the right interpreter
 # with no direnv.
 #
@@ -14,14 +14,14 @@
 #   live_mode = true
 #   [[language]]
 #   name = "python"
-#   language-servers = ["basedpyright", "ruff", "pylsp"]
+#   language-servers = [{ name = "pyright", except-features = ["diagnostics"] }, "ruff", "pylsp"]
 
 # ---------- Python ----------
-[language-server.basedpyright]
-command = "basedpyright-langserver"
+[language-server.pyright]
+command = "pyright-langserver"
 args = ["--stdio"]
 
-[language-server.basedpyright.config.basedpyright.analysis]
+[language-server.pyright.config.python.analysis]
 # "workspace" (not "openFilesOnly") so find-references/rename see files that aren't
 # currently open (e.g. a test importing a symbol). Heavier CPU/RAM on large repos.
 diagnosticMode = "workspace"
@@ -33,7 +33,7 @@ args = ["server"]
 
 [[language]]
 name = "python"
-language-servers = ["basedpyright", "ruff"]
+language-servers = ["pyright", "ruff"]
 auto-format = true
 
 # ---------- Jinja ----------

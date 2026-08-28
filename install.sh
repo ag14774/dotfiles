@@ -51,8 +51,8 @@ else
 fi
 export PATH="$HOME/.local/bin:$PATH"
 
-echo "==> basedpyright (uv tool)"
-uv tool install --upgrade basedpyright >/dev/null
+echo "==> pyright (uv tool)"
+uv tool install --upgrade pyright >/dev/null
 
 echo "==> JS-based language servers (npm -g)"
 # core-js's postinstall only prints its funding notice; allow that script explicitly.
