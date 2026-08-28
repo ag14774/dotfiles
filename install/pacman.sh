@@ -53,11 +53,11 @@ command -v pacman >/dev/null 2>&1 || {
 }
 
 if ((EUID == 0)); then
-  pacman -S --needed "${PACKAGES[@]}"
+  pacman -Syu --needed "${PACKAGES[@]}"
 else
   command -v sudo >/dev/null 2>&1 || {
     echo "sudo is required to install Pacman packages." >&2
     exit 1
   }
-  sudo pacman -S --needed "${PACKAGES[@]}"
+  sudo pacman -Syu --needed "${PACKAGES[@]}"
 fi
