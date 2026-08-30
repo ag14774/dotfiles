@@ -27,8 +27,8 @@ itself when needed.
 
 Homebrew must already be installed on macOS. The Linux backends support Debian
 13 (Trixie) and Pacman-based distributions such as Manjaro and Arch Linux.
-Because several tools are not in Debian 13, its backend installs Helix, Yazi,
-Zellij, Taplo, and Marksman from their upstream GitHub releases. Ghostty uses
+Because several tools are not in Debian 13, its backend installs Yazi, Zellij,
+Taplo, and Marksman from their upstream GitHub releases. Ghostty uses
 the community Debian package linked from
 [Ghostty's official installation docs](https://ghostty.org/docs/install/binary#debian-and-ubuntu).
 
@@ -40,8 +40,8 @@ ecosystem:
 | Manager | Installed by | Managed tools |
 | --- | --- | --- |
 | Homebrew/Pacman | platform backend | Node/npm, Ruff, Taplo, Marksman, ShellCheck, shfmt |
-| APT | `install/apt.sh` | Node/npm, ShellCheck, shfmt |
-| Upstream release assets | `install/apt.sh` | Helix, Yazi, Ghostty, Zellij, Taplo, Marksman on Debian |
+| APT | `install/apt.sh` | Node/npm, Helix (`hx`), ShellCheck, shfmt |
+| Upstream release assets | `install/apt.sh` | Yazi, Ghostty, Zellij, Taplo, Marksman on Debian |
 | Official uv installer (`~/.local/bin`) | `install.sh` | uv |
 | `uv tool` | `install.sh` | Pyright, plus Ruff on Debian |
 | npm (`~/.local`) | `install.sh` | bash/yaml/json language servers |

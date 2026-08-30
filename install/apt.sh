@@ -11,6 +11,7 @@ PACKAGES=(
   starship
   zsh-autosuggestions
   zsh-syntax-highlighting
+  hx
 
   # Yazi preview and helper dependencies
   ffmpeg
@@ -136,19 +137,6 @@ install_release_deb() {
 }
 
 # These tools are not in Debian 13. Use upstream packages where available.
-if [ "$DEB_ARCH" = "amd64" ]; then
-  install_release_deb "Helix" "helix-editor/helix" '^helix_[^/]+_amd64\.deb$'
-else
-  echo "==> Helix (official release)"
-  download_release_asset "helix-editor/helix" \
-    "^helix-[^-]+-$RELEASE_ARCH-linux\\.tar\\.xz$" "$TMP_DIR/helix.tar.xz"
-  mkdir -p "$TMP_DIR/helix" "$HOME/.local/lib"
-  tar -xJf "$TMP_DIR/helix.tar.xz" -C "$TMP_DIR/helix" --strip-components=1
-  rm -rf "$HOME/.local/lib/helix"
-  mv "$TMP_DIR/helix" "$HOME/.local/lib/helix"
-  ln -sfn "$HOME/.local/lib/helix/hx" "$HOME/.local/bin/hx"
-fi
-
 install_release_deb "Yazi" "sxyazi/yazi" \
   "^yazi-$RELEASE_ARCH-unknown-linux-gnu\\.deb$"
 
