@@ -161,6 +161,7 @@ if [ -f "$ZSHRC" ]; then
 fi
 {
   printf '%s\n' "$ZB"
+  printf 'export SHELL="%s"\n' "$ZSH_BIN"
   printf 'if [[ -z "${ZELLIJ:-}" && "${ZELLIJ_AUTO_START:-true}" == true ]] && command -v zellij >/dev/null 2>&1; then\n'
   printf '  exec zellij\n'
   printf 'fi\n'
