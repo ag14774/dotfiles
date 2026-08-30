@@ -25,8 +25,8 @@ setopt EXTENDED_GLOB
 setopt NO_BEEP
 
 # ---------- completion ----------
-# Homebrew drops completions in share/zsh/site-functions; Arch already has its
-# own on fpath. Add brew's (if present) before compinit.
+# Homebrew drops completions in share/zsh/site-functions; Linux distributions
+# already configure their own fpath. Add brew's (if present) before compinit.
 () {
   local d
   for d in "${HOMEBREW_PREFIX:-/opt/homebrew}/share/zsh/site-functions" \
@@ -94,6 +94,7 @@ ZSH_AUTOSUGGEST_STRATEGY=(history completion)
 dotfiles_source_first \
   "${HOMEBREW_PREFIX:-/opt/homebrew}/share/zsh-autosuggestions/zsh-autosuggestions.zsh" \
   /usr/local/share/zsh-autosuggestions/zsh-autosuggestions.zsh \
+  /usr/share/zsh-autosuggestions/zsh-autosuggestions.zsh \
   /usr/share/zsh/plugins/zsh-autosuggestions/zsh-autosuggestions.zsh
 
 # ---------- prompt: starship ----------
@@ -106,5 +107,6 @@ dotfiles_load_syntax_highlighting() {
   dotfiles_source_first \
     "${HOMEBREW_PREFIX:-/opt/homebrew}/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh" \
     /usr/local/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh \
+    /usr/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh \
     /usr/share/zsh/plugins/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh
 }

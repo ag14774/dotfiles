@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Dotfiles installer (macOS/Homebrew or Linux/Pacman, with zsh). Safe to re-run.
+# Dotfiles installer (macOS/Homebrew or Linux/APT/Pacman, with zsh). Safe to re-run.
 #
 #   git clone <repo> ~/dotfiles && ~/dotfiles/install.sh && exec zsh
 #
@@ -18,25 +18,77 @@ E="# <<< dotfiles (helix/yazi/zellij) <<<"
 ZB="# >>> dotfiles (zellij autostart) >>>"
 ZE="# <<< dotfiles (zellij autostart) <<<"
 
-case "$(uname -s)" in
+if ((EUID == 0)) && [ -n "${SUDO_USER:-}" ] && [ "$SUDO_USER" != "root" ]; then
+  echo "Run this installer as your normal user, without sudo." >&2
+  exit 1
+fi
+
+INSTALL_USER="$(id -un)"
+OS_NAME="$(uname -s)"
+
+case "$OS_NAME" in
   Darwin)
     PACKAGE_INSTALLER="brew"
     ;;
   Linux)
-    if command -v pacman >/dev/null 2>&1; then
+    OS_ID=""
+    if [ -r /etc/os-release ]; then
+      # shellcheck source=/dev/null
+      OS_ID="$(. /etc/os-release && printf '%s' "${ID:-}")"
+    fi
+    if [ "$OS_ID" = "debian" ] && command -v apt-get >/dev/null 2>&1; then
+      PACKAGE_INSTALLER="apt"
+    elif command -v pacman >/dev/null 2>&1; then
       PACKAGE_INSTALLER="pacman"
     else
-      echo "Unsupported Linux distribution: Pacman is required." >&2
+      echo "Unsupported Linux distribution: Debian/APT or Pacman is required." >&2
       exit 1
     fi
     ;;
   *)
-    echo "Unsupported operating system: $(uname -s)" >&2
+    echo "Unsupported operating system: $OS_NAME" >&2
     exit 1
     ;;
 esac
 
 bash "$DOTFILES/install/$PACKAGE_INSTALLER.sh"
+
+ZSH_BIN="$(command -v zsh || true)"
+if [ -r /etc/shells ]; then
+  while IFS= read -r shell; do
+    if [[ $shell == */zsh && -x $shell ]]; then
+      ZSH_BIN="$shell"
+      break
+    fi
+  done </etc/shells
+fi
+[ -n "$ZSH_BIN" ] || {
+  echo "zsh was not installed by the platform backend." >&2
+  exit 1
+}
+
+LOGIN_SHELL="${SHELL:-}"
+case "$OS_NAME" in
+  Darwin)
+    if SHELL_RECORD="$(dscl . -read "/Users/$INSTALL_USER" UserShell 2>/dev/null)"; then
+      LOGIN_SHELL="${SHELL_RECORD#*: }"
+    fi
+    ;;
+  Linux)
+    if PASSWD_ENTRY="$(getent passwd "$INSTALL_USER" 2>/dev/null)"; then
+      LOGIN_SHELL="${PASSWD_ENTRY##*:}"
+    fi
+    ;;
+esac
+
+if [[ $LOGIN_SHELL != */zsh ]]; then
+  echo "==> Default login shell (zsh)"
+  command -v chsh >/dev/null 2>&1 || {
+    echo "chsh is required to set zsh as the default shell." >&2
+    exit 1
+  }
+  chsh -s "$ZSH_BIN" "$INSTALL_USER"
+fi
 
 command -v curl >/dev/null 2>&1 || {
   echo "curl is required to install uv, OpenCode, and rustup." >&2
@@ -53,6 +105,11 @@ export PATH="$HOME/.local/bin:$PATH"
 
 echo "==> pyright (uv tool)"
 uv tool install --upgrade pyright >/dev/null
+
+if [ "$PACKAGE_INSTALLER" = "apt" ]; then
+  echo "==> ruff (uv tool)"
+  uv tool install --upgrade ruff >/dev/null
+fi
 
 echo "==> JS-based language servers (npm -g)"
 # core-js's postinstall only prints its funding notice; allow that script explicitly.

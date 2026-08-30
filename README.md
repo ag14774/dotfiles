@@ -1,6 +1,6 @@
 # dotfiles
 
-Personal terminal setup for macOS (**iTerm2**) and Manjaro/Arch Linux
+Personal terminal setup for macOS (**iTerm2**), Debian, and Manjaro/Arch Linux
 (**Ghostty**): **Helix + Yazi + Zellij** (Catppuccin Mocha), plus zsh helper
 functions (git-worktree workflow, opencode reload, and more).
 
@@ -12,16 +12,25 @@ git clone <this-repo> ~/dotfiles
 exec zsh
 ```
 
-`install.sh` (safe to rerun) selects Homebrew on macOS or Pacman on Linux,
+`install.sh` (safe to rerun) selects Homebrew on macOS, APT on Debian, or
+Pacman on Arch-based Linux,
 installs the platform packages plus developer tools/language servers and the Yazi
 flavor, symlinks `config/` into `~/.config` via GNU Stow, and appends a small
 configuration block to `~/.zshrc` (adds the managed user-tool directories to `PATH`, sets
 `EDITOR` to the available Helix executable, sources
 `~/.config/zsh/secrets.zsh`, and loads the `shell/*.zsh` functions). A separate
-managed preamble is kept at the beginning for Zellij autostart.
+managed preamble is kept at the beginning for Zellij autostart. If the account's
+login shell is not zsh, the installer changes it permanently with `chsh`;
+`exec zsh` enters zsh immediately without waiting for the next login. Run the
+installer as your normal user, not with `sudo`; it elevates package installation
+itself when needed.
 
-Homebrew must already be installed on macOS. The Linux backend currently
-supports Pacman-based distributions such as Manjaro and Arch Linux.
+Homebrew must already be installed on macOS. The Linux backends support Debian
+13 (Trixie) and Pacman-based distributions such as Manjaro and Arch Linux.
+Because several tools are not in Debian 13, its backend installs Helix, Yazi,
+Zellij, Taplo, and Marksman from their upstream GitHub releases. Ghostty uses
+the community Debian package linked from
+[Ghostty's official installation docs](https://ghostty.org/docs/install/binary#debian-and-ubuntu).
 
 ### Managed developer tools
 
@@ -31,8 +40,10 @@ ecosystem:
 | Manager | Installed by | Managed tools |
 | --- | --- | --- |
 | Homebrew/Pacman | platform backend | Node/npm, Ruff, Taplo, Marksman, ShellCheck, shfmt |
+| APT | `install/apt.sh` | Node/npm, ShellCheck, shfmt |
+| Upstream release assets | `install/apt.sh` | Helix, Yazi, Ghostty, Zellij, Taplo, Marksman on Debian |
 | Official uv installer (`~/.local/bin`) | `install.sh` | uv |
-| `uv tool` | `install.sh` | Pyright |
+| `uv tool` | `install.sh` | Pyright, plus Ruff on Debian |
 | npm (`~/.local`) | `install.sh` | bash/yaml/json language servers |
 | Official OpenCode installer (`~/.opencode/bin`) | `install.sh` | OpenCode |
 | Official rustup installer (`~/.cargo`, `~/.rustup`) | `install.sh` | stable Rust toolchain and Cargo |
@@ -64,7 +75,7 @@ this): inside a zellij session run
 
 - `config/.config/{ghostty,zellij,helix,yazi,opencode}/` — stowed into `~/.config`
 - `shell/*.zsh` — sourced directly by the `.zshrc` block
-- `install/{brew,pacman}.sh` — platform package installation backends
+- `install/{apt,brew,pacman}.sh` — platform package installation backends
 - `Brewfile` — Homebrew package manifest
 - `secrets.zsh.example` — template; real secrets live in
   `~/.config/zsh/secrets.zsh` (gitignored, never committed)
