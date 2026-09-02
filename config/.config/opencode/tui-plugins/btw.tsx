@@ -5,6 +5,7 @@ import type {
   TuiPluginApi,
   TuiPluginModule,
 } from "@opencode-ai/plugin/tui";
+import { createSignal } from "solid-js";
 
 const MESSAGE_LIMIT = 10;
 const CONTEXT_CHAR_LIMIT = 8_000;
@@ -25,6 +26,7 @@ type SideSession = {
   directory: string;
   workspace?: string;
   deleted?: boolean;
+  replacing?: boolean;
   model?: {
     providerID: string;
     id: string;
@@ -210,69 +212,74 @@ async function startSession(
 function showConversation(
   api: TuiPluginApi,
   session: SideSession,
-  turns: ConversationTurn[],
+  initialTurns: ConversationTurn[],
 ) {
-  let busy = false;
+  api.ui.dialog.replace(
+    () => {
+      const [busy, setBusy] = createSignal(false);
 
-  api.ui.dialog.replace(() =>
-    api.ui.DialogPrompt({
-      title: "BTW",
-      description: () => (
-        <box flexDirection="column" gap={1}>
-          <scrollbox
-            height={16}
-            stickyScroll={true}
-            stickyStart="bottom"
-            scrollbarOptions={{ showArrows: true }}
-          >
-            <box flexDirection="column" gap={1} paddingRight={1}>
-              {turns.map((turn) => (
-                <box flexDirection="column">
-                  <text wrapMode="word">You: {turn.question}</text>
-                  <text wrapMode="word">BTW: {turn.answer}</text>
-                </box>
-              ))}
-            </box>
-          </scrollbox>
-          <text>Ask a follow-up, or press Esc to close.</text>
-        </box>
-      ),
-      placeholder: "Follow-up question",
-      onConfirm(value) {
-        const question = value.trim();
-        if (!question || busy) return;
+      return api.ui.DialogPrompt({
+        title: "BTW",
+        description: () => (
+          <box flexDirection="column" gap={1}>
+            <scrollbox
+              height={16}
+              stickyScroll={true}
+              stickyStart="bottom"
+              scrollbarOptions={{ showArrows: true }}
+            >
+              <box flexDirection="column" gap={1} paddingRight={1}>
+                {initialTurns.map((turn) => (
+                  <box flexDirection="column">
+                    <text wrapMode="word">You: {turn.question}</text>
+                    <text wrapMode="word">BTW: {turn.answer}</text>
+                  </box>
+                ))}
+              </box>
+            </scrollbox>
+            <text>Ask a follow-up, or press Esc to close.</text>
+          </box>
+        ),
+        placeholder: "Follow-up question",
+        get busy() {
+          return busy();
+        },
+        busyText: "Thinking...",
+        onConfirm(value) {
+          const question = value.trim();
+          if (!question || busy()) return;
 
-        busy = true;
-        api.ui.toast({
-          variant: "info",
-          title: "BTW",
-          message: "Thinking about the follow-up...",
-        });
-        void promptSession(api, session, followUpPrompt(question)).then(
-          (nextAnswer) => {
-            if (!session.deleted) {
+          setBusy(true);
+          void promptSession(api, session, followUpPrompt(question)).then(
+            (answer) => {
+              if (session.deleted) return;
+              session.replacing = true;
               showConversation(api, session, [
-                ...turns,
-                { question, answer: nextAnswer },
+                ...initialTurns,
+                { question, answer },
               ]);
-            }
-          },
-          (error) => {
-            busy = false;
-            if (session.deleted) return;
-            console.error("[btw] Follow-up failed", error);
-            api.ui.toast({
-              variant: "error",
-              title: "BTW follow-up failed",
-              message: error instanceof Error ? error.message : String(error),
-            });
-          },
-        );
-      },
-      onCancel() {
-        void deleteSession(api, session);
-      },
-    }),
+            },
+            (error) => {
+              setBusy(false);
+              if (session.deleted) return;
+              console.error("[btw] Follow-up failed", error);
+              api.ui.toast({
+                variant: "error",
+                title: "BTW follow-up failed",
+                message: error instanceof Error ? error.message : String(error),
+              });
+            },
+          );
+        },
+      });
+    },
+    () => {
+      if (session.replacing) {
+        session.replacing = false;
+        return;
+      }
+      void deleteSession(api, session);
+    },
   );
   api.ui.dialog.setSize("large");
 }
