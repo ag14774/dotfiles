@@ -10,9 +10,11 @@
 #   wtclone <url> [dir]   set up a bare repo + worktree layout from a remote
 #   wt <branch> [base]    create/reuse a worktree for <branch> and cd into it
 #                         (seeds configured local files into new worktrees)
-#   wtrm <branch>         remove a worktree
+#   wtreview <pr>         review a GitHub PR with its changes visible in Helix
+#   wtchange              turn the current review worktree into the PR branch
+#   wtrm [-f] <name>      remove a worktree by branch or directory name
 #   wtprune [-ynm]        wtrm worktrees whose remote branch was deleted ("gone");
-#                         -m/--merged also removes merged branches (GitHub via gh)
+#                         -m also removes merged branches/clean PR reviews (via gh)
 #   wtls                  list worktrees
 #   wtconvert [-y]        convert a normal clone (CWD) into this bare/worktree layout
 #   wthelp                show help for these commands
@@ -123,6 +125,132 @@ _wt_default_worktree() {
   return 0
 }
 
+# Set REPLY to the registered worktree path for a local branch, or empty.
+_wt_worktree_for_branch() { # $1=project root $2=branch
+  emulate -L zsh
+  local proj=$1 branch=$2 line wtpath=
+  REPLY=
+  for line in ${(f)"$(git -C "$proj" worktree list --porcelain 2>/dev/null)"}; do
+    case $line in
+      ("worktree "*) wtpath=${line#worktree } ;;
+      ("branch refs/heads/$branch") REPLY=$wtpath; return 0 ;;
+    esac
+  done
+  return 1
+}
+
+# Set REPLY to a registered worktree selected by branch or directory basename.
+_wt_worktree_for_arg() { # $1=project root $2=branch-or-name
+  emulate -L zsh
+  local proj=$1 arg=$2 line wtpath= branch_path= name_path=
+  if [[ $arg == /* ]]; then
+    for line in ${(f)"$(git -C "$proj" worktree list --porcelain 2>/dev/null)"}; do
+      [[ $line == "worktree "* && ${line#worktree } == $arg ]] \
+        && { REPLY=$arg; return 0; }
+    done
+    REPLY=
+    return 1
+  fi
+  _wt_worktree_for_branch "$proj" "$arg" && branch_path=$REPLY
+  for line in ${(f)"$(git -C "$proj" worktree list --porcelain 2>/dev/null)"}; do
+    [[ $line == "worktree "* ]] || continue
+    wtpath=${line#worktree }
+    [[ $wtpath != $proj && ${wtpath:t} == $arg ]] && name_path=$wtpath
+  done
+  if [[ -n $branch_path && -n $name_path && $branch_path != $name_path ]]; then
+    REPLY=
+    return 2
+  fi
+  [[ -n $branch_path ]] && { REPLY=$branch_path; return 0; }
+  [[ -n $name_path ]] && { REPLY=$name_path; return 0; }
+  REPLY="$proj/${arg//\//-}"
+  [[ -d $REPLY ]]
+}
+
+# Review metadata lives beside the linked worktree's private HEAD/index, never
+# in the checked-out PR. Set REPLY to that metadata file.
+_wt_review_meta() { # $1=worktree
+  emulate -L zsh
+  local gitdir
+  gitdir=$(git -C "$1" rev-parse --path-format=absolute --git-dir 2>/dev/null) || { REPLY=; return 1; }
+  REPLY="$gitdir/wt-review"
+}
+
+_wt_review_get() { # $1=worktree $2=key
+  emulate -L zsh
+  local meta
+  _wt_review_meta "$1" || return 1
+  meta=$REPLY
+  git config --file "$meta" --get "review.$2" 2>/dev/null
+}
+
+_wt_review_set() { # $1=worktree $2=key $3=value
+  emulate -L zsh
+  local meta
+  _wt_review_meta "$1" || return 1
+  meta=$REPLY
+  git config --file "$meta" "review.$2" "$3"
+}
+
+# Return success when the review worktree differs from the stored PR head. In
+# review mode the index starts at the PR head, so this cleanly distinguishes the
+# synthetic PR diff (HEAD..index) from edits made by the reviewer.
+_wt_review_has_personal_changes() { # $1=worktree $2=PR-head-OID
+  emulate -L zsh
+  local wt=$1 head=$2
+  git -C "$wt" diff --ignore-submodules=none --quiet "$head" -- 2>/dev/null || return 0
+  git -C "$wt" diff --cached --ignore-submodules=none --quiet "$head" -- 2>/dev/null || return 0
+  # Include ignored files: review cleanup uses --force, so hiding .env or build
+  # output here could silently delete local data.
+  [[ -n $(git -C "$wt" ls-files --others --directory --no-empty-directory 2>/dev/null) ]] && return 0
+  return 1
+}
+
+# Find a configured remote whose URL names OWNER/REPO. Set REPLY to its name.
+_wt_remote_for_repo() { # $1=project root $2=owner/repo
+  emulate -L zsh
+  setopt local_options extended_glob
+  local proj=$1 repo=$2 remote url
+  REPLY=
+  for remote in ${(f)"$(git -C "$proj" remote 2>/dev/null)"}; do
+    url=$(git -C "$proj" remote get-url "$remote" 2>/dev/null) || continue
+    url=${url%.git}
+    if [[ $url == *:${repo} || $url == */${repo} ]]; then
+      REPLY=$remote
+      return 0
+    fi
+  done
+  return 1
+}
+
+# Query a PR and return fields in zsh's conventional $reply array:
+# number url state base-branch base-oid head-branch head-oid head-repo
+# head-owner cross-repo maintainer-can-modify base-repo base-git-url host
+_wt_pr_info() { # $1=project root $2=number-or-url
+  emulate -L zsh
+  local proj=$1 spec=$2 line rest host base_repo base_git_url
+  local -a fields
+  line=$(cd "$proj" && gh pr view "$spec" \
+    --json number,url,state,baseRefName,baseRefOid,headRefName,headRefOid,headRepository,headRepositoryOwner,isCrossRepository,maintainerCanModify \
+    --jq '[.number,.url,.state,.baseRefName,.baseRefOid,.headRefName,.headRefOid,(.headRepository.nameWithOwner // "-"),(.headRepositoryOwner.login // "-"),(.isCrossRepository|tostring),(.maintainerCanModify|tostring)] | @tsv' 2>/dev/null) \
+    || { print -u2 "wtreview: could not read PR '$spec' (check gh auth and repository)"; return 1; }
+  fields=("${(@ps:\t:)line}")
+  (( $#fields == 11 )) || { print -u2 "wtreview: unexpected PR metadata from gh"; return 1; }
+  rest=${fields[2]#*://}
+  host=${rest%%/*}
+  base_repo=${rest#*/}
+  base_repo=${base_repo%/pull/*}
+  base_git_url="${fields[2]%/pull/*}.git"
+  reply=("${fields[@]}" "$base_repo" "$base_git_url" "$host")
+}
+
+_wt_review_delete_refs() { # $1=project root $2=PR number
+  local failed=0
+  git -C "$1" update-ref -d "refs/wt-review/pr-$2/head" 2>/dev/null || failed=1
+  git -C "$1" update-ref -d "refs/wt-review/pr-$2/base" 2>/dev/null || failed=1
+  return $failed
+}
+
 # create/reuse a worktree for <branch> and cd into it
 wt() {
   emulate -L zsh
@@ -132,6 +260,10 @@ wt() {
   common=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null) \
     || { print -u2 "wt: not inside a git repo"; return 1; }
   proj=${common:h}
+  if _wt_worktree_for_branch "$proj" "$branch"; then
+    cd "$REPLY"
+    return
+  fi
   wtdir="$proj/${branch//\//-}"
   if [[ ! -d "$wtdir" ]]; then
     # Validate an explicit/per-repo manifest before creating anything. _wt_seed
@@ -156,16 +288,242 @@ wt() {
   cd "$wtdir"
 }
 
+# Review a GitHub PR while making Helix compare its files with the PR merge base.
+# The PR itself is staged (HEAD..index); reviewer edits remain unstaged.
+wtreview() {
+  emulate -L zsh
+  local spec=$1
+  [[ -z $spec ]] && { print -u2 "usage: wtreview <pr-number|url>"; return 1; }
+  (( $+commands[gh] )) || { print -u2 "wtreview: GitHub CLI (gh) is required"; return 1; }
+
+  local common proj
+  common=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null) \
+    || { print -u2 "wtreview: not inside a git repo"; return 1; }
+  proj=${common:h}
+
+  local -a pr
+  _wt_pr_info "$proj" "$spec" || return 1
+  pr=("${reply[@]}")
+  local number=$pr[1] url=$pr[2] state=$pr[3] base_branch=$pr[4] base_oid=$pr[5]
+  local head_branch=$pr[6] head_oid=$pr[7] head_repo=$pr[8] head_owner=$pr[9]
+  local cross=$pr[10] maintain=$pr[11] base_repo=$pr[12] base_git_url=$pr[13] host=$pr[14]
+  local wtdir="$proj/review-pr-$number"
+  local head_ref="refs/wt-review/pr-$number/head" base_ref="refs/wt-review/pr-$number/base"
+  local base_remote base_source
+  if _wt_remote_for_repo "$proj" "$base_repo"; then
+    base_remote=$REPLY
+    base_source=$base_remote
+  else
+    base_source=$base_git_url
+  fi
+
+  print "wtreview: fetching PR #$number ..."
+  git -C "$proj" fetch -q "$base_source" \
+    "+refs/pull/$number/head:$head_ref" \
+    "+refs/heads/$base_branch:$base_ref" \
+    || {
+      [[ -d $wtdir ]] || _wt_review_delete_refs "$proj" "$number"
+      print -u2 "wtreview: failed to fetch PR refs from $base_source"
+      return 1
+    }
+  local fetched_head fetched_base merge_base
+  fetched_head=$(git -C "$proj" rev-parse "$head_ref") || return 1
+  fetched_base=$(git -C "$proj" rev-parse "$base_ref") || return 1
+  [[ $fetched_head == $head_oid ]] \
+    || {
+      [[ -d $wtdir ]] || _wt_review_delete_refs "$proj" "$number"
+      print -u2 "wtreview: PR changed while fetching; rerun the command"
+      return 1
+    }
+  # The base branch may move between the API query and fetch. The fetched tip is
+  # authoritative for the comparison, while the queried OID remains metadata.
+  merge_base=$(git -C "$proj" merge-base "$head_ref" "$base_ref") \
+    || {
+      [[ -d $wtdir ]] || _wt_review_delete_refs "$proj" "$number"
+      print -u2 "wtreview: could not determine the PR merge base"
+      return 1
+    }
+
+  if [[ -d $wtdir ]]; then
+    local old_url old_head old_merge mode
+    mode=$(_wt_review_get "$wtdir" mode)
+    old_url=$(_wt_review_get "$wtdir" url)
+    old_head=$(_wt_review_get "$wtdir" head)
+    old_merge=$(_wt_review_get "$wtdir" merge-base)
+    [[ $mode == review && $old_url == $url ]] \
+      || { print -u2 "wtreview: $wtdir exists but is not this PR's review worktree"; return 1; }
+    if [[ $old_head != $head_oid || $old_merge != $merge_base ]]; then
+      if _wt_review_has_personal_changes "$wtdir" "$old_head"; then
+        print -u2 "wtreview: PR #$number changed, but the review worktree has personal edits"
+        print -u2 "wtreview: run wtchange to keep them, or wtrm -f review-pr-$number to discard them"
+        return 1
+      fi
+      git -C "$wtdir" reset --hard "$head_ref" || return 1
+      git -C "$wtdir" reset --soft "$merge_base" || return 1
+      print "wtreview: refreshed to ${head_oid[1,12]}"
+    fi
+  else
+    git -C "$proj" worktree add --detach "$wtdir" "$head_ref" || return 1
+    git -C "$wtdir" reset --soft "$merge_base" || {
+      git -C "$proj" worktree remove --force "$wtdir" 2>/dev/null
+      _wt_review_delete_refs "$proj" "$number"
+      return 1
+    }
+  fi
+
+  _wt_review_set "$wtdir" mode review || return 1
+  _wt_review_set "$wtdir" number "$number" || return 1
+  _wt_review_set "$wtdir" url "$url" || return 1
+  _wt_review_set "$wtdir" state "$state" || return 1
+  _wt_review_set "$wtdir" head "$head_oid" || return 1
+  _wt_review_set "$wtdir" head-branch "$head_branch" || return 1
+  _wt_review_set "$wtdir" head-repo "$head_repo" || return 1
+  _wt_review_set "$wtdir" head-owner "$head_owner" || return 1
+  _wt_review_set "$wtdir" base "$fetched_base" || return 1
+  _wt_review_set "$wtdir" base-api "$base_oid" || return 1
+  _wt_review_set "$wtdir" base-branch "$base_branch" || return 1
+  _wt_review_set "$wtdir" base-repo "$base_repo" || return 1
+  _wt_review_set "$wtdir" merge-base "$merge_base" || return 1
+  _wt_review_set "$wtdir" cross-repository "$cross" || return 1
+  _wt_review_set "$wtdir" maintainer-can-modify "$maintain" || return 1
+  _wt_review_set "$wtdir" host "$host" || return 1
+
+  cd "$wtdir"
+  print "wtreview: PR #$number ($head_owner:$head_branch)"
+  print "  review mode: PR changes are staged and visible against ${merge_base[1,12]}"
+  print "  your edits:  git diff"
+  print "  edit/push:   wtchange"
+}
+
+# Convert the current synthetic review checkout into the real PR branch without
+# touching the index or worktree, preserving reviewer edits and staging.
+wtchange() {
+  emulate -L zsh
+  local wt common proj mode
+  wt=$(git rev-parse --show-toplevel 2>/dev/null) \
+    || { print -u2 "wtchange: not inside a worktree"; return 1; }
+  mode=$(_wt_review_get "$wt" mode)
+  [[ $mode == review ]] || { print -u2 "wtchange: current worktree is not in review mode"; return 1; }
+  common=$(git -C "$wt" rev-parse --path-format=absolute --git-common-dir) || return 1
+  proj=${common:h}
+
+  local number url head_oid head_branch head_repo head_owner merge_base maintain host
+  number=$(_wt_review_get "$wt" number)
+  url=$(_wt_review_get "$wt" url)
+  head_oid=$(_wt_review_get "$wt" head)
+  head_branch=$(_wt_review_get "$wt" head-branch)
+  head_repo=$(_wt_review_get "$wt" head-repo)
+  head_owner=$(_wt_review_get "$wt" head-owner)
+  merge_base=$(_wt_review_get "$wt" merge-base)
+  maintain=$(_wt_review_get "$wt" maintainer-can-modify)
+  host=$(_wt_review_get "$wt" host)
+  [[ -n $number && -n $head_oid && -n $head_branch && $head_repo != - ]] \
+    || { print -u2 "wtchange: incomplete PR metadata (the fork may have been deleted)"; return 1; }
+  [[ $(git -C "$wt" rev-parse HEAD 2>/dev/null) == $merge_base ]] \
+    || { print -u2 "wtchange: review HEAD changed unexpectedly; refusing to rewrite it"; return 1; }
+  # Validate the configured seed manifest before changing refs or branch state.
+  _wt_seed "" "" "$common" || return 1
+
+  local remote remote_url origin_url remote_ref remote_oid
+  if _wt_remote_for_repo "$proj" "$head_repo"; then
+    remote=$REPLY
+  else
+    remote="pr-$number-${head_owner//[^A-Za-z0-9._-]/-}"
+    if git -C "$proj" remote get-url "$remote" >/dev/null 2>&1; then
+      print -u2 "wtchange: remote '$remote' already exists for another repository"
+      return 1
+    fi
+    origin_url=$(git -C "$proj" remote get-url origin 2>/dev/null)
+    if [[ $origin_url == *@*:* ]]; then
+      remote_url="${origin_url%%:*}:$head_repo.git"
+    elif [[ $origin_url == ssh://* ]]; then
+      local ssh_authority=${${origin_url#ssh://}%%/*}
+      remote_url="ssh://$ssh_authority/$head_repo.git"
+    else
+      remote_url="https://$host/$head_repo.git"
+    fi
+    git -C "$proj" remote add "$remote" "$remote_url" || return 1
+    print "wtchange: added remote $remote -> $head_repo"
+  fi
+  remote_ref="refs/remotes/$remote/$head_branch"
+  git -C "$proj" fetch -q "$remote" "+refs/heads/$head_branch:$remote_ref" \
+    || { print -u2 "wtchange: could not fetch $remote/$head_branch"; return 1; }
+  remote_oid=$(git -C "$proj" rev-parse "$remote_ref") || return 1
+  [[ $remote_oid == $head_oid ]] || {
+    print -u2 "wtchange: the PR branch advanced from ${head_oid[1,12]} to ${remote_oid[1,12]}"
+    print -u2 "wtchange: rerun wtreview $url to review the new head before changing it"
+    return 1
+  }
+
+  if git -C "$proj" show-ref -q --verify "refs/heads/$head_branch"; then
+    [[ $(git -C "$proj" rev-parse "refs/heads/$head_branch") == $head_oid ]] \
+      || { print -u2 "wtchange: local branch '$head_branch' exists at a different commit"; return 1; }
+    if _wt_worktree_for_branch "$proj" "$head_branch" && [[ $REPLY != $wt ]]; then
+      print -u2 "wtchange: local branch '$head_branch' is already checked out at $REPLY"
+      return 1
+    fi
+  else
+    git -C "$proj" branch "$head_branch" "$head_oid" || return 1
+  fi
+  git -C "$proj" branch --set-upstream-to="$remote/$head_branch" "$head_branch" >/dev/null || return 1
+
+  # HEAD moves from merge-base to PR head. --soft deliberately preserves the PR
+  # index and all reviewer edits; attaching by symbolic-ref avoids a checkout.
+  git -C "$wt" reset --soft "$head_oid" || return 1
+  git -C "$wt" symbolic-ref HEAD "refs/heads/$head_branch" || return 1
+  _wt_review_set "$wt" mode change || return 1
+  _wt_review_delete_refs "$proj" "$number" \
+    || print -u2 "wtchange: warning: could not remove temporary review refs for PR #$number"
+
+  local src
+  src=$(_wt_default_worktree "$common")
+  [[ $src == $wt ]] && src=
+  _wt_seed "$src" "$wt" "$common" || return 1
+
+  print "wtchange: PR #$number is now branch '$head_branch' tracking $remote/$head_branch"
+  [[ $head_owner != $(gh api user --jq .login 2>/dev/null) && $maintain != true ]] \
+    && print -u2 "wtchange: warning: the contributor disabled maintainer edits; pushing may be rejected"
+  print "  PR baseline removed; only your additional edits remain in git status/Helix"
+}
+
 # remove a worktree
 wtrm() {
   emulate -L zsh
-  local branch="$1"
-  [[ -z "$branch" ]] && { print -u2 "usage: wtrm <branch>"; return 1; }
-  local common proj
+  local force=0
+  [[ $1 == (-f|--force) ]] && { force=1; shift; }
+  local arg="$1"
+  [[ -z "$arg" ]] && { print -u2 "usage: wtrm [-f|--force] <branch|worktree>"; return 1; }
+  local common proj target mode head number
   common=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null) \
     || { print -u2 "wtrm: not inside a git repo"; return 1; }
   proj=${common:h}
-  git -C "$proj" worktree remove "$proj/${branch//\//-}" && print "removed ${branch//\//-}"
+  _wt_worktree_for_arg "$proj" "$arg"
+  local found=$?
+  if (( found == 2 )); then
+    print -u2 "wtrm: '$arg' matches both a branch and a worktree directory; use the absolute path"
+    return 1
+  elif (( found != 0 )); then
+    print -u2 "wtrm: no worktree found for '$arg'"
+    return 1
+  fi
+  target=$REPLY
+  mode=$(_wt_review_get "$target" mode)
+  if [[ $mode == review ]]; then
+    head=$(_wt_review_get "$target" head)
+    number=$(_wt_review_get "$target" number)
+    if (( ! force )) && _wt_review_has_personal_changes "$target" "$head"; then
+      print -u2 "wtrm: review-pr-$number has personal edits; run wtchange or use wtrm -f $arg"
+      return 1
+    fi
+    git -C "$proj" worktree remove --force "$target" || return 1
+    _wt_review_delete_refs "$proj" "$number" \
+      || print -u2 "wtrm: warning: could not remove temporary review refs for PR #$number"
+  else
+    local -a opts
+    (( force )) && opts+=(--force)
+    git -C "$proj" worktree remove $opts "$target" || return 1
+  fi
+  print "removed ${target:t}"
 }
 
 # list worktrees
@@ -179,15 +537,44 @@ wtls() { git worktree list; }
 #     origin/HEAD). A brand-new branch with no commits is trivially an ancestor of
 #     origin/HEAD, so ancestry can't tell an empty new branch from a merged one and
 #     would delete fresh work. A merged PR matched by SHA is the only safe signal.
-_wtprune_merged() { # $1=proj  $2=gh_ok  $3=branch
+_wtprune_merged() { # $1=proj  $2=gh_ok  $3=branch  $4=worktree
   emulate -L zsh
-  local proj=$1 gh_ok=$2 b=$3 tip pr
+  local proj=$1 gh_ok=$2 b=$3 wt=$4 tip pr url mode
   (( gh_ok )) || return 1
   tip=$(git -C "$proj" rev-parse "refs/heads/$b" 2>/dev/null) || return 1
-  pr=$(cd "$proj" && gh pr list --head "$b" --state merged --json number,headRefOid \
-    --jq ".[] | select(.headRefOid==\"$tip\") | .number" 2>/dev/null | head -1)
+  mode=$(_wt_review_get "$wt" mode)
+  url=$(_wt_review_get "$wt" url)
+  if [[ $mode == change && -n $url ]]; then
+    pr=$(cd "$proj" && gh pr view "$url" --json number,state,headRefOid \
+      --jq "select(.state==\"MERGED\" and .headRefOid==\"$tip\") | .number" 2>/dev/null)
+  else
+    pr=$(cd "$proj" && gh pr list --head "$b" --state merged --json number,headRefOid \
+      --jq ".[] | select(.headRefOid==\"$tip\") | .number" 2>/dev/null | head -1)
+  fi
   [[ -n $pr ]] && { REPLY="merged PR #$pr"; return 0; }
   return 1
+}
+
+# Is a detached synthetic review worktree's exact PR head now merged? Return 2
+# when merged but carrying personal edits, so callers can explain why it stays.
+_wtprune_review_merged() { # $1=project root $2=gh_ok $3=worktree
+  emulate -L zsh
+  local proj=$1 gh_ok=$2 wt=$3 mode url head number pr
+  (( gh_ok )) || return 1
+  mode=$(_wt_review_get "$wt" mode)
+  [[ $mode == review ]] || return 1
+  url=$(_wt_review_get "$wt" url)
+  head=$(_wt_review_get "$wt" head)
+  number=$(_wt_review_get "$wt" number)
+  pr=$(cd "$proj" && gh pr view "$url" --json number,state,headRefOid \
+    --jq "select(.state==\"MERGED\" and .headRefOid==\"$head\") | .number" 2>/dev/null)
+  [[ -n $pr ]] || return 1
+  if _wt_review_has_personal_changes "$wt" "$head"; then
+    REPLY="review-pr-$number has personal edits"
+    return 2
+  fi
+  REPLY="merged PR #$pr (review mode)"
+  return 0
 }
 
 # Remove worktrees you're done with. By DEFAULT that means the branch's upstream
@@ -196,11 +583,11 @@ _wtprune_merged() { # $1=proj  $2=gh_ok  $3=branch
 # local work you haven't pushed). Runs `git fetch --prune` first (skip -n) so the
 # gone status is fresh, lists the matches, then confirms before removing.
 #
-# With -m/--merged it ALSO removes worktrees whose branch was MERGED via a PR --
-# detected GITHUB ONLY (needs `gh`): a merged PR whose merged commit matches the
-# branch tip by SHA. (No ancestry check: an empty new branch is trivially an
-# ancestor of origin/HEAD, so it can't be told apart from a merged one.) Without
-# `gh` / on non-GitHub remotes, --merged finds nothing extra and says so.
+# With -m/--merged it ALSO removes worktrees whose branch was MERGED via a PR,
+# including clean detached `wtreview` worktrees. Review worktrees with personal
+# edits are always retained. Detection is GitHub-only and matches the exact PR
+# head SHA; no ancestry check is used because a new empty branch is trivially an
+# ancestor of the default branch.
 #   wtprune              remove worktrees whose tracked remote branch was deleted
 #   wtprune -m|--merged  ALSO remove worktrees whose branch has been merged
 #   wtprune -y           don't prompt
@@ -223,8 +610,8 @@ wtprune() {
   proj=${common:h}
 
   if (( fetch )); then
-    print "wtprune: git fetch --prune ..."
-    git -C "$proj" fetch --prune --quiet \
+    print "wtprune: git fetch --all --prune ..."
+    git -C "$proj" fetch --all --prune --quiet \
       || print -u2 "wtprune: fetch failed; continuing with cached remote-tracking refs"
   fi
 
@@ -271,15 +658,35 @@ wtprune() {
           continue
         fi
         if [[ -n ${gone[$b]} ]]; then
-          targets+=$b
-          why[$b]="remote branch deleted"
-        elif (( merged )) && _wtprune_merged "$proj" "$gh_ok" "$b"; then
-          targets+=$b
-          why[$b]=$REPLY
+          targets+=$wtpath
+          why[$wtpath]="remote branch deleted"
+        elif (( merged )) && _wtprune_merged "$proj" "$gh_ok" "$b" "$wtpath"; then
+          targets+=$wtpath
+          why[$wtpath]=$REPLY
         fi
         ;;
     esac
   done
+
+  # Detached review worktrees have no `branch` porcelain record, so inspect
+  # their private metadata in a separate pass. They are candidates only under
+  # --merged and only if they still exactly match the reviewed PR head.
+  if (( merged )); then
+    local review_result
+    for line in ${(f)"$(git -C "$proj" worktree list --porcelain 2>/dev/null)"}; do
+      [[ $line == "worktree "* ]] || continue
+      wtpath=${line#worktree }
+      [[ -n $curwt && $wtpath == $curwt ]] && continue
+      _wtprune_review_merged "$proj" "$gh_ok" "$wtpath"
+      review_result=$?
+      if (( review_result == 0 )); then
+        targets+=$wtpath
+        why[$wtpath]=$REPLY
+      elif (( review_result == 2 )); then
+        print -u2 "wtprune: skipping $REPLY -- run wtchange or remove it explicitly"
+      fi
+    done
+  fi
 
   if (( ! $#targets )); then
     print "wtprune: nothing to remove."
@@ -288,14 +695,16 @@ wtprune() {
 
   print "wtprune: worktrees to remove:"
   local t
-  for t in $targets; do printf '  %-38s (%s)\n' "$t" "${why[$t]}"; done
+  for t in $targets; do printf '  %-38s (%s)\n' "${t:t}" "${why[$t]}"; done
   if (( ! yes )); then
     print -n "remove them? [y/N] "
     local reply; read -r reply
     [[ $reply == [yY]* ]] || { print "aborted"; return 1; }
   fi
 
-  for t in $targets; do wtrm "$t"; done
+  local failed=0
+  for t in $targets; do wtrm "$t" || failed=1; done
+  return $failed
 }
 
 # convert a NORMAL clone (in the CWD) into the bare + worktree layout `wtclone` makes.
@@ -389,11 +798,16 @@ wthelp() {
                         (base defaults to origin/HEAD; tab-completes branches;
                          seeds local files configured by $WT_SEED, the common-dir
                          wt-seed manifest, or $WT_SEED_FILE)
-  wtrm <branch>         remove a worktree            (tab-completes worktrees)
+  wtreview <pr>         create/reuse review-pr-<number> for a GitHub PR;
+                        PR changes stay highlighted in Helix (needs gh)
+  wtchange              convert the current review worktree to the real PR
+                        branch; preserves edits, sets upstream, and seeds files
+  wtrm [-f] <name>      remove by branch or worktree name; clean synthetic
+                        reviews are removed safely, -f discards personal edits
   wtprune [-ynm]        remove worktrees whose remote branch was deleted ("gone");
                         leaves branches that never had a remote. -n skips fetch --prune;
-                        -m/--merged also removes branches merged via a PR
-                        (GitHub only, via gh; matched by commit SHA)
+                        -m/--merged also removes branches and clean review
+                        worktrees merged via a PR (GitHub only; exact head SHA)
   wtls                  list worktrees
   wtconvert [-y]        convert a normal clone (CWD) into the bare/worktree layout
                         (needs a clean tree; keeps ignored files; stashes survive)
@@ -418,12 +832,28 @@ _wt() {
 }
 (( $+functions[compdef] )) && compdef _wt wt
 
-# complete `wtrm` with the names of EXISTING worktrees (minus the bare repo)
+# Complete `wtreview` with open PR numbers and descriptions (GitHub only).
+_wtreview() {
+  local -a prs
+  (( $+commands[gh] )) || return 0
+  prs=(${(f)"$(gh pr list --state open --json number,title,headRefName \
+    --jq '.[] | "\(.number):\(.headRefName) — \(.title)"' 2>/dev/null)"})
+  _describe 'pull request' prs
+}
+(( $+functions[compdef] )) && compdef _wtreview wtreview
+
+# Complete `wtrm` with existing worktree directory and branch names.
 _wtrm() {
-  local -a wts
-  wts=(${(f)"$(git worktree list --porcelain 2>/dev/null | awk '/^worktree /{print $2}')"})
-  wts=(${wts:t})                        # :t = basename of each worktree path
-  compadd -a -- ${wts:#.bare}           # drop the ".bare" repo itself
+  local -a values
+  local line wtpath
+  for line in ${(f)"$(git worktree list --porcelain 2>/dev/null)"}; do
+    case $line in
+      ("worktree "*) wtpath=${line#worktree }; values+=(${wtpath:t}) ;;
+      ("branch refs/heads/"*) values+=(${line#branch refs/heads/}) ;;
+    esac
+  done
+  compadd -- -f --force
+  compadd -a -- ${(u)values:#.bare}
 }
 (( $+functions[compdef] )) && compdef _wtrm wtrm
 
