@@ -39,8 +39,8 @@ ecosystem:
 
 | Manager | Installed by | Managed tools |
 | --- | --- | --- |
-| Homebrew/Pacman | platform backend | Node/npm, Ruff, Taplo, Marksman, ShellCheck, shfmt |
-| APT | `install/apt.sh` | Node/npm, Helix (`hx`), ShellCheck, shfmt |
+| Homebrew/Pacman | platform backend | Node/npm, Ruff, Taplo, Marksman, ShellCheck, shfmt, GitHub CLI |
+| APT | `install/apt.sh` | Node/npm, Helix (`hx`), ShellCheck, shfmt, GitHub CLI |
 | Upstream release assets | `install/apt.sh` | Yazi, Ghostty, Zellij, Taplo, Marksman on Debian |
 | Official uv installer (`~/.local/bin`) | `install.sh` | uv |
 | `uv tool` | `install.sh` | Pyright, plus Ruff on Debian |
@@ -88,6 +88,20 @@ a temporary read-only session and displays a scrollable side-conversation above
 a follow-up input. The temporary session persists for follow-up questions until
 the modal closes, then it is deleted. The active session is never prompted or
 modified.
+
+### Pull request worktrees
+
+`wtreview <number-or-url>` creates a detached `review-pr-<number>` worktree
+whose `HEAD` is the PR merge base while its index and files are the PR head.
+Helix therefore shows the complete PR in its Git gutter. In this mode,
+`git diff --cached` is the original PR and `git diff` is only your own edits.
+
+Run `wtchange` inside that worktree before committing or pushing. It attaches
+the original PR branch, configures its upstream (including contributor forks),
+copies the normal worktree seed files, and preserves staged and unstaged review
+edits. `ggpush` and `ggpull` use the configured upstream; both refuse detached
+review mode. `wtprune --merged` removes clean review worktrees after their exact
+PR head is merged, but leaves reviews with personal edits alone.
 
 ## Changing the theme
 
