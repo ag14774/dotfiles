@@ -69,6 +69,7 @@ _wt_seed() {
   local seed_file="${WT_SEED_FILE:-$common/wt-seed}"
   local seed_label=WT_SEED
   local -a patterns
+  reply=()
 
   if [[ -n ${WT_SEED_FILE:-} && ! -r $seed_file ]]; then
     print -u2 "wt: WT_SEED_FILE is not readable: $seed_file"
@@ -98,7 +99,7 @@ _wt_seed() {
       [[ -e $f ]] || continue   # literal patterns (.env, .envrc) skip null_glob; drop them when the source lacks them
       rel=${f#$src/}
       [[ -e $dest/$rel ]] && continue
-      mkdir -p "$dest/${rel:h}" && cp -R "$f" "$dest/$rel" && (( n++ ))
+      mkdir -p "$dest/${rel:h}" && cp -R "$f" "$dest/$rel" && { (( n++ )); reply+=("$rel"); }
     done
   done
   (( n )) && print "wt: seeded $n local file(s) from ${src:t}/ ($seed_label)"
@@ -192,17 +193,49 @@ _wt_review_set() { # $1=worktree $2=key $3=value
   git config --file "$meta" "review.$2" "$3"
 }
 
+_wt_review_add_seed() { # $1=worktree $2=relative seeded path
+  emulate -L zsh
+  local wt=$1 seed=$2 meta existing
+  _wt_review_meta "$wt" || return 1
+  meta=$REPLY
+  for existing in ${(f)"$(git config --file "$meta" --get-all review.seed 2>/dev/null)"}; do
+    [[ $existing == $seed ]] && return 0
+  done
+  git config --file "$meta" --add review.seed "$seed"
+}
+
 # Return success when the review worktree differs from the stored PR head. In
 # review mode the index starts at the PR head, so this cleanly distinguishes the
 # synthetic PR diff (HEAD..index) from edits made by the reviewer.
 _wt_review_has_personal_changes() { # $1=worktree $2=PR-head-OID
   emulate -L zsh
-  local wt=$1 head=$2
+  local wt=$1 head=$2 seed_source seed rel allowed
+  local -a seeds untracked
   git -C "$wt" diff --ignore-submodules=none --quiet "$head" -- 2>/dev/null || return 0
   git -C "$wt" diff --cached --ignore-submodules=none --quiet "$head" -- 2>/dev/null || return 0
-  # Include ignored files: review cleanup uses --force, so hiding .env or build
-  # output here could silently delete local data.
-  [[ -n $(git -C "$wt" ls-files --others --directory --no-empty-directory 2>/dev/null) ]] && return 0
+
+  seed_source=$(_wt_review_get "$wt" seed-source)
+  _wt_review_meta "$wt" || return 0
+  seeds=(${(f)"$(git config --file "$REPLY" --get-all review.seed 2>/dev/null)"})
+  # A seeded path is baseline only while it still exactly matches the source it
+  # was copied from. Any edit, deletion, or source drift is retained as personal
+  # data rather than being discarded by review refresh/removal.
+  for seed in $seeds; do
+    [[ -n $seed_source && -e "$seed_source/$seed" && -e "$wt/$seed" ]] || return 0
+    diff -qr -- "$seed_source/$seed" "$wt/$seed" >/dev/null 2>&1 || return 0
+  done
+
+  # Include ignored files: review cleanup uses --force. Unchanged recorded seed
+  # paths are the only untracked content that is safe to treat as baseline.
+  untracked=(${(f)"$(git -C "$wt" ls-files --others --directory --no-empty-directory 2>/dev/null)"})
+  for rel in $untracked; do
+    rel=${rel%/}
+    allowed=0
+    for seed in $seeds; do
+      [[ $rel == $seed || ${rel#$seed/} != $rel ]] && { allowed=1; break; }
+    done
+    (( allowed )) || return 0
+  done
   return 1
 }
 
@@ -310,6 +343,13 @@ wtreview() {
   local wtdir="$proj/review-pr-$number"
   local head_ref="refs/wt-review/pr-$number/head" base_ref="refs/wt-review/pr-$number/base"
   local base_remote base_source
+  local seed_src
+  seed_src=$(_wt_review_get "$wtdir" seed-source)
+  if [[ -z $seed_src ]]; then
+    seed_src=$(git rev-parse --show-toplevel 2>/dev/null)
+    [[ $seed_src == $wtdir ]] && seed_src=
+    [[ -z $seed_src ]] && seed_src=$(_wt_default_worktree "$common")
+  fi
   if _wt_remote_for_repo "$proj" "$base_repo"; then
     base_remote=$REPLY
     base_source=$base_remote
@@ -387,6 +427,12 @@ wtreview() {
   _wt_review_set "$wtdir" cross-repository "$cross" || return 1
   _wt_review_set "$wtdir" maintainer-can-modify "$maintain" || return 1
   _wt_review_set "$wtdir" host "$host" || return 1
+  if [[ -n $seed_src && -d $seed_src && $seed_src != $wtdir ]]; then
+    _wt_review_set "$wtdir" seed-source "$seed_src" || return 1
+    _wt_seed "$seed_src" "$wtdir" "$common" || return 1
+    local seeded
+    for seeded in "${reply[@]}"; do _wt_review_add_seed "$wtdir" "$seeded" || return 1; done
+  fi
 
   cd "$wtdir"
   print "wtreview: PR #$number ($head_owner:$head_branch)"
@@ -799,7 +845,7 @@ wthelp() {
                          seeds local files configured by $WT_SEED, the common-dir
                          wt-seed manifest, or $WT_SEED_FILE)
   wtreview <pr>         create/reuse review-pr-<number> for a GitHub PR;
-                        PR changes stay highlighted in Helix (needs gh)
+                        highlights PR changes and seeds local files (needs gh)
   wtchange              convert the current review worktree to the real PR
                         branch; preserves edits, sets upstream, and seeds files
   wtrm [-f] <name>      remove by branch or worktree name; clean synthetic

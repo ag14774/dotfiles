@@ -81,6 +81,7 @@ wtreview 7 >/dev/null
 assert_eq "$PWD" "$project/review-pr-7"
 assert_eq "$(git rev-parse HEAD)" "$GH_BASE_OID"
 assert_eq "$(git show :app.txt)" $'base\nfeature'
+assert_eq "$(<.env)" 'seeded secret'
 git diff --quiet || fail "review worktree should match the PR-head index"
 git diff --cached --quiet && fail "PR baseline should be staged against the merge base"
 
@@ -140,6 +141,11 @@ if wtrm review-pr-8 >/dev/null 2>&1; then
   fail "wtrm should refuse a review worktree with personal edits"
 fi
 rm "$project/review-pr-8/scratch.txt"
+print 'changed secret' > "$project/review-pr-8/.env"
+if wtrm review-pr-8 >/dev/null 2>&1; then
+  fail "wtrm should refuse a review worktree with a modified seed file"
+fi
+print 'seeded secret' > "$project/review-pr-8/.env"
 
 export GH_PR_STATE=MERGED
 wtprune -n -m -y >/dev/null

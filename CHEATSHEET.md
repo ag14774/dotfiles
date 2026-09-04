@@ -276,7 +276,7 @@ Multi-step workflows and the reasoning. The individual keys are in the tables ab
 
 ### Reviewing a pull request in Helix
 
-1. **Open a highlighted review worktree** — `wtreview 123` (a PR URL also works), then open Helix there. The full PR appears in the Git gutter even though its commits are already pushed.
+1. **Open a highlighted review worktree** — `wtreview 123` (a PR URL also works), then open Helix there. The full PR appears in the Git gutter even though its commits are already pushed; normal worktree seed files are copied too.
 2. **Separate PR changes from your edits** — `git diff --cached` is the original PR; `git diff` is only edits made during review; `git diff HEAD` combines both.
 3. **Turn the review into a normal branch** — run `wtchange`. It preserves your edits, attaches the PR branch and its push remote, copies normal seed files, and leaves only your own edits highlighted.
 4. **Commit and update the PR** — use the normal `git add` / `gcai` / `ggpush` flow. Fork PR pushes still require GitHub permission or “Allow edits by maintainers.”
