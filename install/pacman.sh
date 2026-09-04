@@ -41,6 +41,7 @@ PACKAGES=(
   curl
   stow
   git-delta
+  github-cli
   glow
   pandoc-cli
   xdg-utils

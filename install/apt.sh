@@ -36,6 +36,7 @@ PACKAGES=(
   curl
   stow
   git-delta
+  gh
   glow
   pandoc
   xdg-utils
