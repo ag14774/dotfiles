@@ -44,7 +44,7 @@ ecosystem:
 | Upstream release assets | `install/apt.sh` | Yazi, Ghostty, Zellij, Taplo, Marksman on Debian |
 | Official uv installer (`~/.local/bin`) | `install.sh` | uv |
 | `uv tool` | `install.sh` | Pyright, plus Ruff on Debian |
-| npm (`~/.local`) | `install.sh` | bash/yaml/json language servers |
+| npm (`~/.local`) | `install.sh` | TypeScript plus bash/yaml/json language servers |
 | Official OpenCode installer (`~/.opencode/bin`) | `install.sh` | OpenCode |
 | Official rustup installer (`~/.cargo`, `~/.rustup`) | `install.sh` | stable Rust toolchain and Cargo |
 | Cargo (`~/.cargo/bin`) | `install.sh` | `jinja-lsp` |

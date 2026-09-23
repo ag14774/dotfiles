@@ -30,7 +30,7 @@ brew "taplo"
 brew "marksman"
 brew "shellcheck"
 brew "shfmt"
-brew "node" # provides npm for the JS-based LSPs (yaml/json/bash)
+brew "node" # provides npm for the JS-based LSPs (TypeScript/yaml/json/bash)
 
 # Tooling
 brew "stow"      # symlink manager for the config/ package

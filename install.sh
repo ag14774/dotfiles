@@ -114,7 +114,8 @@ fi
 echo "==> JS-based language servers (npm -g)"
 # core-js's postinstall only prints its funding notice; allow that script explicitly.
 npm install --global --prefix "$HOME/.local" --allow-scripts=core-js \
-  bash-language-server yaml-language-server vscode-langservers-extracted >/dev/null
+  bash-language-server typescript typescript-language-server \
+  yaml-language-server vscode-langservers-extracted >/dev/null
 
 echo "==> OpenCode (official installer)"
 export PATH="$HOME/.opencode/bin:$PATH"
