@@ -137,7 +137,22 @@ mkdir -p "$HOME/.config"
 stow --no-folding -d "$DOTFILES" -t "$HOME" config
 
 echo "==> Yazi flavor (catppuccin-mocha, from package.toml)"
-ya pkg install >/dev/null
+if ! YAZI_PACKAGE_OUTPUT="$(ya pkg install 2>&1)"; then
+  # Yazi 26.9.1 cannot migrate package caches containing real Git symlinks (upstream #4319).
+  if [[ $YAZI_PACKAGE_OUTPUT != *"failed to resolve Git symlink target"* ]]; then
+    printf '%s\n' "$YAZI_PACKAGE_OUTPUT" >&2
+    exit 1
+  fi
+
+  echo "==> Refresh legacy Yazi package cache"
+  if [[ ${XDG_CACHE_HOME:-} = /* ]]; then
+    YAZI_PACKAGE_CACHE="$XDG_CACHE_HOME/yazi/packages"
+  else
+    YAZI_PACKAGE_CACHE="$HOME/.cache/yazi/packages"
+  fi
+  rm -rf -- "$YAZI_PACKAGE_CACHE"
+  ya pkg install >/dev/null
+fi
 
 echo "==> zoxide: seed from autojump history (one-time, if present)"
 if [ "$(uname -s)" = "Darwin" ]; then
