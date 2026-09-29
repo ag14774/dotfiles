@@ -11,7 +11,6 @@ PACKAGES=(
   starship
   zsh-autosuggestions
   zsh-syntax-highlighting
-  hx
 
   # Yazi preview and helper dependencies
   ffmpeg
@@ -67,9 +66,8 @@ case "$(dpkg --print-architecture)" in
     MARKSMAN_ARCH="x64"
     ;;
   arm64)
-    DEB_ARCH="arm64"
-    RELEASE_ARCH="aarch64"
-    MARKSMAN_ARCH="arm64"
+    echo "The pinned upstream Helix .deb requires amd64; Debian arm64 is not supported." >&2
+    exit 1
     ;;
   *)
     echo "Unsupported Debian architecture: $(dpkg --print-architecture)" >&2
@@ -104,6 +102,20 @@ fi
 TMP_DIR="$(mktemp -d)"
 chmod 0755 "$TMP_DIR"
 trap 'rm -rf "$TMP_DIR"' EXIT
+
+# Debian's Helix is too old for the shared config. This version is hardcoded:
+# manually bump the release, package version, and SHA256 when upgrading Helix.
+HELIX_VERSION="25.07.1"
+HELIX_DEB_VERSION="25.7.1-1"
+HELIX_SHA256="c9ff7ee3113f039c21c3ff31e8e2b71d1cc51a2c3e6c39face36e3cf25fe8788"
+HELIX_PACKAGE="$TMP_DIR/helix_${HELIX_DEB_VERSION}_${DEB_ARCH}.deb"
+
+echo "==> Helix $HELIX_VERSION (pinned upstream package; manually updated)"
+curl -fsSL "https://github.com/helix-editor/helix/releases/download/$HELIX_VERSION/helix_${HELIX_DEB_VERSION}_${DEB_ARCH}.deb" \
+  -o "$HELIX_PACKAGE"
+printf '%s  %s\n' "$HELIX_SHA256" "$HELIX_PACKAGE" | sha256sum -c -
+# Both packages own /usr/bin/hx; remove the distro package in the same transaction.
+"${APT[@]}" install -y "$HELIX_PACKAGE" hx-
 
 download_release_asset() {
   local repo="$1"

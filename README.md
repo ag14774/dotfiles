@@ -26,11 +26,19 @@ installer as your normal user, not with `sudo`; it elevates package installation
 itself when needed.
 
 Homebrew must already be installed on macOS. The Linux backends support Debian
-13 (Trixie) and Pacman-based distributions such as Manjaro and Arch Linux.
+13 (Trixie, amd64 only) and Pacman-based distributions such as Manjaro and Arch Linux.
 Because several tools are not in Debian 13, its backend installs Yazi, Zellij,
 Taplo, and Marksman from their upstream GitHub releases. Ghostty uses
 the community Debian package linked from
 [Ghostty's official installation docs](https://ghostty.org/docs/install/binary#debian-and-ubuntu).
+
+Debian's packaged Helix is too old for the shared configuration. `install/apt.sh`
+installs the upstream Helix **25.07.1** `.deb` through APT, replacing Debian's `hx`
+package. **The Debian Helix version is hardcoded and must be bumped manually:**
+update `HELIX_VERSION`, `HELIX_DEB_VERSION`, and `HELIX_SHA256` in that script,
+then rerun the installer. Normal APT upgrades do not track upstream Helix releases.
+The pinned release has no arm64 `.deb`, so the Debian installer rejects arm64
+before making package changes. Homebrew and Pacman continue to use their repositories.
 
 ### Managed developer tools
 
@@ -40,8 +48,8 @@ ecosystem:
 | Manager | Installed by | Managed tools |
 | --- | --- | --- |
 | Homebrew/Pacman | platform backend | Node/npm, Ruff, Taplo, Marksman, ShellCheck, shfmt, GitHub CLI |
-| APT | `install/apt.sh` | Node/npm, Helix (`hx`), ShellCheck, shfmt, GitHub CLI |
-| Upstream release assets | `install/apt.sh` | Yazi, Ghostty, Zellij, Taplo, Marksman on Debian |
+| APT | `install/apt.sh` | Node/npm, ShellCheck, shfmt, GitHub CLI |
+| Upstream release assets | `install/apt.sh` | Helix (pinned `.deb` via APT), Yazi, Ghostty, Zellij, Taplo, Marksman on Debian |
 | Official uv installer (`~/.local/bin`) | `install.sh` | uv |
 | `uv tool` | `install.sh` | Pyright, plus Ruff on Debian |
 | npm (`~/.local`) | `install.sh` | TypeScript plus bash/yaml/json language servers |
