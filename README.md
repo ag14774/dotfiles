@@ -138,13 +138,23 @@ are stopped. Remove stale database `-wal`/`-shm` files before restoring it. The 
 
 ### OpenCode BTW
 
-The OpenCode TUI plugin provides `/btw`, which opens a dialog for a side
-question. It sends a bounded text-only snapshot of the current conversation to
-a temporary read-only session and displays a scrollable side-conversation above
-a follow-up input. The temporary session persists for follow-up questions until
-the modal closes, then it is deleted. The active session is never prompted or
-modified. V2 loads `btw-v2.tsx` and disables the built-in one-shot `opencode.btw`
-plugin to preserve this follow-up workflow; V1 continues using `btw.tsx`.
+The OpenCode TUI plugin provides `/btw` for side questions. V2 adapts the
+[built-in BTW plugin](https://github.com/anomalyco/opencode/blob/v2/packages/tui/src/feature-plugins/prompt/btw.tsx):
+it uses the current session's context and model through transient `session.generate`
+calls, without running tools or adding messages to the main conversation.
+The dialog renders Markdown with tables, scroll controls, copy, and follow-ups.
+Press `f` or Enter to write a follow-up, Enter to send, `c` to copy the latest
+answer while reading (`Ctrl+Y` while typing), and Esc to close. Side-conversation
+history stays only in the dialog and is discarded on close; no temporary session
+is created. A `/btw` spinner in the prompt footer indicates pending requests.
+V2 loads `btw-v2/tui.tsx` through the `btw-v2/` plugin directory and disables
+the built-in one-shot `opencode.btw`; V1 retains its temporary-session `btw.tsx`.
+
+To test the built-in without changing settings, launch
+`OPENCODE_CLI_CONFIG_CONTENT='{"plugins":["opencode.btw"]}' opencode`.
+To test the custom plugin, launch `opencode`, open a session, and run
+`/btw What is 2 + 2?`. After the answer appears, press `f` and ask `Multiply that by 3`
+in the follow-up input, then press Esc to close the temporary conversation.
 
 ### Pull request worktrees
 

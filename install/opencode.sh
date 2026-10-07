@@ -75,7 +75,7 @@ if [ "$CURRENT" != "$VERSION" ] || [ -f "$TMP/cli.json" ]; then
 fi
 if [ -f "$TMP/cli.json" ]; then
   mkdir -p "$CONFIG"
-  # Preparation emits an existing file only to port the bundled V1 BTW reference.
+  # Preparation emits an existing file only to repair the bundled BTW reference.
   cp "$TMP/cli.json" "$CONFIG/cli.json.dotfiles-new"
   chmod 600 "$CONFIG/cli.json.dotfiles-new"
   mv "$CONFIG/cli.json.dotfiles-new" "$CONFIG/cli.json"

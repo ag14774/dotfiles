@@ -23,14 +23,23 @@ def prepare(config, state, schema_path, keybind_path, output):
     if cli.exists() or cli.is_symlink():
         existing = read(cli)
         jsonschema.validate(existing, schema)
-        if "./tui-plugins/btw.tsx" in existing.get("plugins", []):
+        old_btw = {"./tui-plugins/btw.tsx", "./tui-plugins/btw-v2.tsx"}
+        if any(
+            item in old_btw
+            for item in existing.get("plugins", [])
+            if isinstance(item, str)
+        ):
             existing["plugins"] = [
-                item for item in existing["plugins"] if item != "./tui-plugins/btw.tsx"
+                item
+                for item in existing["plugins"]
+                if not isinstance(item, str) or item not in old_btw
             ]
-            existing["plugins"].extend(["-opencode.btw", "./tui-plugins/btw-v2.tsx"])
+            for item in ("-opencode.btw", "./tui-plugins/btw-v2"):
+                if item not in existing["plugins"]:
+                    existing["plugins"].append(item)
             jsonschema.validate(existing, schema)
             output.write_text(json.dumps(existing, indent=2) + "\n")
-            print("Replacing the bundled V1 BTW plugin reference in existing cli.json")
+            print("Replacing the bundled BTW file reference with a V2 plugin directory")
             return
         print(f"Preserving existing {cli}")
         return
@@ -136,7 +145,7 @@ def prepare(config, state, schema_path, keybind_path, output):
     for entry in legacy.get("plugin", []):
         package = entry if isinstance(entry, str) else entry[0]
         if package == "./tui-plugins/btw.tsx":
-            plugins.extend(["-opencode.btw", "./tui-plugins/btw-v2.tsx"])
+            plugins.extend(["-opencode.btw", "./tui-plugins/btw-v2"])
         else:
             print(
                 f"V1 plugin {package!r} needs a V2 implementation; retained in {legacy_path}"
