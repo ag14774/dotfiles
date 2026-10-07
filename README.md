@@ -53,7 +53,7 @@ ecosystem:
 | Official uv installer (`~/.local/bin`) | `install.sh` | uv |
 | `uv tool` | `install.sh` | Pyright, plus Ruff on Debian |
 | npm (`~/.local`) | `install.sh` | TypeScript plus bash/yaml/json language servers |
-| Official OpenCode installer (`~/.opencode/bin`) | `install.sh` | OpenCode |
+| Official OpenCode V2 installer (`~/.opencode/bin`) | `install/opencode.sh` | OpenCode 2 |
 | Official rustup installer (`~/.cargo`, `~/.rustup`) | `install.sh` | stable Rust toolchain and Cargo |
 | Cargo (`~/.cargo/bin`) | `install.sh` | `jinja-lsp` |
 
@@ -88,6 +88,54 @@ this): inside a zellij session run
 - `secrets.zsh.example` — template; real secrets live in
   `~/.config/zsh/secrets.zsh` (gitignored, never committed)
 
+### OpenCode 2 migration
+
+The installer uses the [V2 installer](https://opencode.ai/v2/install), currently
+the 2.x channel, rather than V1's GitHub latest release. Set
+`OPENCODE_VERSION=2.0.24 ~/dotfiles/install.sh` to select a specific stable 2.x
+release. A new binary is staged and its version verified before replacement.
+Package-managed OpenCode installations must be removed first; the script reports
+the conflict instead of overwriting their binaries.
+
+Before replacing OpenCode or creating V2 client settings, the installer creates a
+private backup under `~/.local/state/opencode/dotfiles-backups/` (respects XDG).
+It includes the old binary, global configuration, credentials, shell startup file,
+persisted UI preferences, and a consistent SQLite backup including committed WAL
+transactions. Configuration-file symlinks are copied as snapshots. Existing
+`opencode.json(c)`, agents, commands, skills and credentials stay in V1-compatible
+form; V2 loads them without requiring a native-format rewrite.
+
+If `cli.json` is absent, supported global `tui.json(c)` settings and persisted
+preferences are migrated into it and validated against V2's published schema.
+An existing `cli.json` is validated and preserved on reruns, except for replacing
+the bundled V1 BTW plugin reference if V2 already auto-migrated it. This is a real file,
+owned by the client; `cli.json.example` documents the defaults. V1 plugins other
+than the bundled BTW plugin are reported and left in the original V1 file, since
+their implementation must be ported before V2 can load them.
+
+Restart OpenCode after installation. V2 imports V1 session data on startup.
+For V2 `2.0.24`, the installer starts the shared service and repairs the known
+[Azure credential migration bug #53443](https://github.com/anomalyco/opencode/issues/53443).
+It moves the migrated Azure `resourceName` form answer into a new credential's
+`configuration`, activates it, and retains the original credential plus a private
+JSON backup. The repair is idempotent and does not edit the database directly.
+It also backs up and removes imported Vertex API-key credentials when existing
+Google ADC can successfully refresh a token. Claude on Vertex requires ADC;
+an imported API key prevents the V2 provider from using it. If ADC is unavailable,
+the key is preserved and the installer prints the required setup step.
+Verify provider credentials, models and MCP connections in your project.
+V2 has no OpenCode LSP tools or diagnostics; use project lint/typecheck commands
+(Helix's language servers are independent). Shell completions support both versions.
+`gcai` uses the still-supported `run --format json` text-event contract.
+`ocreload` reloads V2's shared server configuration before replacing the client pane.
+
+For rollback, quit V2 and stop its service (`opencode service stop`), restore the
+backup binary into `~/.opencode/bin/opencode`, restore global configuration and
+credentials from the backup, and restore the database while all OpenCode processes
+are stopped. Remove stale database `-wal`/`-shm` files before restoring it. The V1
+`tui.json` and `btw.tsx` remain available. See the
+[upstream migration guide](https://opencode.ai/v2/docs/migrate-v1/).
+
 ### OpenCode BTW
 
 The OpenCode TUI plugin provides `/btw`, which opens a dialog for a side
@@ -95,7 +143,8 @@ question. It sends a bounded text-only snapshot of the current conversation to
 a temporary read-only session and displays a scrollable side-conversation above
 a follow-up input. The temporary session persists for follow-up questions until
 the modal closes, then it is deleted. The active session is never prompted or
-modified.
+modified. V2 loads `btw-v2.tsx` and disables the built-in one-shot `opencode.btw`
+plugin to preserve this follow-up workflow; V1 continues using `btw.tsx`.
 
 ### Pull request worktrees
 

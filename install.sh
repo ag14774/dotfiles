@@ -117,9 +117,9 @@ npm install --global --prefix "$HOME/.local" --allow-scripts=core-js \
   bash-language-server typescript typescript-language-server \
   yaml-language-server vscode-langservers-extracted >/dev/null
 
-echo "==> OpenCode (official installer)"
+echo "==> OpenCode 2 (official installer + V1 migration)"
 export PATH="$HOME/.opencode/bin:$PATH"
-curl -fsSL https://opencode.ai/install | bash -s -- --no-modify-path
+bash "$DOTFILES/install/opencode.sh"
 
 echo "==> Rust toolchain (rustup)"
 if [ ! -x "$HOME/.cargo/bin/rustup" ]; then

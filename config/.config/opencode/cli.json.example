@@ -1,0 +1,11 @@
+{
+  "$schema": "https://opencode.ai/v2/cli.json",
+  "theme": { "name": "opencode" },
+  "leader": { "timeout": 2000 },
+  "keybinds": { "leader": "ctrl+x", "command.palette.show": "ctrl+p" },
+  "scroll": { "speed": 3, "acceleration": false },
+  "diffs": { "view": "auto" },
+  "mouse": true,
+  "attention": { "notifications": true, "sound": true, "volume": 0.4 },
+  "plugins": ["-opencode.btw", "./tui-plugins/btw-v2.tsx"]
+}
