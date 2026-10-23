@@ -156,6 +156,15 @@ To test the custom plugin, launch `opencode`, open a session, and run
 `/btw What is 2 + 2?`. After the answer appears, press `f` and ask `Multiply that by 3`
 in the follow-up input, then press Esc to close the temporary conversation.
 
+### Reading Markdown
+
+Run `mdview` in a repo to open its README in your browser, or
+`mdview docs/guide.md` for another file. In Helix, press `+` then `m` to preview
+the saved file; use `Alt-y` to pick it first if needed. The preview uses
+Catppuccin styling and embeds images relative to the document's directory.
+Save edits and preview again to update it (no live reload or Mermaid rendering).
+The same renderer powers `cheat --pretty`.
+
 ### Pull request worktrees
 
 `wtreview <number-or-url>` creates a detached `review-pr-<number>` worktree

@@ -46,3 +46,4 @@ tbody tr:hover { background: var(--surface0); }
 ul, ol { padding-left: 1.4em; }
 li { margin: .25em 0; }
 li::marker { color: var(--mauve); }
+img { max-width: 100%; height: auto; }

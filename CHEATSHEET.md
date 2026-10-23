@@ -19,6 +19,7 @@ The handful you reach for constantly. Each also has a home in its tool's section
 |---|---|
 | ★ `Alt-y` | Summon Yazi (zellij); the file you pick opens in the Helix pane |
 | ★ `Ctrl-r` | Reload files from disk in Helix (after opencode edits them) |
+| ★ `+` `m` (Helix) · `mdview [FILE]` (shell) | Read Markdown in the browser with images; `mdview` alone opens this directory's README |
 | `gd` → `Ctrl-o` | Goto definition (incl. `.venv` libs), then jump back |
 | ★ `gu` → `Ctrl-o` | Goto **super-method** (parent class's override), then jump back |
 | ★ `j <dir>` · `ji` | zoxide jump · interactive jump (shell) |
@@ -205,6 +206,7 @@ Change bars (added / modified / deleted) show in the gutter automatically. See t
 | ★ `+` `y` | copy diagnostic under the cursor to the system clipboard |
 | ★ `+` `w` · `+` `W` | show · hide whitespace |
 | ★ `+` `g` | peek the git-diff hunk under the cursor (floating pane, delta) |
+| ★ `+` `m` | preview the saved Markdown file in the browser (styled, with images) |
 | ★ `+` `r` | run the whole buffer as Python, Bash, or JavaScript (floating pane) |
 | ★ `gu` | goto super-method — the overridden method's parent (Python; see Recipes) |
 
@@ -243,6 +245,8 @@ Type to filter · `Ctrl-n`/`Ctrl-p` or arrows move · `Enter` select · `Tab` mu
 Multi-step workflows and the reasoning. The individual keys are in the tables above.
 
 ### Helix
+
+**Read a repo's README with images:** `Alt-y` → pick `README.md` → ★ `+` `m` in Helix. Or run `mdview` from the repo directory; `mdview docs/guide.md` previews another file. Images resolve relative to the Markdown file, even from a different working directory. Previews are snapshots: save edits with `:w`, then press `+` `m` again. This is ordinary Markdown rendering, not Mermaid diagram rendering.
 
 **Select N lines from here:** `Nx` (e.g. `5x`). `x` grabs the current line; the count or an extra `x` adds lines below.
 
