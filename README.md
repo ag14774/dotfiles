@@ -162,7 +162,10 @@ Run `mdview` in a repo to open its README in your browser, or
 `mdview docs/guide.md` for another file. In Helix, press `+` then `m` to preview
 the saved file; use `Alt-y` to pick it first if needed. The preview uses
 Catppuccin styling and embeds images relative to the document's directory.
-Save edits and preview again to update it (no live reload or Mermaid rendering).
+Fenced `mermaid` blocks render as diagrams using Mermaid 12.2.0, loaded from
+jsDelivr in the browser (internet access required; diagram source stays local).
+If loading or rendering fails, the source remains visible with an error message.
+Save edits and preview again to update it (no live reload).
 The same renderer powers `cheat --pretty`.
 
 ### Pull request worktrees

@@ -47,3 +47,6 @@ ul, ol { padding-left: 1.4em; }
 li { margin: .25em 0; }
 li::marker { color: var(--mauve); }
 img { max-width: 100%; height: auto; }
+.mermaid-diagram { margin: 1em 0; padding: 1em; overflow-x: auto; background: var(--mantle); border-radius: 8px; }
+.mermaid-diagram svg { display: block; margin: auto; }
+.mermaid-error { color: var(--peach); white-space: pre-wrap; }

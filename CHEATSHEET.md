@@ -246,7 +246,7 @@ Multi-step workflows and the reasoning. The individual keys are in the tables ab
 
 ### Helix
 
-**Read a repo's README with images:** `Alt-y` → pick `README.md` → ★ `+` `m` in Helix. Or run `mdview` from the repo directory; `mdview docs/guide.md` previews another file. Images resolve relative to the Markdown file, even from a different working directory. Previews are snapshots: save edits with `:w`, then press `+` `m` again. This is ordinary Markdown rendering, not Mermaid diagram rendering.
+**Read a repo's README with images and diagrams:** `Alt-y` in Zellij → pick `README.md` in Yazi → ★ `+` `m` in Helix. Or run `mdview` from the repo directory; `mdview docs/guide.md` previews another file. Images resolve relative to the Markdown file, even from a different working directory. Fenced `mermaid` blocks render in the browser using a pinned jsDelivr renderer (internet access required; diagram source stays local). Failed diagrams keep their source and show an error. Previews are snapshots: save edits with `:w`, then press `+` `m` again.
 
 **Select N lines from here:** `Nx` (e.g. `5x`). `x` grabs the current line; the count or an extra `x` adds lines below.
 

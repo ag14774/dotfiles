@@ -42,5 +42,6 @@ out_dir="$(mktemp -d "${TMPDIR:-/tmp}/mdview.XXXXXX")"
 cd -- "$md_dir"
 pandoc "./$md_name" --from=gfm --standalone --embed-resources \
   --css "$script_dir/../CHEATSHEET.css" \
+  --include-after-body "$script_dir/markdown-preview.html" \
   --metadata title="$md_name" -o "$out_dir/index.html"
 "$opener" "$out_dir/index.html"

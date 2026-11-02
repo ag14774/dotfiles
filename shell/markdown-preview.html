@@ -1,0 +1,38 @@
+<!-- Kept inline in the preview so file:// pages need no local module server. -->
+<script type="module">
+  const blocks = [...document.querySelectorAll('pre > code.mermaid, pre > code.language-mermaid')];
+  if (blocks.length) {
+    const showError = (block, message) => {
+      const notice = document.createElement('p');
+      notice.className = 'mermaid-error';
+      notice.textContent = message;
+      block.parentElement.before(notice);
+    };
+    try {
+      // Pin upgrades explicitly. Fetch only when the document contains Mermaid.
+      const { default: mermaid } = await import('https://cdn.jsdelivr.net/npm/mermaid@12.2.0/dist/mermaid.esm.min.mjs');
+      mermaid.initialize({
+        startOnLoad: false,
+        securityLevel: 'strict',
+        suppressErrorRendering: true,
+        theme: 'dark',
+        fontFamily: 'system-ui, sans-serif',
+      });
+      for (const [index, block] of blocks.entries()) {
+        try {
+          const { svg } = await mermaid.render(`mdview-mermaid-${index}`, block.textContent);
+          const diagram = document.createElement('div');
+          diagram.className = 'mermaid-diagram';
+          diagram.innerHTML = svg;
+          block.parentElement.replaceWith(diagram);
+        } catch (error) {
+          // Keep the source readable; one bad diagram must not block the rest.
+          showError(block, `Mermaid could not render this diagram: ${error.message || error}`);
+        }
+      }
+    } catch (error) {
+      showError(blocks[0], 'Could not load Mermaid. Check your internet connection and reload; diagram source is shown below.');
+      console.warn('mdview: Mermaid renderer unavailable', error);
+    }
+  }
+</script>
