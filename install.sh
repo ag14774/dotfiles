@@ -4,7 +4,7 @@
 #   git clone <repo> ~/dotfiles && ~/dotfiles/install.sh && exec zsh
 #
 # It installs platform packages + developer tools/language servers and the Yazi flavor,
-# symlinks config/ into ~/.config via stow, sets up zoxide (replacing autojump),
+# symlinks config/ into ~/.config and ~/.local/bin via stow, sets up zoxide (replacing autojump),
 # maintains small idempotent blocks at the start and end of ~/.zshrc. (zjstatus
 # is loaded by dev.kdl directly from its release URL.)
 # Shell expressions written into ~/.zshrc must remain literal until zsh loads it.
@@ -132,7 +132,7 @@ export PATH="$HOME/.cargo/bin:$PATH"
 echo "==> Cargo-based language servers"
 cargo install jinja-lsp >/dev/null
 
-echo "==> Symlink config/ into ~/.config (stow)"
+echo "==> Symlink config/ into ~/.config and ~/.local/bin (stow)"
 mkdir -p "$HOME/.config"
 # Remove superseded BTW plugins so only btw-v2 remains. A link to the whole
 # btw-v2 directory (not created by stow) would make stow abort with a conflict.

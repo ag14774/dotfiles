@@ -15,7 +15,7 @@ exec zsh
 `install.sh` (safe to rerun) selects Homebrew on macOS, APT on Debian, or
 Pacman on Arch-based Linux,
 installs the platform packages plus developer tools/language servers and the Yazi
-flavor, symlinks `config/` into `~/.config` via GNU Stow, and appends a small
+flavor, symlinks `config/` into `~/.config` and `~/.local/bin` via GNU Stow, and appends a small
 configuration block to `~/.zshrc` (adds the managed user-tool directories to `PATH`, sets
 `EDITOR` to the available Helix executable, sources
 `~/.config/zsh/secrets.zsh`, and loads the `shell/*.zsh` functions). A separate
@@ -82,6 +82,17 @@ this): inside a zellij session run
 ## Layout
 
 - `config/.config/{ghostty,zellij,helix,yazi,opencode}/` — stowed into `~/.config`
+- `config/.local/bin/` — reusable commands, stowed into `~/.local/bin` (on `PATH`
+  for shells, Zellij, and programs started from them):
+  - `wt-core` — the worktree engine behind the `wt*` shell commands
+    (`wt-core help`); the shell functions are thin wrappers that `cd` for you.
+    For scripts and agents, stdout carries only the result (such as the
+    worktree path) and progress goes to stderr
+  - `hx-open FILE...` — open files in the current Zellij tab's Helix `editor`
+    pane, spawning it if needed (used by the `Alt-y` picker)
+
+  The `wt*` functions and the `Alt-y` picker call this checkout's copies
+  directly. Rerun `install.sh` (or its stow step) to put new commands on `PATH`.
 - `shell/*.zsh` — sourced directly by the `.zshrc` block
 - `install/{apt,brew,pacman}.sh` — platform package installation backends
 - `Brewfile` — Homebrew package manifest
@@ -170,6 +181,21 @@ jsDelivr in the browser (internet access required; diagram source stays local).
 If loading or rendering fails, the source remains visible with an error message.
 Save edits and preview again to update it (no live reload).
 The same renderer powers `cheat --pretty`.
+
+### Worktree tabs
+
+`wt <branch>` changes into the branch's worktree, creating it if needed. Choose
+a different landing with `-s` (stay here and print the path), `-t` (focus the
+worktree's Zellij tab, opening one with OpenCode if needed), or `-b` (open that
+tab in the background). `wt -p "fix the flaky test" <branch>` opens a background
+tab whose OpenCode immediately starts on the prompt. `wtreview` accepts the same
+options. Outside Zellij, `-t` changes directory, `-b` stays, and `-p` fails.
+
+Opened tabs are named after the worktree directory and recorded beside its Git
+metadata. `-t` returns to that tab later; `wtrm` and `wtprune` close it with the
+worktree, except the tab you run them from. Options go before the branch. A tab
+only counts while it keeps the worktree's name and has a pane inside the
+worktree, so tabs you open or rename yourself are never closed.
 
 ### Pull request worktrees
 

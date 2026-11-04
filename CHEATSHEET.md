@@ -23,6 +23,8 @@ The handful you reach for constantly. Each also has a home in its tool's section
 | `gd` → `Ctrl-o` | Goto definition (incl. `.venv` libs), then jump back |
 | ★ `gu` → `Ctrl-o` | Goto **super-method** (parent class's override), then jump back |
 | ★ `j <dir>` · `ji` | zoxide jump · interactive jump (shell) |
+| ★ `wt <branch>` · `-s` · `-t` · `-b` | Worktree for a branch: cd into it · stay here · focus its tab (with OpenCode) · open that tab in the background |
+| ★ `wt -p "task" <branch>` | New background tab whose OpenCode starts on the task (`wtreview` takes the same options; `wtrm` closes the tab) |
 | `git diff` | Review changes (delta, side-by-side) |
 | ★ `gcai` | AI commit msg from staged diff → edit → commit (`gcai -y` = no edit; optional free-text arg adds prompt hints, e.g. `gcai 'note X is a placeholder'`) |
 
