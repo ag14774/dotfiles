@@ -17,6 +17,5 @@
     "notifications": true,
     "sound": true,
     "volume": 0.4
-  },
-  "plugin": ["./tui-plugins/btw.tsx"]
+  }
 }

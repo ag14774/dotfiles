@@ -141,17 +141,14 @@ def prepare(config, state, schema_path, keybind_path, output):
         )
     if "animations_enabled" in kv:
         result["animations"] = kv["animations_enabled"]
-    plugins = []
+    # The dotfiles' BTW plugin replaces the built-in one, as in cli.json.example.
+    result["plugins"] = ["-opencode.btw", "./tui-plugins/btw-v2"]
     for entry in legacy.get("plugin", []):
         package = entry if isinstance(entry, str) else entry[0]
-        if package == "./tui-plugins/btw.tsx":
-            plugins.extend(["-opencode.btw", "./tui-plugins/btw-v2"])
-        else:
+        if package != "./tui-plugins/btw.tsx":
             print(
                 f"V1 plugin {package!r} needs a V2 implementation; retained in {legacy_path}"
             )
-    if plugins:
-        result["plugins"] = plugins
     jsonschema.validate(result, schema)
     output.write_text(json.dumps(result, indent=2) + "\n")
     print(f"Prepared V2 client settings from {legacy_path} and persisted preferences")

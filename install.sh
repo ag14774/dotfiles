@@ -134,6 +134,13 @@ cargo install jinja-lsp >/dev/null
 
 echo "==> Symlink config/ into ~/.config (stow)"
 mkdir -p "$HOME/.config"
+# Remove superseded BTW plugins so only btw-v2 remains. A link to the whole
+# btw-v2 directory (not created by stow) would make stow abort with a conflict.
+OPENCODE_TUI_PLUGINS="$HOME/.config/opencode/tui-plugins"
+rm -f -- "$OPENCODE_TUI_PLUGINS/btw.tsx" "$OPENCODE_TUI_PLUGINS/btw-v2.tsx"
+if [ -L "$OPENCODE_TUI_PLUGINS/btw-v2" ]; then
+  rm -- "$OPENCODE_TUI_PLUGINS/btw-v2"
+fi
 stow --no-folding -d "$DOTFILES" -t "$HOME" config
 
 echo "==> Yazi flavor (catppuccin-mocha, from package.toml)"

@@ -106,12 +106,13 @@ transactions. Configuration-file symlinks are copied as snapshots. Existing
 form; V2 loads them without requiring a native-format rewrite.
 
 If `cli.json` is absent, supported global `tui.json(c)` settings and persisted
-preferences are migrated into it and validated against V2's published schema.
+preferences are migrated into it and validated against V2's published schema,
+with the [BTW plugin](#opencode-btw) enabled.
 An existing `cli.json` is validated and preserved on reruns, except for replacing
-the bundled V1 BTW plugin reference if V2 already auto-migrated it. This is a real file,
-owned by the client; `cli.json.example` documents the defaults. V1 plugins other
-than the bundled BTW plugin are reported and left in the original V1 file, since
-their implementation must be ported before V2 can load them.
+an old BTW plugin file reference if V2 already auto-migrated it. This is a real file,
+owned by the client; `cli.json.example` documents the defaults. Other V1 plugins
+are reported and left in the original V1 file, since their implementation must be
+ported before V2 can load them.
 
 Restart OpenCode after installation. V2 imports V1 session data on startup.
 For V2 `2.0.24`, the installer starts the shared service and repairs the known
@@ -133,7 +134,7 @@ For rollback, quit V2 and stop its service (`opencode service stop`), restore th
 backup binary into `~/.opencode/bin/opencode`, restore global configuration and
 credentials from the backup, and restore the database while all OpenCode processes
 are stopped. Remove stale database `-wal`/`-shm` files before restoring it. The V1
-`tui.json` and `btw.tsx` remain available. See the
+`tui.json` remains available, but the V1 BTW plugin was removed. See the
 [upstream migration guide](https://opencode.ai/v2/docs/migrate-v1/).
 
 ### OpenCode BTW
@@ -148,7 +149,9 @@ answer while reading (`Ctrl+Y` while typing), and Esc to close. Side-conversatio
 history stays only in the dialog and is discarded on close; no temporary session
 is created. A `/btw` spinner in the prompt footer indicates pending requests.
 V2 loads `btw-v2/tui.tsx` through the `btw-v2/` plugin directory and disables
-the built-in one-shot `opencode.btw`; V1 retains its temporary-session `btw.tsx`.
+the built-in one-shot `opencode.btw`, so `/btw` always means this plugin. The
+installer deletes older BTW plugin files (`btw.tsx`, `btw-v2.tsx`) from
+`~/.config/opencode/tui-plugins/`.
 
 To test the built-in without changing settings, launch
 `OPENCODE_CLI_CONFIG_CONTENT='{"plugins":["opencode.btw"]}' opencode`.

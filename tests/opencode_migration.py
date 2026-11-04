@@ -73,6 +73,12 @@ class MigrationTests(unittest.TestCase):
         self.assertEqual(legacy.read_bytes(), before)
         self.assertTrue((self.config / "tui.json").is_symlink())
 
+    def test_repo_v1_settings_without_btw_reference_enable_v2_btw(self):
+        (self.config / "tui.json").symlink_to(ROOT / "config/.config/opencode/tui.json")
+        self.prepare()
+        result = json.loads(self.output.read_text())
+        self.assertEqual(result["plugins"], ["-opencode.btw", "./tui-plugins/btw-v2"])
+
     def test_existing_v2_settings_are_preserved_on_rerun(self):
         cli = self.config / "cli.json"
         cli.write_text('{"theme":{"name":"custom"},"tabs":{"mode":"off"}}\n')
