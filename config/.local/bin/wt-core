@@ -19,6 +19,13 @@
 typeset -g _WT_CWD_FILE= _WT_RESULT= _WT_MODE=cd _WT_PROMPT=
 typeset -g _WT_OPENCODE_PANE=${0:A:h}/opencode-pane
 
+_wt_in_zellij() { [[ -n ${ZELLIJ:-} && -n ${ZELLIJ_SESSION_NAME:-} ]]; }
+
+# Act on the Zellij session this runs in. Name it explicitly: given a session
+# name that no longer exists, plain `zellij action` acts on whichever session is
+# running instead of failing.
+_wt_zellij() { zellij --session "$ZELLIJ_SESSION_NAME" action "$@"; }
+
 # cd here (so later messages see the new $PWD) and report the destination: to
 # the wrapper through --cwd-file, otherwise as the result on stdout.
 _wt_chdir() {
@@ -60,7 +67,7 @@ _wt_parse_landing() { # $1=command name for messages, then its arguments
   mode=${modes[1]-}
   if [[ -n $_WT_PROMPT ]]; then
     [[ $mode == stay ]] && { print -u2 "$name: -p needs a tab; it cannot be combined with -s"; return 1; }
-    [[ -n ${ZELLIJ:-} ]] || { print -u2 "$name: -p starts OpenCode in a Zellij tab; not inside Zellij"; return 1; }
+    _wt_in_zellij || { print -u2 "$name: -p starts OpenCode in a Zellij tab; not inside Zellij"; return 1; }
     [[ -n $mode ]] || mode=background
   fi
   _WT_MODE=${mode:-cd}
@@ -72,7 +79,7 @@ _wt_parse_landing() { # $1=command name for messages, then its arguments
 _wt_land() { # $1=worktree $2=command name for messages
   emulate -L zsh
   local wt=$1 name=$2 mode=$_WT_MODE
-  if [[ $mode == (tab|background) && -z ${ZELLIJ:-} ]]; then
+  if [[ $mode == (tab|background) ]] && ! _wt_in_zellij; then
     if [[ $mode == tab ]]; then
       print -u2 "$name: not inside Zellij; changing directory instead of opening a tab"
       mode=cd
@@ -89,41 +96,25 @@ _wt_land() { # $1=worktree $2=command name for messages
   esac
 }
 
-# The Zellij tab opened for a worktree is recorded beside its private HEAD and
-# index, like review metadata, so only tabs wt opened are reused or closed.
-_wt_tab_meta() { # $1=worktree
+# Set reply to "ID:sure" or "ID:unsure" for each tab working in worktree $1: a
+# tab with a live pane inside the worktree and no pane known to be elsewhere.
+# Directories survive renamed tabs and restored sessions, unlike tab names and
+# IDs, so nothing about the tab needs to be remembered. Stopped panes report no
+# directory and are ignored. Live panes can report none too, for seconds while a
+# program like OpenCode starts or when Zellij is busy; a tab with such a pane is
+# "unsure", because the pane could be anywhere.
+_wt_tabs_in() { # $1=worktree
   emulate -L zsh
-  local gitdir
-  gitdir=$(git -C "$1" rev-parse --path-format=absolute --git-dir 2>/dev/null) || { REPLY=; return 1; }
-  REPLY="$gitdir/wt-tab"
-}
-
-# Set REPLY to the ID of the tab wt opened for worktree $1 if it is still open in
-# this session: a tab still named after the worktree with a pane inside it. Tab
-# IDs are reused once a session restarts and a resurrected session restores the
-# tab under a new ID, so the recorded ID only breaks ties and is updated. A tab
-# you rename is no longer treated as the worktree's tab (and is never closed).
-_wt_tab_find() { # $1=worktree
-  emulate -L zsh
-  local wt=${1:A} meta id session found
-  REPLY=
-  [[ -n ${ZELLIJ:-} ]] || return 1
-  _wt_tab_meta "$wt" || return 1
-  meta=$REPLY
-  REPLY=
-  [[ -f $meta ]] || return 1
-  id=$(git config --file "$meta" --get tab.id 2>/dev/null)
-  session=$(git config --file "$meta" --get tab.session 2>/dev/null)
-  [[ $session == ${ZELLIJ_SESSION_NAME:-} ]] || return 1
-  # pane_cwd is missing for panes whose program has exited.
-  found=$(zellij action list-panes --json 2>/dev/null | jq -r --arg id "$id" --arg wt "$wt" --arg name "${wt:t}" '
-    [.[] | select(.is_plugin == false and .tab_name == $name
-                  and ((.pane_cwd // "") as $cwd | $cwd == $wt or ($cwd | startswith($wt + "/"))))]
-    | map(select((.tab_id | tostring) == $id)) + .
-    | first | .tab_id // empty')
-  [[ $found == <-> ]] || return 1
-  [[ $found == $id ]] || git config --file "$meta" tab.id "$found"
-  REPLY=$found
+  local wt=${1:A}
+  reply=()
+  _wt_in_zellij || return 1
+  reply=(${(f)"$(_wt_zellij list-panes --json 2>/dev/null | jq -r --arg wt "$wt" '
+    def inside: . != null and (. == $wt or startswith($wt + "/"));
+    [.[] | select(.is_plugin == false and ((.exited or .is_held) | not))]
+    | group_by(.tab_id)[]
+    | select(any(.[]; .pane_cwd | inside) and all(.[]; .pane_cwd == null or (.pane_cwd | inside)))
+    | "\(.[0].tab_id):\(if all(.[]; .pane_cwd != null) then "sure" else "unsure" end)"')"})
+  (( $#reply ))
 }
 
 # Focus or open the tab for worktree $1: the dev layout, like Alt-t, in the
@@ -132,15 +123,16 @@ _wt_tab_find() { # $1=worktree
 # OpenCode starts on it.
 _wt_tab_open() { # $1=worktree $2=command name $3=focus(1|0) $4=prompt
   emulate -L zsh
-  local wt=${1:A} name=$2 focus=$3 prompt=$4 tab=${1:t} id meta pane i
-  if _wt_tab_find "$wt"; then
-    id=$REPLY
+  local wt=${1:A} name=$2 focus=$3 prompt=$4 tab=${1:t} id pane i
+  # Focusing an unsure tab is harmless; opening a duplicate is not.
+  if _wt_tabs_in "$wt"; then
+    id=${reply[1]%%:*}
     if [[ -n $prompt ]]; then
       print -u2 "$name: $tab already has a tab; send the prompt to its OpenCode instead"
       return 1
     fi
     if (( focus )); then
-      zellij action go-to-tab-by-id "$id" || return
+      _wt_zellij go-to-tab-by-id "$id" || return
     else
       print "$name: $tab already has a tab"
     fi
@@ -149,18 +141,14 @@ _wt_tab_open() { # $1=worktree $2=command name $3=focus(1|0) $4=prompt
 
   local -a opts=(--layout dev --name "$tab" --cwd "$wt")
   (( focus )) || opts+=(--no-focus)
-  id=$(zellij action new-tab "${opts[@]}") && [[ $id == <-> ]] \
+  id=$(_wt_zellij new-tab "${opts[@]}") && [[ $id == <-> ]] \
     || { print -u2 "$name: could not open a Zellij tab for $tab"; return 1; }
-  _wt_tab_meta "$wt" || return 1
-  meta=$REPLY
-  git config --file "$meta" tab.session "$ZELLIJ_SESSION_NAME" || return 1
-  git config --file "$meta" tab.id "$id" || return 1
   (( focus )) || print "$name: opened tab $tab in the background"
   [[ -n $prompt ]] || return 0
 
   # Replace the layout's plain OpenCode pane with one started on the prompt.
   for (( i = 0; i < 40; i++ )); do
-    pane=$(zellij action list-panes --json 2>/dev/null | jq -r --argjson tab "$id" \
+    pane=$(_wt_zellij list-panes --json 2>/dev/null | jq -r --argjson tab "$id" \
       '.[] | select(.is_plugin == false and .tab_id == $tab and .title == "opencode") | "terminal_\(.id)"' \
       | head -n1)
     [[ -n $pane ]] && break
@@ -170,28 +158,33 @@ _wt_tab_open() { # $1=worktree $2=command name $3=focus(1|0) $4=prompt
     print -u2 "$name: no opencode pane in tab $tab; prompt not sent (the tab stays open)"
     return 1
   }
-  zellij action new-pane --in-place --pane-id "$pane" --close-replaced-pane --no-focus \
+  _wt_zellij new-pane --in-place --pane-id "$pane" --close-replaced-pane --no-focus \
     --close-on-exit --name opencode --cwd "$wt" \
     -- "$_WT_OPENCODE_PANE" --prompt "$prompt" >/dev/null \
     || { print -u2 "$name: could not start OpenCode with the prompt in tab $tab"; return 1; }
   print "$name: OpenCode in tab $tab is working on the prompt"
 }
 
-# Close the tab wt opened for a removed worktree, unless the caller is in it.
-_wt_tab_close() { # $1=tab ID $2=worktree name
+# Close the tabs of a removed worktree (from _wt_tabs_in), except the caller's
+# and those not certainly inside it.
+_wt_tabs_close() { # $1=worktree name, then ID:sure|ID:unsure entries
   emulate -L zsh
-  local own
-  own=$(zellij action list-panes --json 2>/dev/null | jq -r --arg me "${ZELLIJ_PANE_ID:-}" \
+  local name=$1 own entry id
+  shift
+  own=$(_wt_zellij list-panes --json 2>/dev/null | jq -r --arg me "${ZELLIJ_PANE_ID:-}" \
     '.[] | select(.is_plugin == false and (.id | tostring) == $me) | .tab_id' | head -n1)
-  if [[ $own == $1 ]]; then
-    print "left the tab of $2 open (you are in it)"
-    return 0
-  fi
-  if zellij action close-tab-by-id "$1"; then
-    print "closed the tab of $2"
-  else
-    print -u2 "warning: could not close the tab of $2"
-  fi
+  for entry in "$@"; do
+    id=${entry%%:*}
+    if [[ $entry == *:unsure ]]; then
+      print "left a tab of $name open (Zellij did not report where all its panes are)"
+    elif [[ $id == $own ]]; then
+      print "left the tab of $name open (you are in it)"
+    elif _wt_zellij close-tab-by-id "$id"; then
+      print "closed the tab of $name"
+    else
+      print -u2 "warning: could not close the tab of $name"
+    fi
+  done
 }
 
 # --- internal helpers (shared by wtclone + wtconvert so the two can't drift) ---
@@ -743,9 +736,9 @@ wtrm() {
     return 1
   fi
   target=$REPLY
-  # Read the tab record now: removing the worktree deletes it.
-  local tab=
-  _wt_tab_find "$target" && tab=$REPLY
+  # Tabs working in the worktree are left with shells in a deleted directory.
+  local -a tabs
+  _wt_tabs_in "$target" && tabs=("${reply[@]}")
   mode=$(_wt_review_get "$target" mode)
   if [[ $mode == review ]]; then
     head=$(_wt_review_get "$target" head)
@@ -763,7 +756,7 @@ wtrm() {
     git -C "$proj" worktree remove $opts "$target" || return 1
   fi
   print "removed ${target:t}"
-  [[ -z $tab ]] || _wt_tab_close "$tab" "${target:t}"
+  (( ! $#tabs )) || _wt_tabs_close "${target:t}" "${tabs[@]}"
 }
 
 # list worktrees
@@ -1041,7 +1034,7 @@ commands (interactive shell equivalent in parentheses):
   review [LAND] <pr>        create/refresh review-pr-<number> for a PR (wtreview)
   change                    turn the current review into the PR branch (wtchange)
   rm [-f] <name>            remove a worktree by branch or directory, closing
-                            the tab open/review opened for it (wtrm)
+                            its tabs, except the tab of the caller (wtrm)
   ls                        list worktrees (wtls)
   prune [-y] [-n] [-m]      remove deleted-remote/merged worktrees (wtprune)
   convert [-y]              convert the normal clone in CWD (wtconvert)
@@ -1054,6 +1047,7 @@ LAND (open/review) chooses what happens after the worktree exists:
   -b, --background          open its tab without moving focus
   -p, --prompt PROMPT       start OpenCode in a new tab with PROMPT (implies -b;
                             fails if the worktree already has a tab)
+  The tab of a worktree is any tab whose panes are all inside the worktree.
   Outside Zellij, -t and -b fall back to changing directory and staying; -p fails.
 
 output:

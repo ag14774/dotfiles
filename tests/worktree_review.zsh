@@ -44,10 +44,16 @@ EOF
 chmod +x "$TMP/bin/gh"
 
 # Stand-in for the `zellij action` calls wt-core makes. State lives in $ZJ_STATE:
-# tabs (id, name), panes (id, tab, title, cwd, command) and the focused tab.
+# tabs (id, name), panes (id, tab, title, cwd, command[, "exited"]) and the
+# focused tab. An empty cwd is a pane for which Zellij reports no directory.
 cat > "$TMP/bin/zellij" <<'EOF'
 #!/usr/bin/env zsh
 st=$ZJ_STATE
+# Like Zellij, fail for a session other than the one these panes belong to.
+if [[ $1 == --session ]]; then
+  [[ $2 == ${ZELLIJ_SESSION_NAME:-} ]] || { print -u2 "Session '$2' not found"; exit 1; }
+  shift 2
+fi
 [[ $1 == action ]] || exit 1
 cmd=$2
 shift 2
@@ -72,7 +78,7 @@ case $cmd in
         | from_entries) as $names
       | [inputs | split("\t") | {id: (.[0] | tonumber), tab_id: (.[1] | tonumber),
           tab_name: $names[.[1]], title: .[2], terminal_command: .[4],
-          pane_cwd: (if .[3] == "" then null else .[3] end),
+          pane_cwd: (if .[3] == "" then null else .[3] end), exited: (.[5] == "exited"),
           is_plugin: false}]' < $st/panes
     ;;
   go-to-tab-by-id) print $1 > $st/focus ;;
@@ -277,9 +283,9 @@ print 1 > "$ZJ_STATE/focus"
 cd "$project/main"
 
 tab_count() { print ${#${(f)"$(<"$ZJ_STATE/tabs")"}}; }
-renumber_tab() { # $1=old ID $2=new ID, as a resurrected session does
-  awk -F'\t' -v OFS='\t' -v o="$1" -v n="$2" '$1 == o { $1 = n } 1' "$ZJ_STATE/tabs" \
-    > "$ZJ_STATE/new" && mv "$ZJ_STATE/new" "$ZJ_STATE/tabs"
+renumber_tab() { # $1=old ID $2=new ID $3=new name, as a restored then renamed tab
+  awk -F'\t' -v OFS='\t' -v o="$1" -v n="$2" -v name="$3" '$1 == o { $1 = n; $2 = name } 1' \
+    "$ZJ_STATE/tabs" > "$ZJ_STATE/new" && mv "$ZJ_STATE/new" "$ZJ_STATE/tabs"
   awk -F'\t' -v OFS='\t' -v o="$1" -v n="$2" '$2 == o { $2 = n } 1' "$ZJ_STATE/panes" \
     > "$ZJ_STATE/new" && mv "$ZJ_STATE/new" "$ZJ_STATE/panes"
 }
@@ -292,14 +298,15 @@ tab=$(tab_in "$project/tabbed")
 [[ -n $tab ]] || fail "wt -t should open a tab in the worktree"
 assert_eq "$(focused_tab)" "$tab"
 # A pane whose program exited reports no cwd; it must not break the lookup.
-printf '60\t%s\tlogs\t\t-\n' "$tab" >> "$ZJ_STATE/panes"
+printf '60\t%s\tlogs\t\t-\texited\n' "$tab" >> "$ZJ_STATE/panes"
 zellij action go-to-tab-by-id 1
 wt -t tabbed >/dev/null 2>&1
 assert_eq "$(focused_tab)" "$tab"
 assert_eq "$(tab_count)" 2
 
-# A resurrected session restores the tab under a new ID; wt takes it over.
-renumber_tab "$tab" 99
+# The tab is found by its directory, so a new ID (restored session) and a new
+# name change nothing.
+renumber_tab "$tab" 99 renamed
 zellij action go-to-tab-by-id 1
 wt -t tabbed >/dev/null 2>&1
 assert_eq "$(focused_tab)" 99
@@ -323,19 +330,30 @@ if wt -p 'again' prompted >/dev/null 2>&1; then
   fail "wt -p should refuse a worktree whose tab already exists"
 fi
 
-# wtrm closes the tab wt opened for the worktree.
+# wtrm closes the worktree's tab.
 wtrm -f prompted >/dev/null 2>&1
 [[ -z $(tab_in "$project/prompted") ]] || fail "wtrm should close the worktree's tab"
-
-# After a restart the recorded ID can belong to another tab, here one with a
-# shell inside the worktree. wtrm must close the worktree's own tab instead.
-tab=$(tab_in "$project/tabbed")
-renumber_tab "$tab" 77
-printf '%s\tnotes\n' "$tab" >> "$ZJ_STATE/tabs"
-printf '50\t%s\tmain\t%s\t-\n' "$tab" "$project/tabbed/src" >> "$ZJ_STATE/panes"
 wtrm tabbed >/dev/null 2>&1
-grep -q "^$tab	notes" "$ZJ_STATE/tabs" || fail "wtrm should not close a tab that reused the recorded ID"
-if grep -q "^77	" "$ZJ_STATE/tabs"; then fail "wtrm should close the worktree's renumbered tab"; fi
+
+# A tab with only some panes in the worktree (here the home tab, where one
+# shell cd'd into it) is neither the worktree's tab nor closed with it.
+wt -s mixed >/dev/null 2>&1
+printf '70\t1\tshell\t%s\t-\n' "$project/mixed/src" >> "$ZJ_STATE/panes"
+wt -t mixed >/dev/null 2>&1
+tab=$(tab_in "$project/mixed")
+[[ -n $tab && $tab != 1 ]] || fail "wt -t should not treat a mixed tab as the worktree's tab"
+wtrm mixed >/dev/null 2>&1
+grep -q "^1	" "$ZJ_STATE/tabs" || fail "wtrm should not close a tab with panes elsewhere"
+[[ -z $(tab_in "$project/mixed") ]] || fail "wtrm should close the worktree's own tab"
+
+# A live pane that reports no directory (OpenCode starting, Zellij busy) could
+# be anywhere, so its tab is not closed even if its other panes are inside.
+wt -b unsure >/dev/null 2>&1
+printf '80\tuser\n' >> "$ZJ_STATE/tabs"
+printf '81\t80\tmain\t%s\t-\n82\t80\topencode\t\t-\n' "$project/unsure/src" >> "$ZJ_STATE/panes"
+wtrm unsure >/dev/null 2>&1
+grep -q "^80	" "$ZJ_STATE/tabs" || fail "wtrm should not close a tab with a pane of unknown directory"
+[[ -z $(tab_in "$project/unsure") ]] || fail "wtrm should still close the worktree's own tab"
 
 # wtrm leaves the tab you run it from open.
 wt -b mine >/dev/null 2>&1
@@ -345,13 +363,6 @@ tab=$(tab_in "$project/mine")
   wtrm mine >/dev/null 2>&1
 )
 grep -q "^$tab	" "$ZJ_STATE/tabs" || fail "wtrm should leave the caller's own tab open"
-
-# A tab wt did not open is never closed, even one named after the worktree.
-wt -s manual >/dev/null 2>&1
-zellij action new-tab --name manual --cwd "$project/manual" >/dev/null
-tab=$(tab_in "$project/manual")
-wtrm manual >/dev/null 2>&1
-grep -q "^$tab	" "$ZJ_STATE/tabs" || fail "wtrm should not close a tab wt did not open"
 
 # Outside Zellij, -p fails before creating anything and -t changes directory.
 unset ZELLIJ ZELLIJ_SESSION_NAME ZELLIJ_PANE_ID

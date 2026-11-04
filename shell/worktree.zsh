@@ -10,7 +10,7 @@
 #                         (same -s/-t/-b/-p options as wt)
 #   wtchange              turn the current review worktree into the PR branch
 #   wtrm [-f] <name>      remove a worktree by branch or directory name (and the
-#                         tab wt opened for it)
+#                         tabs whose panes are all inside it)
 #   wtprune [-ynm]        wtrm worktrees whose remote branch was deleted ("gone");
 #                         -m also removes merged branches/clean PR reviews (via gh)
 #   wtls                  list worktrees
@@ -76,8 +76,8 @@ wthelp() {
                         branch; preserves edits, sets upstream, and seeds files
   wtrm [-f] <name>      remove by branch or worktree name; clean synthetic
                         reviews are removed safely, -f discards personal edits;
-                        also closes the tab wt/wtreview -t/-b/-p opened for it
-                        (never the tab you run it from)
+                        also closes tabs whose panes are all inside the
+                        worktree (never the tab you run it from)
   wtprune [-ynm]        remove worktrees whose remote branch was deleted ("gone");
                         leaves branches that never had a remote. -n skips fetch --prune;
                         -m/--merged also removes branches and clean review
