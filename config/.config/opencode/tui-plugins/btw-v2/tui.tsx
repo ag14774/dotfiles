@@ -48,6 +48,8 @@ function Conversation(props: { context: Context; sessionID: string; initial: Tur
   props.requests.add(controller);
   const dimensions = useTerminalDimensions();
   const maxHeight = createMemo(() => Math.max(4, Math.floor(dimensions().height * 0.6)));
+  // OpenTUI 0.8 (OpenCode 2.2.3+) requires the renderer's scene as the owner;
+  // older versions take only the styles and ignore it.
   const syntax = SyntaxStyle.fromStyles({
     default: { fg: context.theme.text.base },
     "markup.heading": { fg: context.theme.text.base, bold: true },
@@ -55,7 +57,7 @@ function Conversation(props: { context: Context; sessionID: string; initial: Tur
     "markup.italic": { italic: true },
     "markup.link": { underline: true },
     "markup.raw": { fg: context.theme.text.muted },
-  });
+  }, context.renderer.nativeScene);
   onCleanup(() => {
     controller.abort();
     props.requests.delete(controller);
