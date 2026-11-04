@@ -5,9 +5,19 @@
 set -eu
 
 ROOT=${0:A:h:h}
-HOOK=$ROOT/config/.config/zellij/resurrect-command.sh
-resume="$HOME/.local/bin/opencode-pane --resume"
+TMP=$(mktemp -d)
+trap 'rm -rf "$TMP"' EXIT
 failed=0
+
+# Run the hook exactly as Zellij does: `sh -c` with the string from config.kdl,
+# in a home directory where only this checkout's hook is installed.
+hook=$(sed -n 's/^post_command_discovery_hook "\(.*\)"$/\1/p' "$ROOT/config/.config/zellij/config.kdl" \
+  | sed 's/\\"/"/g')
+[[ -n $hook ]] || { print -u2 "FAIL: no post_command_discovery_hook in config.kdl"; exit 1; }
+mkdir -p "$TMP/home/.config/zellij"
+ln -s "$ROOT/config/.config/zellij/resurrect-command.sh" "$TMP/home/.config/zellij/"
+run_hook() { RESURRECT_COMMAND=$1 HOME=$2 sh -c "$hook"; }
+resume="$TMP/home/.local/bin/opencode-pane --resume"
 
 # discovered command | expected replacement (empty: plain shell)
 cases=(
@@ -28,12 +38,18 @@ cases=(
 )
 for case in $cases; do
   command=${case%%|*} expected=${case#*|}
-  # Zellij runs the hook through `sh -c`.
-  actual=$(RESURRECT_COMMAND=$command sh "$HOOK")
+  actual=$(run_hook "$command" "$TMP/home")
   if [[ $actual != $expected ]]; then
     print -u2 "FAIL: '$command' -> '$actual' (expected '$expected')"
     failed=1
   fi
 done
+
+# A missing hook must print nothing and succeed; a failing hook would make
+# Zellij save the raw command (here `rm -rf build`) to rerun it.
+if ! actual=$(run_hook "rm -rf build" "$TMP/no-home" 2>/dev/null) || [[ -n $actual ]]; then
+  print -u2 "FAIL: a missing hook should succeed without output, got '$actual'"
+  failed=1
+fi
 (( ! failed )) || exit 1
 print "resurrect command tests: ok"

@@ -91,14 +91,22 @@ panes and directories, with these programs running again:
 - Floating panes that were open, such as the `Alt-y` picker or the `Alt-/`
   cheatsheet, open again. A Helix `+ r` run pane does not rerun its code.
 
-`config/.config/zellij/resurrect-command.sh` decides what a shell's program
-becomes; extend its allow-list if you want more. Restored panes stay open as
-"exited" after their program quits, and changes made in the last minute before
-a crash can be missing. New tabs (`Alt-t`, tab-mode `n`, `wt -t/-b`) are built
-from `dev.kdl` itself, because a restored session's saved new-tab template
-starts its commands suspended. If Zellij cannot start, for example because the
-saved session is unreadable, the terminal falls back to a plain shell. `zreset`
-deletes the saved session for a clean start.
+Panes started with a program are saved with their own command line: Helix, and
+OpenCode through `opencode-pane`, which always saves itself as
+`opencode-pane --resume`. For programs you start from a shell,
+`config/.config/zellij/resurrect-command.sh` decides what is rerun; extend its
+allow-list if you want more. Keep that hook cheap: Zellij also runs it for
+`list-panes` and waits only 100 ms. A restored OpenCode pane stays open as
+"exited" after you quit OpenCode (`ocreload` replaces it), and changes made in
+the last minute before a crash can be missing. New tabs (`Alt-t`, tab-mode `n`,
+`wt -t/-b`) are built from `dev.kdl` itself, because a restored session's saved
+new-tab template starts its commands suspended. If Zellij cannot start, for
+example because the saved session is unreadable, the terminal falls back to a
+plain shell. `zreset` deletes the saved session for a clean start.
+
+After upgrading Zellij, Helix or OpenCode, run `zsh tests/zellij_restore_smoke.zsh`.
+It saves, kills and restores a throwaway session (never `main`) and checks that
+all of the above still holds.
 
 The top bar (zjstatus) is loaded by `dev.kdl` straight from its release URL, so
 the first time you must grant its plugin permission once (the installer prints
@@ -116,9 +124,10 @@ this): inside a zellij session run
     worktree path) and progress goes to stderr
   - `hx-open FILE...` — open files in the current Zellij tab's Helix `editor`
     pane, spawning it if needed (used by the `Alt-y` picker)
-  - `opencode-pane [--resume]` — run OpenCode in a pane with your shell
-    environment, in a way Zellij can restore; `--resume` continues the
-    directory's latest conversation (used by the layout, `ocreload` and `wt -p`)
+  - `opencode-pane [--prompt PROMPT | --resume]` — run OpenCode in a pane with
+    your shell environment, in a way Zellij restores as `--resume`, which
+    continues the directory's latest conversation; a prompt is never resent
+    (used by the layout, `ocreload` and `wt -p`)
 
   The `wt*` functions, `ocreload` and the `Alt-y` picker call this checkout's
   copies directly. Rerun `install.sh` (or its stow step) to put new commands on
@@ -221,12 +230,14 @@ tab in the background). `wt -p "fix the flaky test" <branch>` opens a background
 tab whose OpenCode immediately starts on the prompt. `wtreview` accepts the same
 options. Outside Zellij, `-t` changes directory, `-b` stays, and `-p` fails.
 
-Opened tabs are named after the worktree directory and recorded beside its Git
-metadata. `-t` returns to that tab later, also after Zellij restores the session
-under new tab IDs; `wtrm` and `wtprune` close it with the worktree, except the
-tab you run them from. Options go before the branch. A tab only counts while it
-keeps the worktree's name and has a pane inside the worktree, so tabs you open
-or rename yourself are never closed.
+A worktree's tab is any tab whose panes are all inside the worktree's
+directory; names and tab IDs play no part, so renaming a tab or restoring the
+session changes nothing. Opened tabs are named after the worktree directory
+only for display. `-t` returns to that tab later; `wtrm` and `wtprune` close the
+worktree's tabs with it (their shells would be left in a deleted directory),
+except the tab you run them from. Tabs with a pane elsewhere, such as a tab
+where one shell `cd`'d into the worktree, are never focused or closed. Options
+go before the branch.
 
 ### Pull request worktrees
 

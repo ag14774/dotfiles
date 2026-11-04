@@ -1,26 +1,50 @@
 #!/usr/bin/env bash
 # opencode-pane -- run the OpenCode TUI in a Zellij pane.
 #
-#   opencode-pane [--resume] [OPENCODE-ARGS...]
+#   opencode-pane [--prompt PROMPT]   start OpenCode, optionally on PROMPT
+#   opencode-pane --resume            continue this directory's most recent
+#                                     conversation, if it has one
 #
-# OpenCode runs inside an interactive zsh, so it gets ~/.zshrc's PATH and
-# secrets, as that shell's foreground job rather than replacing it. Zellij's
-# session serialization then records the `opencode` command, which its
-# discovery hook (~/.config/zellij/resurrect-command.sh) turns into
-# `opencode-pane --resume` for the restored session.
+# Zellij saves each pane's own command line to restore it after a restart. A
+# fresh start therefore re-runs this script as `opencode-pane --resume` and
+# passes "fresh" (and any prompt) in the environment for this run only: a
+# restored pane resumes its conversation and a prompt is never sent twice.
 #
-# --resume  continue the most recent session started in this directory, if any
+# OpenCode runs in an interactive zsh for ~/.zshrc's PATH and secrets, with job
+# control off (+m) so it stays in this pane's process group: Zellij then records
+# this script rather than the bare `opencode`, without its discovery hook. This
+# script stays the parent, so a restored pane runs the current version of it.
 set -u
 
-# The final `exit` keeps zsh from replacing itself with OpenCode.
+usage() {
+  printf 'usage: opencode-pane [--prompt PROMPT | --resume]\n' >&2
+  exit 2
+}
+case "${1:-}" in
+  "") OPENCODE_PANE_FRESH=1 exec "$0" --resume ;;
+  --prompt)
+    [ "$#" -eq 2 ] || usage
+    OPENCODE_PANE_FRESH=1 OPENCODE_PANE_PROMPT=$2 exec "$0" --resume
+    ;;
+  --resume) [ "$#" -eq 1 ] || usage ;;
+  *) usage ;;
+esac
+
+fresh=${OPENCODE_PANE_FRESH:-}
+prompt=${OPENCODE_PANE_PROMPT:-}
+unset OPENCODE_PANE_FRESH OPENCODE_PANE_PROMPT
+
 # shellcheck disable=SC2016 # expanded by zsh, not here
 code='
-if [[ $1 == --resume ]]; then
-  shift
+fresh=$1 prompt=$2
+args=()
+if [[ -n $prompt ]]; then
+  args=(--prompt "$prompt")
+elif [[ -z $fresh ]]; then
   dir=$(jq -rn --arg d "$PWD" "\$d | @uri")
   opencode api get "/api/session?limit=1&order=desc&parentID=null&directory=$dir" 2>/dev/null \
-    | jq -e ".data | length > 0" >/dev/null 2>&1 && set -- --continue "$@"
+    | jq -e ".data | length > 0" >/dev/null 2>&1 && args=(--continue)
 fi
-opencode "$@"
-exit $?'
-exec zsh -i -c "$code" opencode-pane "$@"
+opencode "${args[@]}"'
+zsh -i +m -c "$code" opencode-pane "$fresh" "$prompt"
+exit $?

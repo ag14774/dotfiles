@@ -596,10 +596,11 @@ show_startup_tips false
 // can be useful for removing wrappers around commands
 // Note: be sure to escape backslashes and similar characters properly
 // post_command_discovery_hook "echo $RESURRECT_COMMAND | sed <your_regex_here>"
-// Allow-list of commands a resurrected session may rerun (see the script).
-// `|| true` fails closed: a broken or missing hook makes Zellij keep each
-// pane's original command instead of saving the raw command it found.
-post_command_discovery_hook "$HOME/.config/zellij/resurrect-command.sh || true"
+// Allow-list of commands a resurrected session may rerun (see the script). It is
+// sourced in the `sh` Zellij starts, to avoid a second process start (`list-panes`
+// waits only 100 ms for the answer). A missing hook prints nothing, so Zellij
+// keeps each pane's original command instead of saving the raw one it found.
+post_command_discovery_hook "f=$HOME/.config/zellij/resurrect-command.sh; [ -r \"$f\" ] && . \"$f\"; true"
 
 // Number of async worker tasks to spawn per active client.
 //

@@ -6,14 +6,17 @@
 # here as $RESURRECT_COMMAND (words joined by spaces) and saves whatever this
 # prints instead. Printing nothing keeps the pane's original command (a plain
 # shell for ordinary panes). Zellij splits the output on whitespace, so it must
-# not rely on quoting. `list-panes` also runs this, so keep it cheap (POSIX sh).
+# not rely on quoting. Panes started with a program, such as opencode-pane, are
+# saved with their own command line and never reach this.
+#
+# config.kdl sources this in Zellij's own `sh` (`list-panes` runs it too and
+# waits only 100 ms), so it must stay POSIX sh, cheap, and never `exit`.
 #
 # Resurrected sessions run their commands immediately (the autostart attaches
 # with --force-run-commands), so only commands that are safe to rerun pass:
 #   opencode (the TUI)  -> opencode-pane --resume (continue this directory's session)
 #   hx / helix          -> unchanged (reopens the same files)
 #   anything else       -> nothing (git log, dev servers, rm ... are not rerun)
-# config.kdl appends `|| true`, so a failing or missing hook also reruns nothing.
 set -fu
 
 # shellcheck disable=SC2086 # split the joined command into words on purpose
