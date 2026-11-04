@@ -66,12 +66,16 @@ Additional instructions from the user (incorporate these): $extra"
 	fi
 
 	printf 'gcai: drafting commit message with opencode...\n' >&2
-	local msg f
-	msg="$(
+	local events msg sid f
+	events="$(
 		{ git diff --cached --stat; echo; git diff --cached; } |
-			opencode run --format json "$prompt" \
-				2>/dev/null | jq -rj 'select(.type=="text").part.text'
+			opencode run --format json "$prompt" 2>/dev/null
 	)"
+	msg="$(jq -rj 'select(.type=="text").part.text' <<<"$events")"
+	# The drafting session is disposable. Deleting it keeps it out of the session
+	# list and stops restored OpenCode panes (`--continue`) from reopening it.
+	sid="$(jq -r '.sessionID // empty' <<<"$events" | head -n1)"
+	[ -n "$sid" ] && opencode session delete "$sid" >/dev/null 2>&1
 
 	if [ -z "${msg//[[:space:]]/}" ]; then
 		printf 'gcai: opencode returned no message (check your opencode auth/model)\n' >&2

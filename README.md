@@ -16,10 +16,11 @@ exec zsh
 Pacman on Arch-based Linux,
 installs the platform packages plus developer tools/language servers and the Yazi
 flavor, symlinks `config/` into `~/.config` and `~/.local/bin` via GNU Stow, and appends a small
-configuration block to `~/.zshrc` (adds the managed user-tool directories to `PATH`, sets
-`EDITOR` to the available Helix executable, sources
+configuration block to `~/.zshrc` (adds the managed user-tool directories to `PATH`, sources
 `~/.config/zsh/secrets.zsh`, and loads the `shell/*.zsh` functions). A separate
-managed preamble is kept at the beginning for Zellij autostart. If the account's
+managed preamble is kept at the beginning for Zellij autostart; it also sets
+`PATH` and `EDITOR` (the available Helix executable) first, so Zellij and the
+panes it restores get them. If the account's
 login shell is not zsh, the installer changes it permanently with `chsh`;
 `exec zsh` enters zsh immediately without waiting for the next login. Run the
 installer as your normal user, not with `sudo`; it elevates package installation
@@ -74,6 +75,31 @@ shortcuts; use Zellij (`Alt-t` for a tab, `Alt-n` for a pane) for all
 multiplexing. Set `ZELLIJ_AUTO_START=false` before launching zsh when a bare
 shell is needed.
 
+### Restoring Zellij after a restart
+
+Every terminal attaches to one session, `main`. Zellij saves it every 60
+seconds (the first save happens a minute after it starts), so after a reboot,
+a crash or quitting it with `Ctrl-q`, the next terminal brings back its tabs,
+panes and directories, with these programs running again:
+
+- Helix panes reopen the files they were started with; files opened later and
+  unsaved edits are lost.
+- OpenCode panes continue the most recent conversation in their directory
+  (`gcai` deletes its own drafting sessions so they never take that place).
+- Panes you started a program in from their shell come back as plain shells:
+  dev servers, `git log`, scripts and the like are deliberately not rerun.
+- Floating panes that were open, such as the `Alt-y` picker or the `Alt-/`
+  cheatsheet, open again. A Helix `+ r` run pane does not rerun its code.
+
+`config/.config/zellij/resurrect-command.sh` decides what a shell's program
+becomes; extend its allow-list if you want more. Restored panes stay open as
+"exited" after their program quits, and changes made in the last minute before
+a crash can be missing. New tabs (`Alt-t`, tab-mode `n`, `wt -t/-b`) are built
+from `dev.kdl` itself, because a restored session's saved new-tab template
+starts its commands suspended. If Zellij cannot start, for example because the
+saved session is unreadable, the terminal falls back to a plain shell. `zreset`
+deletes the saved session for a clean start.
+
 The top bar (zjstatus) is loaded by `dev.kdl` straight from its release URL, so
 the first time you must grant its plugin permission once (the installer prints
 this): inside a zellij session run
@@ -90,9 +116,13 @@ this): inside a zellij session run
     worktree path) and progress goes to stderr
   - `hx-open FILE...` — open files in the current Zellij tab's Helix `editor`
     pane, spawning it if needed (used by the `Alt-y` picker)
+  - `opencode-pane [--resume]` — run OpenCode in a pane with your shell
+    environment, in a way Zellij can restore; `--resume` continues the
+    directory's latest conversation (used by the layout, `ocreload` and `wt -p`)
 
-  The `wt*` functions and the `Alt-y` picker call this checkout's copies
-  directly. Rerun `install.sh` (or its stow step) to put new commands on `PATH`.
+  The `wt*` functions, `ocreload` and the `Alt-y` picker call this checkout's
+  copies directly. Rerun `install.sh` (or its stow step) to put new commands on
+  `PATH`.
 - `shell/*.zsh` — sourced directly by the `.zshrc` block
 - `install/{apt,brew,pacman}.sh` — platform package installation backends
 - `Brewfile` — Homebrew package manifest
@@ -192,10 +222,11 @@ tab whose OpenCode immediately starts on the prompt. `wtreview` accepts the same
 options. Outside Zellij, `-t` changes directory, `-b` stays, and `-p` fails.
 
 Opened tabs are named after the worktree directory and recorded beside its Git
-metadata. `-t` returns to that tab later; `wtrm` and `wtprune` close it with the
-worktree, except the tab you run them from. Options go before the branch. A tab
-only counts while it keeps the worktree's name and has a pane inside the
-worktree, so tabs you open or rename yourself are never closed.
+metadata. `-t` returns to that tab later, also after Zellij restores the session
+under new tab IDs; `wtrm` and `wtprune` close it with the worktree, except the
+tab you run them from. Options go before the branch. A tab only counts while it
+keeps the worktree's name and has a pane inside the worktree, so tabs you open
+or rename yourself are never closed.
 
 ### Pull request worktrees
 

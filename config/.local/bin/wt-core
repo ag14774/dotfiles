@@ -17,6 +17,7 @@
 # result (a worktree path, or `ls`/`help` output), so callers can capture it.
 
 typeset -g _WT_CWD_FILE= _WT_RESULT= _WT_MODE=cd _WT_PROMPT=
+typeset -g _WT_OPENCODE_PANE=${0:A:h}/opencode-pane
 
 # cd here (so later messages see the new $PWD) and report the destination: to
 # the wrapper through --cwd-file, otherwise as the result on stdout.
@@ -125,8 +126,10 @@ _wt_tab_find() { # $1=worktree
   REPLY=$found
 }
 
-# Focus or open the tab for worktree $1 (a regular new tab, like Alt-t, in the
-# worktree). With a prompt, the new tab's OpenCode starts on it.
+# Focus or open the tab for worktree $1: the dev layout, like Alt-t, in the
+# worktree. Naming the layout matters in a resurrected session, whose saved
+# new-tab template starts commands suspended. With a prompt, the new tab's
+# OpenCode starts on it.
 _wt_tab_open() { # $1=worktree $2=command name $3=focus(1|0) $4=prompt
   emulate -L zsh
   local wt=${1:A} name=$2 focus=$3 prompt=$4 tab=${1:t} id meta pane i
@@ -144,7 +147,7 @@ _wt_tab_open() { # $1=worktree $2=command name $3=focus(1|0) $4=prompt
     return 0
   fi
 
-  local -a opts=(--name "$tab" --cwd "$wt")
+  local -a opts=(--layout dev --name "$tab" --cwd "$wt")
   (( focus )) || opts+=(--no-focus)
   id=$(zellij action new-tab "${opts[@]}") && [[ $id == <-> ]] \
     || { print -u2 "$name: could not open a Zellij tab for $tab"; return 1; }
@@ -169,7 +172,7 @@ _wt_tab_open() { # $1=worktree $2=command name $3=focus(1|0) $4=prompt
   }
   zellij action new-pane --in-place --pane-id "$pane" --close-replaced-pane --no-focus \
     --close-on-exit --name opencode --cwd "$wt" \
-    -- zsh -i -c 'exec opencode --prompt "$1"' zsh "$prompt" >/dev/null \
+    -- "$_WT_OPENCODE_PANE" --prompt "$prompt" >/dev/null \
     || { print -u2 "$name: could not start OpenCode with the prompt in tab $tab"; return 1; }
   print "$name: OpenCode in tab $tab is working on the prompt"
 }

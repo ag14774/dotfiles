@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+# opencode-pane -- run the OpenCode TUI in a Zellij pane.
+#
+#   opencode-pane [--resume] [OPENCODE-ARGS...]
+#
+# OpenCode runs inside an interactive zsh, so it gets ~/.zshrc's PATH and
+# secrets, as that shell's foreground job rather than replacing it. Zellij's
+# session serialization then records the `opencode` command, which its
+# discovery hook (~/.config/zellij/resurrect-command.sh) turns into
+# `opencode-pane --resume` for the restored session.
+#
+# --resume  continue the most recent session started in this directory, if any
+set -u
+
+# The final `exit` keeps zsh from replacing itself with OpenCode.
+# shellcheck disable=SC2016 # expanded by zsh, not here
+code='
+if [[ $1 == --resume ]]; then
+  shift
+  dir=$(jq -rn --arg d "$PWD" "\$d | @uri")
+  opencode api get "/api/session?limit=1&order=desc&parentID=null&directory=$dir" 2>/dev/null \
+    | jq -e ".data | length > 0" >/dev/null 2>&1 && set -- --continue "$@"
+fi
+opencode "$@"
+exit $?'
+exec zsh -i -c "$code" opencode-pane "$@"

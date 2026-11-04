@@ -48,6 +48,8 @@ Default mode = **locked**, so keys pass through to Helix/Yazi. Unlock with `Ctrl
 
 **Enter a mode after `Ctrl-g`:** `p` pane · `t` tab · `r` resize · `s` scroll · `m` move · `o` session.
 
+★ Tabs, panes, Helix and OpenCode (its folder's latest conversation) come back after a restart; programs started in shells don't rerun. `zreset` starts clean.
+
 | Mode | Keys |
 |---|---|
 | Tab | `n` new · `x` close · `r` rename · ★ `<` `>` move tab · `1`–`9` jump |

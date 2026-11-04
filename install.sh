@@ -185,9 +185,20 @@ fi
 {
   printf '%s\n' "$ZB"
   printf 'export SHELL="%s"\n' "$ZSH_BIN"
-  printf 'export PATH="$HOME/.local/bin:$PATH"\n'
+  # Zellij keeps this environment for panes it restores after a restart (Helix
+  # language servers, OpenCode), and opens restored editor panes with $EDITOR.
+  printf 'export PATH="$HOME/.local/bin:$HOME/.opencode/bin:$HOME/.cargo/bin:$PATH"\n'
+  printf 'if command -v hx >/dev/null 2>&1; then\n'
+  printf '  export EDITOR=hx\n'
+  printf 'else\n'
+  printf '  export EDITOR=helix\n'
+  printf 'fi\n'
+  printf 'export VISUAL="$EDITOR"\n'
   printf 'if [[ -z "${ZELLIJ:-}" && "${ZELLIJ_AUTO_START:-true}" == true ]] && command -v zellij >/dev/null 2>&1; then\n'
-  printf '  exec zellij\n'
+  # Resurrect a saved "main" with its allow-listed commands running (config.kdl).
+  # Not exec: if Zellij fails (e.g. an unreadable saved session), stay in a shell.
+  printf '  zellij attach --create --force-run-commands main && exit\n'
+  printf '  print -u2 "zellij failed to start; plain shell. zreset clears a saved session."\n'
   printf 'fi\n'
   printf '%s\n\n' "$ZE"
   if [ -f "$ZSHRC" ]; then
@@ -207,12 +218,6 @@ fi
   printf '%s\n' "$B"
   printf 'typeset -U path PATH\n'
   printf 'export PATH="$HOME/.local/bin:$HOME/.opencode/bin:$HOME/.cargo/bin:$PATH"\n'
-  printf 'if command -v hx >/dev/null 2>&1; then\n'
-  printf '  export EDITOR=hx\n'
-  printf 'else\n'
-  printf '  export EDITOR=helix\n'
-  printf 'fi\n'
-  printf 'export VISUAL="$EDITOR"\n'
   printf 'source "%s/shell/init.zsh"\n' "$DOTFILES"        # zsh framework: options, compinit, keybinds, starship, plugins (replaces oh-my-zsh)
   printf 'source "%s/shell/completions.zsh"\n' "$DOTFILES" # CLI completions that need compinit (opencode, ...)
   printf 'eval "$(zoxide init zsh --cmd j)"\n'             # zoxide replaces autojump (j / ji); also feeds yazi's z

@@ -48,7 +48,7 @@ keybinds clear-defaults=true {
         bind "j" { GoToNextTab; }
         bind "k" { GoToPreviousTab; }
         bind "l" { GoToNextTab; }
-        bind "n" { NewTab; SwitchToMode "locked"; }
+        bind "n" { NewTab { layout "dev"; }; SwitchToMode "locked"; }
         bind "r" { SwitchToMode "renametab"; TabNameInput 0; }
         bind "s" { ToggleActiveSyncTab; SwitchToMode "locked"; }
         bind "t" { SwitchToMode "normal"; }
@@ -169,7 +169,9 @@ keybinds clear-defaults=true {
         bind "Alt k" { MoveFocus "up"; }
         bind "Alt l" { MoveFocusOrTab "right"; }
         bind "Alt n" { NewPane; }
-        bind "Alt t" { NewTab; }
+        // New tabs name the dev layout: a resurrected session's saved new-tab
+        // template starts its commands suspended ("press ENTER to run").
+        bind "Alt t" { NewTab { layout "dev"; }; }
         bind "Alt p" { TogglePaneInGroup; }
         bind "Alt Shift p" { ToggleGroupMarking; }
         // Alt-o / Alt-i intentionally NOT bound here, so Helix keeps its
@@ -428,7 +430,8 @@ pane_frames false
 // 
 // Single fixed session: every terminal frontend attaches to "main" (with
 // attach_to_session below), and Zellij owns all tabs and panes. Reset it with
-// `zreset` (see shell/reset.zsh).
+// `zreset` (see shell/reset.zsh). The ~/.zshrc autostart names "main" itself
+// (`zellij attach --create --force-run-commands main`), so keep them in sync.
 session_name "main"
  
 // When `session_name` is provided, attaches to that session
@@ -449,10 +452,15 @@ attach_to_session true
 //   - true (default)
 //   - false
 // 
-// Off: don't serialize/resurrect sessions. Stops the pile-up of "EXITED -
-// attach to resurrect" sessions and the resurrection bug where the editor pane
-// comes back running an LSP child (marksman/node) instead of Helix, suspended.
-session_serialization false
+// On: the session is saved every 60 s (the default serialization_interval), so
+// `main` comes back with its tabs, panes and directories after a restart. The
+// autostart attaches with --force-run-commands, so restored commands start
+// right away; post_command_discovery_hook (below) limits them to Helix and
+// OpenCode (resuming its conversation) and restores other panes as shells.
+// Zellij 0.45 takes pane commands from the terminal's foreground job, which
+// fixed the old bug that saved the editor pane as a Helix language server.
+// `zreset` deletes the saved session as well.
+session_serialization true
  
 // Whether pane viewports are serialized along with the session, default is false
 // Options:
@@ -588,6 +596,10 @@ show_startup_tips false
 // can be useful for removing wrappers around commands
 // Note: be sure to escape backslashes and similar characters properly
 // post_command_discovery_hook "echo $RESURRECT_COMMAND | sed <your_regex_here>"
+// Allow-list of commands a resurrected session may rerun (see the script).
+// `|| true` fails closed: a broken or missing hook makes Zellij keep each
+// pane's original command instead of saving the raw command it found.
+post_command_discovery_hook "$HOME/.config/zellij/resurrect-command.sh || true"
 
 // Number of async worker tasks to spawn per active client.
 //

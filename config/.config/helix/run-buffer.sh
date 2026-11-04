@@ -2,42 +2,41 @@
 # Run a Helix buffer in a floating zellij pane without saving it in the project.
 set -euo pipefail
 
-cleanup_dir=
-
-cleanup() {
-  if [ -n "$cleanup_dir" ]; then
-    rm -rf "$cleanup_dir"
-  fi
-}
-
 view() {
   local language=$1 source=$2 workspace=$3 status=0
 
-  cleanup_dir=$(dirname "$source")
-  trap cleanup EXIT
+  # Read the buffer, then delete it before running: if Zellij restores this pane
+  # after a crash, the rerun finds nothing to execute.
+  if [ ! -f "$source" ]; then
+    printf 'run-buffer: the buffer copy is gone; nothing to run.\n\n[press Enter to close]'
+    read -r _ || true
+    return 0
+  fi
+  exec 3<"$source"
+  rm -rf "$(dirname "$source")"
   cd "$workspace"
 
   printf 'Running %s in %s\n\n' "$language" "$workspace"
   case "$language" in
     python)
       if command -v uv >/dev/null 2>&1; then
-        PYTHONPATH="$workspace${PYTHONPATH:+:$PYTHONPATH}" uv run python - <"$source" || status=$?
+        PYTHONPATH="$workspace${PYTHONPATH:+:$PYTHONPATH}" uv run python - <&3 || status=$?
       elif [ -x "$workspace/.venv/bin/python" ]; then
         PYTHONPATH="$workspace${PYTHONPATH:+:$PYTHONPATH}" \
-          "$workspace/.venv/bin/python" - <"$source" || status=$?
+          "$workspace/.venv/bin/python" - <&3 || status=$?
       elif command -v python3 >/dev/null 2>&1; then
-        PYTHONPATH="$workspace${PYTHONPATH:+:$PYTHONPATH}" python3 - <"$source" || status=$?
+        PYTHONPATH="$workspace${PYTHONPATH:+:$PYTHONPATH}" python3 - <&3 || status=$?
       else
         printf 'run-buffer: no Python interpreter found.\n' >&2
         status=127
       fi
       ;;
     bash)
-      bash -s -- <"$source" || status=$?
+      bash -s -- <&3 || status=$?
       ;;
     javascript)
       if command -v node >/dev/null 2>&1; then
-        node - <"$source" || status=$?
+        node - <&3 || status=$?
       else
         printf 'run-buffer: node was not found.\n' >&2
         status=127

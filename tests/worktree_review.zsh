@@ -317,7 +317,7 @@ zellij action go-to-tab-by-id 1
 wt -p 'fix the flaky test' prompted >/dev/null 2>&1
 tab=$(tab_in "$project/prompted")
 assert_eq "$(focused_tab)" 1
-[[ $(opencode_command "$tab") == *'opencode --prompt'*'fix the flaky test' ]] \
+[[ $(opencode_command "$tab") == */opencode-pane' --prompt fix the flaky test' ]] \
   || fail "OpenCode should start with the prompt, got: $(opencode_command "$tab")"
 if wt -p 'again' prompted >/dev/null 2>&1; then
   fail "wt -p should refuse a worktree whose tab already exists"
