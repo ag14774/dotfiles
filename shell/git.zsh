@@ -34,11 +34,35 @@ ggpull() {
 	fi
 }
 
+# _gcai_model -- print the model a new OpenCode conversation here would start
+# with, in the TUI's order: $GCAI_MODEL, a `model` set in OpenCode's config, then
+# the model used most recently. Prints nothing to leave it to OpenCode's own
+# default (`opencode run` alone skips the recent model, and its default is a
+# free model with a usage limit).
+_gcai_model() {
+	if [ -n "${GCAI_MODEL:-}" ]; then
+		printf '%s\n' "$GCAI_MODEL"
+		return
+	fi
+	local dir model
+	dir="$(jq -rn --arg d "$PWD" '$d | @uri')"
+	model="$(opencode api get "/api/config?directory=$dir" 2>/dev/null | jq -r '
+		[.[] | select(.type == "document" and .info.model != null) | .info.model] | last // empty
+		| if type == "string" then . else "\(.providerID)/\(.model)" + (if .variant then "#\(.variant)" else "" end) end
+	' 2>/dev/null)"
+	if [ -z "$model" ]; then
+		model="$(jq -r '.recent[0] // empty | select(.providerID and .modelID) | "\(.providerID)/\(.modelID)"' \
+			"${XDG_STATE_HOME:-$HOME/.local/state}/opencode/model.json" 2>/dev/null)"
+	fi
+	[ -z "$model" ] || printf '%s\n' "$model"
+}
+
 # gcai -- draft a commit message from the staged diff via opencode, then edit in
 # Helix before committing (gcai -y skips the edit). Needs staged changes + jq.
-# Uses whatever provider/model opencode is configured with; no provider is
-# hardcoded here. If that's Google Vertex, export GOOGLE_CLOUD_PROJECT (and
-# optionally VERTEX_LOCATION) in ~/.config/zsh/secrets.zsh -- see secrets.zsh.example.
+# Uses the model a new OpenCode conversation would (see _gcai_model); set
+# GCAI_MODEL=provider/model in ~/.config/zsh/secrets.zsh to pick another. No
+# provider is hardcoded here. For Google Vertex, export GOOGLE_CLOUD_PROJECT (and
+# optionally VERTEX_LOCATION) there too -- see secrets.zsh.example.
 # An optional free-text arg adds extra instructions for the prompt, e.g.
 #   gcai 'mention that function X is a placeholder, implemented in a later PR'
 #   gcai -y 'note this is a breaking change'
@@ -65,11 +89,14 @@ gcai() {
 Additional instructions from the user (incorporate these): $extra"
 	fi
 
-	printf 'gcai: drafting commit message with opencode...\n' >&2
-	local events msg sid f
+	local model events msg sid err f
+	local -a model_args=()
+	model="$(_gcai_model)"
+	[ -z "$model" ] || model_args=(--model "$model")
+	printf 'gcai: drafting commit message with %s...\n' "${model:-the default OpenCode model}" >&2
 	events="$(
 		{ git diff --cached --stat; echo; git diff --cached; } |
-			opencode run --format json "$prompt" 2>/dev/null
+			opencode run --format json "${model_args[@]}" "$prompt" 2>/dev/null
 	)"
 	msg="$(jq -rj 'select(.type=="text").part.text' <<<"$events")"
 	# The drafting session is disposable. Deleting it keeps it out of the session
@@ -78,7 +105,10 @@ Additional instructions from the user (incorporate these): $extra"
 	[ -n "$sid" ] && opencode session delete "$sid" >/dev/null 2>&1
 
 	if [ -z "${msg//[[:space:]]/}" ]; then
-		printf 'gcai: opencode returned no message (check your opencode auth/model)\n' >&2
+		err="$(jq -r 'select(.type=="error") | (.error | if type=="object" then .message else . end) // .message // empty' \
+			<<<"$events" 2>/dev/null | head -n1)"
+		printf 'gcai: opencode returned no message: %s\n' "${err:-no output (check your opencode auth)}" >&2
+		printf 'gcai: set GCAI_MODEL=provider/model in ~/.config/zsh/secrets.zsh to use another model\n' >&2
 		return 1
 	fi
 
