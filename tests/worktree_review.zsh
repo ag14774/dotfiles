@@ -6,8 +6,9 @@ ROOT=${0:A:h:h}
 TMP=$(mktemp -d)
 TMP=${TMP:A}
 trap 'rm -rf "$TMP"' EXIT
-# Tab tests set these against a fake zellij; never touch a real session.
-unset ZELLIJ ZELLIJ_SESSION_NAME ZELLIJ_PANE_ID
+# Tab tests set these against a fake zellij; never touch a real session. Run
+# as a person would, even from an OpenCode agent.
+unset ZELLIJ ZELLIJ_SESSION_NAME ZELLIJ_PANE_ID OPENCODE_TERMINAL
 
 fail() {
   print -u2 "FAIL: $*"
@@ -360,9 +361,28 @@ wt -b mine >/dev/null 2>&1
 tab=$(tab_in "$project/mine")
 (
   export ZELLIJ_PANE_ID=$(awk -F'\t' -v t="$tab" '$2 == t && $3 == "main" { print $1 }' "$ZJ_STATE/panes")
-  wtrm mine >/dev/null 2>&1
+  cd "$project/mine" && wtrm mine >/dev/null 2>&1
 )
 grep -q "^$tab	" "$ZJ_STATE/tabs" || fail "wtrm should leave the caller's own tab open"
+[[ ! -d $project/mine ]] || fail "wtrm should remove the worktree it runs from"
+zellij action close-tab-by-id "$tab"
+
+# The caller's pane must exist to know which tab to spare; otherwise nothing is
+# closed. Commands run by an OpenCode agent (OPENCODE_TERMINAL=1) close no tabs.
+for caller in 999 agent; do
+  wt -b stale >/dev/null 2>&1
+  tab=$(tab_in "$project/stale")
+  if [[ $caller == agent ]]; then
+    out=$(OPENCODE_TERMINAL=1 wtrm stale 2>&1)
+    reason="OpenCode agents don't close tabs"
+  else
+    out=$(ZELLIJ_PANE_ID=$caller wtrm stale 2>&1)
+    reason="could not tell which tab you are in"
+  fi
+  grep -q "^$tab	" "$ZJ_STATE/tabs" || fail "wtrm ($caller) should close no tab"
+  [[ $out == *"$reason"* ]] || fail "wtrm ($caller) should say why the tab stays: $out"
+  zellij action close-tab-by-id "$tab"
+done
 
 # Outside Zellij, -p fails before creating anything and -t changes directory.
 unset ZELLIJ ZELLIJ_SESSION_NAME ZELLIJ_PANE_ID

@@ -165,14 +165,29 @@ _wt_tab_open() { # $1=worktree $2=command name $3=focus(1|0) $4=prompt
   print "$name: OpenCode in tab $tab is working on the prompt"
 }
 
-# Close the tabs of a removed worktree (from _wt_tabs_in), except the caller's
-# and those not certainly inside it.
-_wt_tabs_close() { # $1=worktree name, then ID:sure|ID:unsure entries
+# Set $REPLY to the caller's tab: that of $ZELLIJ_PANE_ID, which must exist.
+_wt_caller_tab() {
   emulate -L zsh
-  local name=$1 own entry id
-  shift
-  own=$(_wt_zellij list-panes --json 2>/dev/null | jq -r --arg me "${ZELLIJ_PANE_ID:-}" \
-    '.[] | select(.is_plugin == false and (.id | tostring) == $me) | .tab_id' | head -n1)
+  REPLY=$(_wt_zellij list-panes --json 2>/dev/null | jq -r --arg me "${ZELLIJ_PANE_ID:-}" \
+    '[.[] | select(.is_plugin == false and (.id | tostring) == $me)][0].tab_id // empty')
+  [[ -n $REPLY ]]
+}
+
+# Close the tabs of a removed worktree (from _wt_tabs_in), except the caller's
+# and those not certainly inside it. OpenCode runs an agent's commands outside
+# its pane (they carry OPENCODE_TERMINAL=1) with a pane ID passed along by
+# OpenCode, so for them, and when the caller's tab is unknown, close nothing.
+_wt_tabs_close() { # $1=worktree name, $2=caller's tab or "", then ID:sure|ID:unsure entries
+  emulate -L zsh
+  local name=$1 own=$2 entry id
+  shift 2
+  if [[ -n ${OPENCODE_TERMINAL:-} ]]; then
+    print "left the tabs of $name open (OpenCode agents don't close tabs)"
+    return 0
+  elif [[ -z $own ]]; then
+    print "left the tabs of $name open (could not tell which tab you are in)"
+    return 0
+  fi
   for entry in "$@"; do
     id=${entry%%:*}
     if [[ $entry == *:unsure ]]; then
@@ -738,7 +753,11 @@ wtrm() {
   target=$REPLY
   # Tabs working in the worktree are left with shells in a deleted directory.
   local -a tabs
-  _wt_tabs_in "$target" && tabs=("${reply[@]}")
+  local own=
+  if _wt_tabs_in "$target"; then
+    tabs=("${reply[@]}")
+    _wt_caller_tab && own=$REPLY
+  fi
   mode=$(_wt_review_get "$target" mode)
   if [[ $mode == review ]]; then
     head=$(_wt_review_get "$target" head)
@@ -756,7 +775,7 @@ wtrm() {
     git -C "$proj" worktree remove $opts "$target" || return 1
   fi
   print "removed ${target:t}"
-  (( ! $#tabs )) || _wt_tabs_close "${target:t}" "${tabs[@]}"
+  (( ! $#tabs )) || _wt_tabs_close "${target:t}" "$own" "${tabs[@]}"
 }
 
 # list worktrees
