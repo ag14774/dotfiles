@@ -3,7 +3,9 @@
 #
 #   hx-open FILE...
 #
-# The current tab is the one containing $ZELLIJ_PANE_ID (the calling pane).
+# The current tab is the one containing $ZELLIJ_PANE_ID (the calling pane); it
+# refuses to guess when that pane is gone. It never switches you to another tab:
+# in a tab you are not on, it only uses an existing editor, without focusing it.
 # Files are routed into that tab's pane named "editor", or a new one is spawned.
 # Placement uses zellij's swap layout (which drops the new pane in the BOTTOM
 # slot), so we move it up to the top 70% -- but only if it actually landed below
@@ -60,9 +62,22 @@ fi
 
 # Scope everything to the caller's tab: look up the tab of $ZELLIJ_PANE_ID. This
 # stops the "editor" lookup from matching a Helix running in another tab.
-# Empty => any tab.
-TAB="$(zj list-panes --json 2>>"$ERRTO" | jq -r --arg me "${ZELLIJ_PANE_ID:-}" '.[]|select(.is_plugin==false and (.id|tostring)==$me)|.tab_id' | head -n1)"
-log "hx-open: tab=[$TAB] (caller pane_id=${ZELLIJ_PANE_ID:-<unset>}) files: ${files[*]}"
+# No $ZELLIJ_PANE_ID => any tab. If that pane no longer exists, don't guess.
+TAB=""
+if [ -n "${ZELLIJ_PANE_ID:-}" ]; then
+  TAB="$(zj list-panes --json 2>>"$ERRTO" | jq -r --arg me "$ZELLIJ_PANE_ID" '[.[]|select(.is_plugin==false and (.id|tostring)==$me)][0].tab_id // empty')"
+  if [ -z "$TAB" ]; then
+    printf 'hx-open: pane %s (ZELLIJ_PANE_ID) does not exist; not guessing which tab to use\n' "$ZELLIJ_PANE_ID" >&2
+    exit 1
+  fi
+fi
+# Never switch you to a tab you are not on (an agent in a background tab may
+# call this): there, only an existing editor is used, and nothing gets focus.
+background=""
+if [ -n "$TAB" ] && [ "$(zj list-tabs --json 2>>"$ERRTO" | jq -r --arg t "$TAB" '.[]|select((.tab_id|tostring)==$t)|.active')" = false ]; then
+  background=1
+fi
+log "hx-open: tab=[$TAB]${background:+ (background)} (caller pane_id=${ZELLIJ_PANE_ID:-<unset>}) files: ${files[*]}"
 
 editor_id="$(bash "$RESOLVE" editor "$TAB" 2>>"$ERRTO")"
 log "resolved editor=[$editor_id]"
@@ -79,7 +94,7 @@ log "editor state=[$editor_state]"
 if [ "$editor_state" = stopped ]; then
   log "replace stopped editor $editor_id in place"
   zj new-pane --in-place --pane-id "$editor_id" --close-replaced-pane --close-on-exit \
-    -n editor -- "$HELIX" "${files[@]}" >/dev/null 2>>"$ERRTO" || {
+    ${background:+--no-focus} -n editor -- "$HELIX" "${files[@]}" >/dev/null 2>>"$ERRTO" || {
     printf 'hx-open: could not restart Helix in the editor pane\n' >&2
     exit 1
   }
@@ -91,7 +106,10 @@ elif [ -n "$editor_id" ]; then
     zj write-chars --pane-id "$editor_id" ":open \"$f\"" 2>>"$ERRTO"
     zj write --pane-id "$editor_id" 13 2>>"$ERRTO" # Enter
   done
-  zj focus-pane-id "$editor_id" 2>>"$ERRTO"
+  [ -n "$background" ] || zj focus-pane-id "$editor_id" 2>>"$ERRTO"
+elif [ -n "$background" ]; then
+  printf 'hx-open: tab %s has no editor and is not the tab you are on; not switching tabs\n' "$TAB" >&2
+  exit 1
 else
   # Spawn Helix, then snap the tab into the `with-editor` swap layout.
   #

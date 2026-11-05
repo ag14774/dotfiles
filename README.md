@@ -106,7 +106,8 @@ plain shell. `zreset` deletes the saved session for a clean start.
 
 After upgrading Zellij, Helix or OpenCode, run `zsh tests/zellij_restore_smoke.zsh`.
 It saves, kills and restores a throwaway session (never `main`) and checks that
-all of the above still holds.
+all of the above still holds. After upgrading OpenCode or changing the ADE
+plugin, also run `zsh tests/ade_plugin_smoke.zsh` (see "OpenCode agents and Zellij").
 
 The top bar (zjstatus) is loaded by `dev.kdl` straight from its release URL, so
 the first time you must grant its plugin permission once (the installer prints
@@ -123,7 +124,10 @@ this): inside a zellij session run
     For scripts and agents, stdout carries only the result (such as the
     worktree path) and progress goes to stderr
   - `hx-open FILE...` — open files in the current Zellij tab's Helix `editor`
-    pane, spawning it if needed (used by the `Alt-y` picker)
+    pane, spawning it if needed (used by the `Alt-y` picker and the ADE
+    plugin). The tab is the one of `$ZELLIJ_PANE_ID`; it refuses to guess when
+    that pane is gone, and never switches you to another tab: in a tab you are
+    not on, it only uses an existing editor, without focusing it
   - `opencode-pane [--prompt PROMPT | --resume]` — run OpenCode in a pane with
     your shell environment, in a way Zellij restores as `--resume`, which
     continues the directory's latest conversation; a prompt is never resent
@@ -186,6 +190,39 @@ credentials from the backup, and restore the database while all OpenCode process
 are stopped. Remove stale database `-wal`/`-shm` files before restoring it. The V1
 `tui.json` remains available, but the V1 BTW plugin was removed. See the
 [upstream migration guide](https://opencode.ai/v2/docs/migrate-v1/).
+
+### OpenCode agents and Zellij
+
+OpenCode itself knows nothing about Zellij, and an agent's commands are started
+by OpenCode's shared background service, not by your pane. So agents act on
+your Zellij through the ADE plugin instead of running Zellij scripts:
+
+- The `show_file` tool asks the OpenCode app in the pane showing the
+  conversation to run `hx-open` with that pane's own environment. A subagent's
+  request goes to its parent's pane. One pane carries it out (the first to
+  claim it), and the agent is told what happened, including "no OpenCode pane
+  in Zellij is showing this conversation". This also works after `/cd`.
+- The server part (`plugins/ade.ts`, loaded automatically) also removes the
+  Zellij variables from the service's own environment. A conversation no pane
+  shows (a subagent, a fork not yet opened) would otherwise get the variables
+  of whichever pane started the service, and act on that pane's tab.
+- The app part (`tui-plugins/ade`) is listed in `cli.json`; the installer adds
+  it. `rpc.ts` holds the calls between the two parts; its `show_file` method
+  does what the tool does, for scripts (`opencode api POST
+  "/api/rpc/ade/show_file?directory=…" -d '{"input":{"sessionID":…,"paths":[…]}}'`).
+
+Agents can still run `hx-open` or `wtrm` through the shell: `hx-open` refuses
+when `$ZELLIJ_PANE_ID` no longer exists, and `wtrm`/`wtprune` close no tabs when
+run by an agent (OpenCode marks its commands with `OPENCODE_TERMINAL=1`) or
+when that pane no longer exists.
+
+The service keeps the server part it first loaded: OpenCode reloads changed
+plugins, but not symlinked ones like ours. When the files differ from what the
+service runs, OpenCode panes say so in a warning; run `opencode service
+restart` (this interrupts running conversations). `tests/ade_plugin_smoke.zsh`
+tests this checkout's plugin with a private OpenCode server and a throwaway
+Zellij session, so it needs no restart and never touches your session or
+service. It makes one model call.
 
 ### OpenCode BTW
 

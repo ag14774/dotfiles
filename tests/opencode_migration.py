@@ -69,7 +69,7 @@ class MigrationTests(unittest.TestCase):
         self.assertFalse(result["attention"]["sound"])
         self.assertEqual(result["session"]["sidebar"], "hide")
         self.assertEqual(result["prompt"]["paste"], "full")
-        self.assertEqual(result["plugins"], ["-opencode.btw", "./tui-plugins/btw-v2"])
+        self.assertEqual(result["plugins"], ["-opencode.btw", "./tui-plugins/btw-v2", "./tui-plugins/ade"])
         self.assertEqual(legacy.read_bytes(), before)
         self.assertTrue((self.config / "tui.json").is_symlink())
 
@@ -77,15 +77,29 @@ class MigrationTests(unittest.TestCase):
         (self.config / "tui.json").symlink_to(ROOT / "config/.config/opencode/tui.json")
         self.prepare()
         result = json.loads(self.output.read_text())
-        self.assertEqual(result["plugins"], ["-opencode.btw", "./tui-plugins/btw-v2"])
+        self.assertEqual(result["plugins"], ["-opencode.btw", "./tui-plugins/btw-v2", "./tui-plugins/ade"])
 
     def test_existing_v2_settings_are_preserved_on_rerun(self):
         cli = self.config / "cli.json"
-        cli.write_text('{"theme":{"name":"custom"},"tabs":{"mode":"off"}}\n')
+        cli.write_text(
+            '{"theme":{"name":"custom"},"tabs":{"mode":"off"},"plugins":["./tui-plugins/ade"]}\n'
+        )
         before = cli.read_bytes()
         self.prepare()
         self.assertEqual(cli.read_bytes(), before)
         self.assertFalse(self.output.exists())
+
+    def test_existing_v2_settings_gain_the_ade_plugin(self):
+        cli = self.config / "cli.json"
+        cli.write_text('{"theme":{"name":"custom"},"plugins":["-opencode.btw","./tui-plugins/btw-v2"]}\n')
+        before = cli.read_bytes()
+        self.prepare()
+        result = json.loads(self.output.read_text())
+        self.assertEqual(result["theme"], {"name": "custom"})
+        self.assertEqual(
+            result["plugins"], ["-opencode.btw", "./tui-plugins/btw-v2", "./tui-plugins/ade"]
+        )
+        self.assertEqual(cli.read_bytes(), before)
 
     def test_btw_file_references_are_ported_without_losing_v2_preferences(self):
         for reference in ("./tui-plugins/btw.tsx", "./tui-plugins/btw-v2.tsx"):
@@ -105,7 +119,7 @@ class MigrationTests(unittest.TestCase):
                 self.assertEqual(result["theme"], {"name": "custom"})
                 self.assertEqual(
                     result["plugins"],
-                    ["-opencode.btw", "v2-plugin", "./tui-plugins/btw-v2"],
+                    ["-opencode.btw", "v2-plugin", "./tui-plugins/btw-v2", "./tui-plugins/ade"],
                 )
                 self.assertEqual(cli.read_bytes(), before)
                 cli.write_text(self.output.read_text())
@@ -124,6 +138,7 @@ class MigrationTests(unittest.TestCase):
         result = json.loads(self.output.read_text())
         self.assertEqual(result["keybinds"]["command.palette.show"], "ctrl+p")
         self.assertIn("./tui-plugins/btw-v2", result["plugins"])
+        self.assertIn("./tui-plugins/ade", result["plugins"])
         self.assertNotIn("./tui-plugins/btw.tsx", result["plugins"])
 
     def test_backup_captures_wal_and_symlink_content_for_rollback(self):

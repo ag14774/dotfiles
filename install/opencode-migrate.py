@@ -13,6 +13,11 @@ import json5
 import jsonschema
 
 
+# The app part of the ADE plugin (its server part, plugins/ade.ts, loads on its
+# own). TUI-only plugins must be listed in cli.json.
+ADE_TUI_PLUGIN = "./tui-plugins/ade"
+
+
 def read(path):
     return json5.loads(path.read_text()) if path.is_file() else {}
 
@@ -23,23 +28,30 @@ def prepare(config, state, schema_path, keybind_path, output):
     if cli.exists() or cli.is_symlink():
         existing = read(cli)
         jsonschema.validate(existing, schema)
+        plugins = list(existing.get("plugins", []))
+        changes = []
         old_btw = {"./tui-plugins/btw.tsx", "./tui-plugins/btw-v2.tsx"}
-        if any(
-            item in old_btw
-            for item in existing.get("plugins", [])
-            if isinstance(item, str)
-        ):
-            existing["plugins"] = [
+        if any(item in old_btw for item in plugins if isinstance(item, str)):
+            plugins = [
                 item
-                for item in existing["plugins"]
+                for item in plugins
                 if not isinstance(item, str) or item not in old_btw
             ]
             for item in ("-opencode.btw", "./tui-plugins/btw-v2"):
-                if item not in existing["plugins"]:
-                    existing["plugins"].append(item)
+                if item not in plugins:
+                    plugins.append(item)
+            changes.append(
+                "Replacing the bundled BTW file reference with a V2 plugin directory"
+            )
+        if ADE_TUI_PLUGIN not in plugins:
+            plugins.append(ADE_TUI_PLUGIN)
+            changes.append(f"Enabling the ADE plugin's app part ({ADE_TUI_PLUGIN})")
+        if changes:
+            existing["plugins"] = plugins
             jsonschema.validate(existing, schema)
             output.write_text(json.dumps(existing, indent=2) + "\n")
-            print("Replacing the bundled BTW file reference with a V2 plugin directory")
+            for change in changes:
+                print(change)
             return
         print(f"Preserving existing {cli}")
         return
@@ -142,7 +154,7 @@ def prepare(config, state, schema_path, keybind_path, output):
     if "animations_enabled" in kv:
         result["animations"] = kv["animations_enabled"]
     # The dotfiles' BTW plugin replaces the built-in one, as in cli.json.example.
-    result["plugins"] = ["-opencode.btw", "./tui-plugins/btw-v2"]
+    result["plugins"] = ["-opencode.btw", "./tui-plugins/btw-v2", ADE_TUI_PLUGIN]
     for entry in legacy.get("plugin", []):
         package = entry if isinstance(entry, str) else entry[0]
         if package != "./tui-plugins/btw.tsx":
