@@ -195,21 +195,33 @@ are stopped. Remove stale database `-wal`/`-shm` files before restoring it. The 
 
 OpenCode itself knows nothing about Zellij, and an agent's commands are started
 by OpenCode's shared background service, not by your pane. So agents act on
-your Zellij through the ADE plugin instead of running Zellij scripts:
+your Zellij through the ADE plugin instead of running Zellij scripts: its tools
+ask the OpenCode app in the pane showing the conversation (for a subagent, its
+parent's pane) to do the work with that pane's own environment. One pane
+carries it out (the first to claim it), and the agent is told what happened,
+including "no OpenCode pane in Zellij is showing this conversation".
 
-- The `show_file` tool asks the OpenCode app in the pane showing the
-  conversation to run `hx-open` with that pane's own environment. A subagent's
-  request goes to its parent's pane. One pane carries it out (the first to
-  claim it), and the agent is told what happened, including "no OpenCode pane
-  in Zellij is showing this conversation". This also works after `/cd`.
+- `show_file` opens files in the tab's Helix (`hx-open`), also after `/cd`.
+- `delegate` starts work in another worktree: say "delegate this", "do this in
+  a new worktree", or use `/delegate [what]`. It runs `wt-core open --prompt
+  BRIEF BRANCH` from the pane, so a background tab opens for the worktree and its
+  OpenCode starts on a brief the agent writes. The calling conversation stays
+  where it is and isn't told when the new one finishes. (In a plain clone, as
+  with `wt`, the worktree goes inside the repository folder.)
+- Each conversation a pane in Zellij shows gets short instructions about this
+  setup (tabs, `show_file`, delegating only when asked), as a per-conversation
+  instruction entry rather than a global `AGENTS.md`, so OpenCode elsewhere
+  never sees them.
 - The server part (`plugins/ade.ts`, loaded automatically) also removes the
-  Zellij variables from the service's own environment. A conversation no pane
-  shows (a subagent, a fork not yet opened) would otherwise get the variables
-  of whichever pane started the service, and act on that pane's tab.
+  Zellij variables from the service's own environment. A conversation that
+  never had a pane (a subagent, a fork not yet opened) would otherwise get the
+  variables of whichever pane started the service, and act on that pane's tab.
 - The app part (`tui-plugins/ade`) is listed in `cli.json`; the installer adds
-  it. `rpc.ts` holds the calls between the two parts; its `show_file` method
-  does what the tool does, for scripts (`opencode api POST
-  "/api/rpc/ade/show_file?directory=…" -d '{"input":{"sessionID":…,"paths":[…]}}'`).
+  it. `rpc.ts` holds the calls between the two parts; its `show_file` and
+  `delegate` methods do what the tools do, for scripts, e.g. `opencode api POST
+  "/api/rpc/ade/show_file?location%5Bdirectory%5D=DIR" -d
+  '{"input":{"sessionID":"ses_…","paths":["/abs/file"]}}'` (RPC calls take
+  their folder from `location[directory]`, not `directory`).
 
 Agents can still run `hx-open` or `wtrm` through the shell: `hx-open` refuses
 when `$ZELLIJ_PANE_ID` no longer exists, and `wtrm`/`wtprune` close no tabs when
@@ -220,9 +232,9 @@ The service keeps the server part it first loaded: OpenCode reloads changed
 plugins, but not symlinked ones like ours. When the files differ from what the
 service runs, OpenCode panes say so in a warning; run `opencode service
 restart` (this interrupts running conversations). `tests/ade_plugin_smoke.zsh`
-tests this checkout's plugin with a private OpenCode server and a throwaway
+tests this checkout's plugin with a private OpenCode service and a throwaway
 Zellij session, so it needs no restart and never touches your session or
-service. It makes one model call.
+service. It makes three model calls.
 
 ### OpenCode BTW
 

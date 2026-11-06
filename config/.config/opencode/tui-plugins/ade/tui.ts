@@ -4,10 +4,14 @@
 // of its subagents (they act for their parent).
 import { execFile } from "node:child_process"
 import { Plugin } from "@opencode/plugin/tui"
+import { createEffect, createMemo, createRoot } from "solid-js"
 import { serverDigest } from "./digest"
 import { Ade } from "./rpc"
 
-type Request = { id: string; sessionID: string; action: "show_file"; paths: string[] }
+type Request = { id: string; sessionID: string; action: string; args: string[]; cwd: string; timeout: number }
+
+// The only commands a request may run, by action.
+const COMMANDS: Record<string, string> = { show_file: "hx-open", delegate: "wt-core" }
 
 export default Plugin.define({
   id: "local.ade",
@@ -66,27 +70,25 @@ export default Plugin.define({
       return (await rootOf(sessionID)) === (await rootOf(route.sessionID))
     }
 
-    const run = (command: string, args: string[]) =>
-      new Promise<{ ok: boolean; message: string }>((done) => {
-        execFile(command, args, { env, timeout: 15_000 }, (error, _stdout, stderr) => {
-          const detail = String(stderr).trim()
-          if (error) done({ ok: false, message: detail || String(error.message) })
-          else done({ ok: true, message: detail })
+    const run = (command: string, request: Request) =>
+      new Promise<{ ok: boolean; stdout: string; stderr: string }>((done) => {
+        const options = { env, cwd: request.cwd, timeout: request.timeout }
+        execFile(command, request.args, options, (error, stdout, stderr) => {
+          const message = String(stderr) || (error ? String(error.message) : "")
+          done({ ok: !error, stdout: String(stdout), stderr: message })
         })
       })
 
     const handle = async (request: Request) => {
-      if (!(await shows(request.sessionID))) return
+      const command = COMMANDS[request.action]
+      if (!command || !(await shows(request.sessionID))) return
       const { granted } = (await ade.claim({ id: request.id })) as { granted: boolean }
       if (!granted) return
-      let result = { ok: false, message: `Unknown request: ${request.action}` }
+      let result = { ok: false, stdout: "", stderr: "" }
       try {
-        if (request.action === "show_file") {
-          result = await run("hx-open", request.paths)
-          if (result.ok) result.message = `Opened ${request.paths.join(", ")} in the user's editor.`
-        }
+        result = await run(command, request)
       } catch (error) {
-        result = { ok: false, message: String(error) }
+        result.stderr = String(error)
       }
       await ade.finish({ id: request.id, ...result })
     }
@@ -95,6 +97,32 @@ export default Plugin.define({
         context.ui.toast.show({ variant: "error", title: "ADE plugin", message: String(error?.message ?? error) })
       })
     })
-    return () => unsubscribe()
+
+    // Give each conversation this pane shows the environment instructions,
+    // once the server has it (a new conversation is shown just before).
+    const attach = async (sessionID: string) => {
+      for (let attempt = 1; attempt <= 5; attempt++) {
+        try {
+          return await ade.attach({ sessionID })
+        } catch {
+          await new Promise((done) => setTimeout(done, 1_000))
+        }
+      }
+    }
+    const stopAttaching = createRoot((dispose) => {
+      const shown = createMemo(() => {
+        const route = context.ui.router.current()
+        return route.type === "session" && context.data.session.get(route.sessionID) ? route.sessionID : undefined
+      })
+      createEffect(() => {
+        const sessionID = shown()
+        if (sessionID) void attach(sessionID)
+      })
+      return dispose
+    })
+    return () => {
+      unsubscribe()
+      stopAttaching()
+    }
   },
 })

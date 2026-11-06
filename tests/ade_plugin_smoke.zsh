@@ -2,13 +2,15 @@
 # Live check of the ADE plugin (server part plugins/ade.ts, app part
 # tui-plugins/ade) with this checkout's code, against the installed Zellij,
 # Helix and OpenCode. The OpenCode app in the pane showing a conversation (or
-# its parent, for a subagent) opens the files the conversation asks for.
+# its parent, for a subagent) opens files and delegated tabs for it.
 #
-# It starts a private OpenCode server with temporary data and config (your
-# auth, model preferences and ~/.config/zsh/secrets.zsh are reused) and a
-# throwaway Zellij session, so it never touches `main` or your OpenCode
-# service. Most steps call the plugin's show_file RPC directly; one has an
-# agent call the tool, with your most recent model (or ADE_TEST_MODEL).
+# OpenCode runs a private background service with temporary data and config
+# (your auth, model preferences and ~/.config/zsh/secrets.zsh are reused), in a
+# throwaway Zellij session, so it never touches `main` or your OpenCode service.
+# Most steps call the plugin's RPC methods directly; two have an agent use the
+# tools (show_file after /cd, delegate from plain English), and the delegated
+# tab answers its brief: three model calls with your most recent model (or
+# ADE_TEST_MODEL).
 
 set -u
 
@@ -16,9 +18,10 @@ ROOT=${0:A:h:h}
 TMP=$(mktemp -d)
 TMP=${TMP:A}
 S=ade$$
-mkdir -p "$TMP"/{A,B,C,zj,bin,src/plugins} "$TMP"/oc/{data/opencode,state/opencode,cache,config}
+mkdir -p "$TMP"/{A,B,C,zj/layouts,bin,src/plugins} "$TMP"/oc/{data/opencode,state/opencode,cache,config}
 : > "$TMP/keys"
 : > "$TMP/zj/config.kdl"
+cp "$ROOT/config/.config/zellij/layouts/dev.kdl" "$TMP/zj/layouts/"
 for f in A/notes B/notes A/other A/bg A/two C/none; do print "I am $f" > "$TMP/$f.md"; done
 
 fail() {
@@ -29,6 +32,7 @@ step() { print -- "- $*"; }
 zj() { zellij --session "$S" action "$@"; }
 uri() { jq -rn --arg d "$1" '$d | @uri'; }
 wait_for() { local n=$1; shift; for _ in {1..$n}; do "$@" && return 0; sleep 1; done; return 1; }
+gives() { [[ -n $("$@") ]]; } # for wait_for: the command prints something (run on every attempt)
 session_running() { zellij list-sessions --no-formatting 2>/dev/null | grep "^$S " | grep -qv EXITED; }
 pane() { # $1 = title, $2 = tab: pane ID
   zj list-panes --json 2>/dev/null | jq -r --arg t "$1" --argjson tab "$2" \
@@ -41,17 +45,26 @@ type_in() { # $1 = pane, $2 = text, then Enter
   sleep 1
   zj write --pane-id "terminal_$1" 13
 }
-oc_cli() { opencode --server "$OPENCODE_SERVER" "$@"; }
+oc_cli() { opencode "$@"; }
 newest() {
   oc_cli api GET "/api/session?limit=1&order=desc&parentID=null&directory=$(uri "$1")" 2>/dev/null \
     | jq -r '.data[0].id // empty'
 }
-show() { # $1 = session, then absolute paths: the show_file RPC's message
+rpc() { # $1 = method, $2 = directory, $3 = input (JSON): the answer's message
+  oc_cli api POST "/api/rpc/ade/$1?location%5Bdirectory%5D=$(uri "$2")" -d "{\"input\":$3}" 2>&1 \
+    | jq -r '.output.message // .message // .'
+}
+show() { # $1 = session, then absolute paths
   local sid=$1
   shift
-  oc_cli api POST "/api/rpc/ade/show_file?directory=$(uri "$TMP/A")" \
-    -d "$(jq -cn --arg s "$sid" '{input: {sessionID: $s, paths: $ARGS.positional}}' --args "$@")" 2>&1 \
-    | jq -r '.output.message // .message // .'
+  rpc show_file "$TMP/A" "$(jq -cn --arg s "$sid" '{sessionID: $s, paths: $ARGS.positional}' --args "$@")"
+}
+has_environment() { # $1 = session
+  oc_cli api GET "/api/experimental/session/$1/instructions/entries" 2>/dev/null \
+    | jq -e '[.data // . | .[] | select(.key == "ade.environment")] | length > 0' >/dev/null
+}
+tab_in() { # $1 = directory: a tab with a pane there
+  zj list-panes --json 2>/dev/null | jq -r --arg d "$1" '[.[] | select(.is_plugin == false and .pane_cwd == $d)][0].tab_id // empty'
 }
 dev_tab() { # $1 = directory, $2 = "no-editor" to leave Helix out: a tab like the dev layout's
   local tab
@@ -60,9 +73,8 @@ dev_tab() { # $1 = directory, $2 = "no-editor" to leave Helix out: a tab like th
   tab=$(active_tab)
   zj rename-pane main >/dev/null 2>&1
   [[ -n ${2:-} ]] || zj new-pane --cwd "$1" --name editor -- hx >/dev/null
-  zj new-pane --cwd "$1" --name opencode -- \
-    opencode --server "$OPENCODE_SERVER" ${ADE_TEST_MODEL:+--model "$ADE_TEST_MODEL"} >/dev/null
-  wait_for 30 test -n "$(pane opencode "$tab")" || fail "no OpenCode pane in $1"
+  zj new-pane --cwd "$1" --name opencode -- opencode ${ADE_TEST_MODEL:+--model "$ADE_TEST_MODEL"} >/dev/null
+  wait_for 30 gives pane opencode "$tab" || fail "no OpenCode pane in $1"
   sleep 10
   print "$tab"
 }
@@ -70,11 +82,14 @@ start_conversation() { # $1 = OpenCode pane, $2 = directory: start one with a sh
   zj write-chars --pane-id "terminal_$1" '!'
   sleep 1
   type_in "$1" 'echo started'
-  wait_for 60 test -n "$(newest "$2")" || fail "no conversation started in $2"
+  wait_for 60 gives newest "$2" || fail "no conversation started in $2"
   newest "$2"
 }
 cleanup() {
-  [[ -n ${server_pid:-} ]] && kill "$server_pid" 2>/dev/null
+  # Stop the private service by its pid (never `opencode service stop`, which
+  # stops yours if the environment is lost).
+  local service=$TMP/oc/state/opencode/service.json
+  [[ -f $service ]] && kill "$(jq -r '.pid' "$service")" 2>/dev/null
   zellij kill-session "$S" >/dev/null 2>&1
   pkill -f "tail -n 0 -f $TMP/keys" 2>/dev/null
   pkill -f "force-run-commands $S" 2>/dev/null
@@ -100,17 +115,28 @@ for f in "$TMP"/src/tui-plugins/ade/*; do ln -s "$f" "$config/tui-plugins/ade/";
 [[ -f $config/cli.json ]] || print '{}' > "$config/cli.json"
 jq '.plugins = ((.plugins // []) - ["./tui-plugins/ade"] + ["./tui-plugins/ade"])' "$config/cli.json" \
   > "$config/cli.json.new" && mv "$config/cli.json.new" "$config/cli.json"
-ln -s "$ROOT/config/.local/bin/hx-open" "$TMP/bin/"
+ln -s "$ROOT/config/.local/bin/hx-open" "$ROOT/config/.local/bin/wt-core" "$TMP/bin/"
 export XDG_DATA_HOME=$TMP/oc/data XDG_STATE_HOME=$TMP/oc/state XDG_CACHE_HOME=$TMP/oc/cache \
-  XDG_CONFIG_HOME=$TMP/oc/config OPENCODE_PASSWORD=ade-test-$$ PATH="$TMP/bin:$PATH"
-zsh -fc '[[ -r ~/.config/zsh/secrets.zsh ]] && source ~/.config/zsh/secrets.zsh
-  exec opencode serve --hostname 127.0.0.1 --port 0' >"$TMP/server.log" 2>&1 &
-server_pid=$!
-wait_for 30 grep -q 'listening on http' "$TMP/server.log" || fail "the private OpenCode server did not start"
-export OPENCODE_SERVER=$(grep -oE 'http://127\.0\.0\.1:[0-9]+' "$TMP/server.log" | head -1)
+  XDG_CONFIG_HOME=$TMP/oc/config PATH="$TMP/bin:$PATH"
+unset OPENCODE_PASSWORD OPENCODE_SERVER_PASSWORD
+[[ -r ~/.config/zsh/secrets.zsh ]] && source ~/.config/zsh/secrets.zsh
+# The private service starts here, inside this caller's Zellij pane, so it
+# inherits that pane's Zellij variables (the plugin must remove them).
+# Its own port: the managed service's default port is the one yours uses.
+oc_cli service set port "$(python3 -c 'import socket; s = socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1])')" >/dev/null 2>&1
+oc_cli service start >"$TMP/service.log" 2>&1
+wait_for 30 test -f "$TMP/oc/state/opencode/service.json" || fail "the private OpenCode service did not start"
 
-# Zellij passes this environment (private OpenCode, this checkout's hx-open)
-# on to its panes.
+# A project in wt's layout, for delegate.
+git init -q --bare "$TMP/remote.git"
+git init -q "$TMP/seed" && print seed > "$TMP/seed/README"
+git -C "$TMP/seed" add README && git -C "$TMP/seed" -c user.name=t -c user.email=t@example.com commit -qm init
+git -C "$TMP/seed" push -q "$TMP/remote.git" HEAD:main && git --git-dir="$TMP/remote.git" symbolic-ref HEAD refs/heads/main
+(cd "$TMP" && wt-core clone "$TMP/remote.git" proj && cd proj && wt-core open --stay main) >/dev/null 2>&1
+[[ -d $TMP/proj/main ]] || fail "could not set up a wt project"
+
+# Zellij passes this environment (private OpenCode, this checkout's hx-open and
+# wt-core) on to its panes.
 (cd "$TMP/A" && tail -n 0 -f "$TMP/keys" | env -u ZELLIJ -u ZELLIJ_SESSION_NAME -u ZELLIJ_PANE_ID TERM=xterm-256color \
   script -q /dev/null zsh -fc "stty rows 50 cols 200; exec zellij --config-dir '$TMP/zj' attach --create --force-run-commands $S" \
   >"$TMP/client.log" 2>&1 &) >/dev/null 2>&1
@@ -120,6 +146,13 @@ tab=$(dev_tab "$TMP/A")
 oc=$(pane opencode "$tab") ed=$(pane editor "$tab")
 sid=$(start_conversation "$oc" "$TMP/A")
 ! screen_has "$oc" "ADE plugin" || fail "the plugin warned about current code"
+
+step "a conversation a pane shows gets the environment instructions; one no pane shows doesn't"
+wait_for 15 has_environment "$sid" || fail "no environment instructions on the conversation"
+loose=$(oc_cli api POST /api/session -d "{\"location\":{\"directory\":\"$TMP/C\"}}" 2>/dev/null | jq -r '.data.id // empty')
+[[ -n $loose ]] || fail "could not create a conversation without a pane"
+sleep 3
+! has_environment "$loose" || fail "a conversation no pane shows got the environment instructions"
 
 step "show_file opens the file in this tab's Helix"
 msg=$(show "$sid" "$TMP/A/notes.md")
@@ -140,6 +173,27 @@ child=$(oc_cli api POST "/api/session?directory=$(uri "$TMP/B")" -d "{\"parentID
 msg=$(show "$child" "$TMP/A/other.md")
 [[ $msg == Opened* ]] || fail "unexpected answer for the subagent: $msg"
 wait_for 10 screen_has "$ed" "I am A/other" || fail "Helix did not show the subagent's file"
+
+step "an agent delegates from plain English: a background tab starts on the brief"
+tab_p=$(dev_tab "$TMP/proj/main")
+oc_p=$(pane opencode "$tab_p")
+sid_p=$(start_conversation "$oc_p" "$TMP/proj/main")
+tabs_before=$(zj list-tabs --json | jq length)
+type_in "$oc_p" 'Delegate this to a new worktree named feat-x: reply with exactly the word delegated.'
+last_lines() { zj dump-screen --pane-id "$1" 2>/dev/null | grep -v '^[[:space:]]*$' | tail -${2:-12}; }
+wait_for 120 gives tab_in "$TMP/proj/feat-x" \
+  || fail "no tab opened for the delegated worktree; the agent's pane shows:"$'\n'"$(last_lines "$oc_p")"$'\n'"panes: $(zj list-panes --json | jq -c '[.[] | select(.is_plugin == false) | {id, tab_id, title, cwd: .pane_cwd}]')"
+[[ $(active_tab) == "$tab_p" ]] || fail "delegate moved you to the new tab"
+(( $(zj list-tabs --json | jq length) == tabs_before + 1 )) || fail "delegate should open exactly one tab"
+wait_for 120 gives newest "$TMP/proj/feat-x" || fail "the delegated tab's OpenCode did not start on the brief"
+
+step "the /delegate command is available"
+oc_cli api GET "/api/command?location%5Bdirectory%5D=$(uri "$TMP/proj/main")" 2>/dev/null \
+  | jq -e '[.. | objects | select(.name? == "delegate")] | length > 0' >/dev/null || fail "no /delegate command"
+
+step "delegate refuses a worktree that already has a tab"
+msg=$(rpc delegate "$TMP/proj/main" "$(jq -cn --arg s "$sid_p" '{sessionID: $s, branch: "feat-x", brief: "again"}')")
+[[ $msg == "Nothing was delegated:"*"already has a tab"* ]] || fail "unexpected answer: $msg"
 
 step "from a tab you are not on: opens in its Helix, and you stay where you are"
 zj new-tab --name elsewhere >/dev/null
@@ -164,7 +218,7 @@ step "two panes showing one conversation: exactly one opens the file"
 tab_2=$(dev_tab "$TMP/A")
 ed_2=$(pane editor "$tab_2") oc_2=$(pane opencode "$tab_2")
 zj new-pane --in-place --pane-id "terminal_$oc_2" --close-replaced-pane --name opencode --cwd "$TMP/A" \
-  -- opencode --server "$OPENCODE_SERVER" --session "$sid" >/dev/null
+  -- opencode --session "$sid" >/dev/null
 sleep 10
 oc_2=$(pane opencode "$tab_2")
 screen_has "$oc_2" "show_file" || fail "the second pane is not showing the conversation"
@@ -180,22 +234,24 @@ sleep 3
 msg=$(show "$sid" "$TMP/B/notes.md")
 [[ $msg == "No OpenCode pane in Zellij is showing this conversation"* ]] || fail "unexpected answer: $msg"
 
-step "its shell commands see no Zellij (the server started inside one)"
-rm -f "$TMP/B/seen"
-oc_cli api POST "/api/session/$sid/shell" \
+# A conversation keeps the environment of the last pane that showed it (OpenCode
+# does that); one that never had a pane gets the service's, without Zellij.
+step "a conversation that never had a pane sees no Zellij (the service started inside one)"
+rm -f "$TMP/C/seen"
+oc_cli api POST "/api/session/$loose/shell" \
   -d '{"command":"echo \"[$ZELLIJ$ZELLIJ_SESSION_NAME$ZELLIJ_PANE_ID]\" > seen"}' >/dev/null 2>&1
-wait_for 30 test -s "$TMP/B/seen" || fail "the shell command did not run"
-[[ $(<"$TMP/B/seen") == "[]" ]] || fail "a conversation no pane shows saw Zellij: $(<"$TMP/B/seen")"
+wait_for 30 test -s "$TMP/C/seen" || fail "the shell command did not run"
+[[ $(<"$TMP/C/seen") == "[]" ]] || fail "a conversation without a pane saw Zellij: $(<"$TMP/C/seen")"
 
 step "after the server part changes on disk, OpenCode panes say the service is out of date"
-digest() { oc_cli api POST "/api/rpc/ade/info?directory=$(uri "$TMP/A")" -d '{"input":{}}' 2>/dev/null | jq -r '.output.digest'; }
+digest() { oc_cli api POST "/api/rpc/ade/info?location%5Bdirectory%5D=$(uri "$TMP/A")" -d '{"input":{}}' 2>/dev/null | jq -r '.output.digest'; }
 before=$(digest)
 print '// changed' >> "$TMP/src/plugins/ade.ts"
 sleep 8
 if [[ $(digest) != "$before" ]]; then
   print "  (OpenCode reloaded the symlinked plugin: the stale warning may no longer be needed)"
 else
-  zj new-pane --cwd "$TMP/C" -- opencode --server "$OPENCODE_SERVER" >/dev/null
+  zj new-pane --cwd "$TMP/C" -- opencode >/dev/null
   sleep 2
   fresh=$(zj list-panes --json | jq -r '[.[] | select(.is_plugin == false)] | max_by(.id) | .id')
   wait_for 30 screen_has "$fresh" "ADE plugin" || fail "no stale warning in a new OpenCode pane"
