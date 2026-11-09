@@ -41,6 +41,10 @@ const pending: Map<string, Pending> = ((globalThis as any).__adePending ??= new 
 const waiting: Map<string, Set<string>> = ((globalThis as any).__adeWaiting ??= new Map())
 const WAITING_EVENTS = ["permission.asked", "permission.replied", "form.created", "form.replied", "form.cancelled"]
 
+// What each OpenCode pane shows in its tab's name: Zellij session -> pane ID ->
+// state. Panes in one tab use it to agree on the tab's icon.
+const tabStates: Map<string, Map<string, string>> = ((globalThis as any).__adeTabs ??= new Map())
+
 // Taken once, when this module is evaluated: a running service keeps evaluated
 // code, so this describes what runs even after the files change.
 const RUNNING = serverDigest(new URL("../", import.meta.url)) ?? "unknown"
@@ -93,6 +97,13 @@ export default Plugin.define({
         return delegate(sessionID, task, context.signal)
       },
       status: async (input, context) => status((input as { sessionID: string }).sessionID, context.signal),
+      tab_state: async (input) => {
+        const { zellij, pane, state } = input as { zellij: string; pane: string; state: string }
+        const panes = tabStates.get(zellij) ?? new Map<string, string>()
+        state === "none" ? panes.delete(pane) : panes.set(pane, state)
+        panes.size ? tabStates.set(zellij, panes) : tabStates.delete(zellij)
+        return { states: Object.fromEntries(panes) }
+      },
       attach: async (input) => {
         const { sessionID } = input as { sessionID: string }
         const entries = await ctx.session.instructions.entry.list({ sessionID })

@@ -241,6 +241,18 @@ report=$(status_of)
 jq -r '.output.message' <<< "$report" | grep -q "proj/main (this conversation): branch main" \
   || fail "unexpected status text: $(jq -r '.output.message' <<< "$report")"
 
+step "tab icons: a tab that finished in the background shows done until you visit it"
+tab_name() { zj list-tabs --json 2>/dev/null | jq -r --argjson t "$1" '.[] | select(.tab_id == $t) | .name'; }
+name_is() { [[ $(tab_name "$1") == "$2" ]]; }
+full_tab=$(tab_in "$TMP/proj/feat-full")
+wait_for 30 name_is "$full_tab" $'\uf00c feat-full' || fail "expected the done icon, got: $(tab_name "$full_tab")"
+back=$(active_tab)
+zj go-to-tab-by-id "$full_tab"
+wait_for 15 name_is "$full_tab" feat-full || fail "visiting the tab should clear its icon, got: $(tab_name "$full_tab")"
+zj go-to-tab-by-id "$back"
+[[ $(tab_name "$tab") != [$'\uf0f3\uf057\uf00c\U000f051f']* ]] \
+  || fail "a tab that was active when its agent finished should show no icon, got: $(tab_name "$tab")"
+
 step "from a tab you are not on: opens in its Helix, and you stay where you are"
 zj new-tab --name elsewhere >/dev/null
 sleep 2

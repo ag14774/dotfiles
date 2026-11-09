@@ -4,8 +4,10 @@ layout {
     pane_template name="zjbar" borderless=true {
         plugin location="https://github.com/dj95/zjstatus/releases/download/v0.23.0/zjstatus.wasm" {
             format_left   "{mode}{tabs}#[fg=#585b70]  +⌥t "
-            format_center "#[fg=#585b70]  #[fg=#cba6f7,bold]{session}"
-            format_right  "#[fg=#cba6f7,bold] {datetime}#[fg=#94e2d5]↖ "
+            format_center ""
+            // No session name (it is always main) and no clock: zjstatus redraws
+            // only on Zellij events, so a clock went stale while the session idled.
+            format_right  ""
             format_space  ""
 
             border_enabled             "false"
@@ -26,9 +28,6 @@ layout {
             tab_active    "#[fg=#89b4fa,bold] {name} "
             tab_separator "#[fg=#94e2d5,bold]⋮"
 
-            datetime          "#[fg=#6C7086,bold] {format} "
-            datetime_format   "%A, %d %b %Y %H:%M"
-            datetime_timezone "Europe/Zurich"
         }
     }
     // BOTTOM BAR: zellij keybinding hints.

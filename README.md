@@ -109,7 +109,10 @@ It saves, kills and restores a throwaway session (never `main`) and checks that
 all of the above still holds. After upgrading OpenCode or changing the ADE
 plugin, also run `zsh tests/ade_plugin_smoke.zsh` (see "OpenCode agents and Zellij").
 
-The top bar (zjstatus) is loaded by `dev.kdl` straight from its release URL, so
+The top bar (zjstatus) shows the mode, the tabs (with the agent icons above) and
+an `Alt-t` hint. It has no clock: zjstatus redraws only on Zellij events, so a
+clock went stale while the session was idle. It is loaded by `dev.kdl`
+straight from its release URL, so
 the first time you must grant its plugin permission once (the installer prints
 this): inside a zellij session run
 `zellij plugin -f -- "<zjstatus-url>"`, press `y`, then close that pane.
@@ -222,6 +225,13 @@ including "no OpenCode pane in Zellij is showing this conversation".
   and its latest conversation: working, waiting for you (a permission request
   or question), idle, failed or interrupted, with the start of its last answer.
   Read-only; a tab you only use to delegate and ask this acts as a coordinator.
+- Each tab's name shows what its OpenCode is doing, with a Nerd Font icon in
+  front: 󰔟 working,  waiting for you (a permission request or question),
+   done and  failed or interrupted. Done and failed show only if the tab
+  wasn't active when the work ended, and clear when you visit it. The app in
+  the pane renames its own tab (`rename-tab-by-id`); with several OpenCode
+  panes in a tab, the most urgent state wins. Nothing relies on the names;
+  `wt` finds tabs by directory.
 - Each conversation a pane in Zellij shows gets short instructions about this
   setup (tabs, `show_file`, `status`, delegating only when asked), as a per-conversation
   instruction entry rather than a global `AGENTS.md`, so OpenCode elsewhere
