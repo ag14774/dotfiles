@@ -133,6 +133,10 @@ this): inside a zellij session run
     plugin). The tab is the one of `$ZELLIJ_PANE_ID`; it refuses to guess when
     that pane is gone, and never switches you to another tab: in a tab you are
     not on, it only uses an existing editor, without focusing it
+  - `opencode-send FILE [START [END [LANGUAGE]]] [< SELECTION]` — paste a
+    reference (`FILE:START-END`) and the selection, as a fenced block, into the
+    current tab's OpenCode prompt and focus it; nothing is submitted. Not tied to
+    an editor; Helix calls it from `+ a` (see "OpenCode agents and Zellij")
   - `opencode-pane [--session ID] [--prompt PROMPT] | --resume` — run OpenCode
     in a pane with your shell environment, optionally on a given conversation,
     in a way Zellij restores as `--resume`, which continues the directory's
@@ -208,6 +212,13 @@ carries it out (the first to claim it), and the agent is told what happened,
 including "no OpenCode pane in Zellij is showing this conversation".
 
 - `show_file` opens files in the tab's Helix (`hx-open`), also after `/cd`.
+- The other way round, in Helix press `+` then `a` to ask this tab's OpenCode
+  about the code: it gets `file:line`, or for a selection `file:start-end` and
+  the selected text (shown as `[Pasted ~N lines]`, unsaved edits included), and
+  becomes the focused pane for your question. Only the primary selection is
+  sent. Helix doesn't reload files agents change: `Ctrl-R` reloads them all
+  (`:reload-all`, which discards unsaved edits), and Helix refuses to save over
+  a file changed on disk unless you use `:w!`.
 - `delegate` starts work in another worktree: say "delegate this", "do this in
   a new worktree", or use `/delegate [what]`. It runs `wt-core open --prompt
   BRIEF BRANCH` from the pane, so a background tab opens for the worktree and its
