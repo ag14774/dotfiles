@@ -7,6 +7,7 @@ import { Plugin } from "@opencode/plugin/tui"
 import { createEffect, createMemo, createRoot } from "solid-js"
 import { serverDigest } from "./digest"
 import { Ade } from "./rpc"
+import { type Mark, URGENCY, withMark } from "./tabs"
 
 type Copy = { sessionID: string; before?: string; compact: boolean; prepare: string[] }
 type Request = {
@@ -21,13 +22,6 @@ type Request = {
 
 // The only commands a request may run, by action.
 const COMMANDS: Record<string, string> = { show_file: "hx-open", delegate: "wt-core", status: "wt-core" }
-
-// What a pane puts in front of its tab's name (Nerd Font: bell, times-circle,
-// check, timer-sand), most urgent first when a tab has several OpenCode panes.
-type Mark = "none" | "waiting" | "failed" | "done" | "working"
-const ICONS: Record<Exclude<Mark, "none">, string> = { waiting: "\u{F0F3}", failed: "\u{F057}", done: "\u{F00C}", working: "\u{F051F}" }
-const URGENCY = ["waiting", "failed", "done", "working"] as const
-const ICON_PREFIX = new RegExp(`^(?:${Object.values(ICONS).join("|")}) `)
 
 export default Plugin.define({
   id: "local.ade",
@@ -153,11 +147,10 @@ export default Plugin.define({
       const report = { zellij: env.ZELLIJ_SESSION_NAME!, pane: env.ZELLIJ_PANE_ID!, state: mark }
       const { states } = (await ade.tab_state(report)) as { states: Record<string, string> }
       const inTab = panes.filter((pane) => !pane.is_plugin && pane.tab_id === me.tab_id).map((pane) => String(pane.id))
-      const top = URGENCY.find((state) => inTab.some((id) => states[id] === state))
+      const top = URGENCY.find((state) => inTab.some((id) => states[id] === state)) ?? "none"
       const tab = (JSON.parse(await zellij("list-tabs", "--json")) as any[]).find((tab) => tab.tab_id === me.tab_id)
       if (!tab) return
-      const base = String(tab.name).replace(ICON_PREFIX, "")
-      const name = top ? `${ICONS[top]} ${base}` : base
+      const name = withMark(String(tab.name), top)
       if (name !== tab.name) await zellij("rename-tab-by-id", String(me.tab_id), name)
     }
     let synced = Promise.resolve()
@@ -165,7 +158,11 @@ export default Plugin.define({
     const setMark = (next: Mark, force = false) => {
       if (next === mark && !force) return
       mark = next
-      synced = synced.then(syncTab).catch(() => {})
+      // Then the top bar's totals, counted from all tab names by the server part.
+      synced = synced
+        .then(syncTab)
+        .then(() => ade.totals({ zellij: env.ZELLIJ_SESSION_NAME! }))
+        .catch(() => {})
       // Zellij doesn't tell programs about tab switches: while "done" or
       // "failed" shows, check every few seconds whether the tab is active.
       const unseen = mark === "done" || mark === "failed"

@@ -4,7 +4,7 @@
 import { createHash } from "node:crypto"
 import { readFileSync } from "node:fs"
 
-const files = ["plugins/ade.ts", "tui-plugins/ade/rpc.ts", "tui-plugins/ade/digest.ts"]
+const files = ["plugins/ade.ts", "tui-plugins/ade/rpc.ts", "tui-plugins/ade/digest.ts", "tui-plugins/ade/tabs.ts"]
 
 export function serverDigest(config: URL): string | undefined {
   try {

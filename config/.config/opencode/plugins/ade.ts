@@ -6,11 +6,13 @@
 // So the Zellij variables are removed from it, and anything that must act in
 // "the user's tab" is done by the OpenCode app in the pane showing the
 // conversation (tui.ts), which knows its own pane for certain.
+import { execFile } from "node:child_process"
 import { randomUUID } from "node:crypto"
 import { isAbsolute, resolve } from "node:path"
 import { Plugin } from "@opencode/plugin"
 import { serverDigest } from "../tui-plugins/ade/digest"
 import { Ade } from "../tui-plugins/ade/rpc"
+import { totalsText } from "../tui-plugins/ade/tabs"
 
 type Action = "show_file" | "delegate" | "status"
 // Copy conversation sessionID (up to message `before`) into the worktree that
@@ -44,6 +46,10 @@ const WAITING_EVENTS = ["permission.asked", "permission.replied", "form.created"
 // What each OpenCode pane shows in its tab's name: Zellij session -> pane ID ->
 // state. Panes in one tab use it to agree on the tab's icon.
 const tabStates: Map<string, Map<string, string>> = ((globalThis as any).__adeTabs ??= new Map())
+
+// Top-bar totals are pushed one at a time per Zellij session, so the last push
+// reflects the latest tab names: Zellij session -> queue.
+const totalsQueues: Map<string, Promise<unknown>> = ((globalThis as any).__adeTotals ??= new Map())
 
 // Taken once, when this module is evaluated: a running service keeps evaluated
 // code, so this describes what runs even after the files change.
@@ -103,6 +109,27 @@ export default Plugin.define({
         state === "none" ? panes.delete(pane) : panes.set(pane, state)
         panes.size ? tabStates.set(zellij, panes) : tabStates.delete(zellij)
         return { states: Object.fromEntries(panes) }
+      },
+      // Count the agent marks in the session's tab names and send the totals to
+      // zjstatus in every tab (its {pipe_agents} widget, see dev.kdl).
+      totals: async (input) => {
+        const { zellij } = input as { zellij: string }
+        const run = (...args: string[]) =>
+          new Promise<string>((done, fail) => {
+            const child = execFile("zellij", ["--session", zellij, ...args], { timeout: 10_000 }, (error, stdout) =>
+              error ? fail(error) : done(String(stdout)),
+            )
+            child.stdin?.end() // `zellij pipe` reads stdin as long as it is open
+          })
+        const push = async () => {
+          const tabs = JSON.parse(await run("action", "list-tabs", "--json")) as { name: string }[]
+          // (A blank message would make `zellij pipe` wait for stdin.)
+          await run("pipe", "--", `zjstatus::pipe::pipe_agents::${totalsText(tabs.map((tab) => tab.name)) || " "}`)
+        }
+        const queued = (totalsQueues.get(zellij) ?? Promise.resolve()).then(push)
+        totalsQueues.set(zellij, queued.catch(() => {}))
+        await queued
+        return {}
       },
       attach: async (input) => {
         const { sessionID } = input as { sessionID: string }

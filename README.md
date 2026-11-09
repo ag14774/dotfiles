@@ -110,8 +110,10 @@ all of the above still holds. After upgrading OpenCode or changing the ADE
 plugin, also run `zsh tests/ade_plugin_smoke.zsh` (see "OpenCode agents and Zellij").
 
 The top bar (zjstatus) shows the mode, the tabs (with the agent icons above) and
-an `Alt-t` hint. It has no clock: zjstatus redraws only on Zellij events, so a
-clock went stale while the session was idle. It is loaded by `dev.kdl`
+an `Alt-t` hint on the left, and on the right how many tabs are waiting, failed,
+done or working (counted from those icons by the ADE plugin's server part and
+sent with `zellij pipe` whenever one changes). It has no clock: zjstatus redraws
+only on Zellij events, so a clock went stale while the session was idle. It is loaded by `dev.kdl`
 straight from its release URL, so
 the first time you must grant its plugin permission once (the installer prints
 this): inside a zellij session run

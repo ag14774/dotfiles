@@ -73,6 +73,7 @@ dev_tab() { # $1 = directory, $2 = "no-editor" to leave Helix out: a tab like th
   local tab
   zj new-tab --cwd "$1" >/dev/null
   sleep 2
+  wait_for 30 gives active_tab || fail "no active tab after opening one in $1"
   tab=$(active_tab)
   zj rename-pane main >/dev/null 2>&1
   [[ -n ${2:-} ]] || zj new-pane --cwd "$1" --name editor -- hx >/dev/null
@@ -119,6 +120,11 @@ for f in "$TMP"/src/tui-plugins/ade/*; do ln -s "$f" "$config/tui-plugins/ade/";
 jq '.plugins = ((.plugins // []) - ["./tui-plugins/ade"] + ["./tui-plugins/ade"])' "$config/cli.json" \
   > "$config/cli.json.new" && mv "$config/cli.json.new" "$config/cli.json"
 ln -s "$ROOT/config/.local/bin/hx-open" "$ROOT/config/.local/bin/wt-core" "$TMP/bin/"
+# A pass-through zellij that records what is piped to zjstatus (the totals).
+print -rl '#!/bin/bash' \
+  "[[ \" \$* \" == *' pipe '* ]] && printf '%s\\n' \"\${@: -1}\" >> '$TMP/pipes.log'" \
+  "exec '$(command -v zellij)' \"\$@\"" > "$TMP/bin/zellij"
+chmod +x "$TMP/bin/zellij"
 export XDG_DATA_HOME=$TMP/oc/data XDG_STATE_HOME=$TMP/oc/state XDG_CACHE_HOME=$TMP/oc/cache \
   XDG_CONFIG_HOME=$TMP/oc/config PATH="$TMP/bin:$PATH"
 unset OPENCODE_PASSWORD OPENCODE_SERVER_PASSWORD
@@ -145,7 +151,7 @@ git -C "$TMP/seed" push -q "$TMP/remote.git" HEAD:main && git --git-dir="$TMP/re
   >"$TMP/client.log" 2>&1 &) >/dev/null 2>&1
 wait_for 60 session_running || fail "the test session did not start"
 
-tab=$(dev_tab "$TMP/A")
+tab=$(dev_tab "$TMP/A") || exit 1
 oc=$(pane opencode "$tab") ed=$(pane editor "$tab")
 sid=$(start_conversation "$oc" "$TMP/A")
 ! screen_has "$oc" "ADE plugin" || fail "the plugin warned about current code"
@@ -178,7 +184,7 @@ msg=$(show "$child" "$TMP/A/other.md")
 wait_for 10 screen_has "$ed" "I am A/other" || fail "Helix did not show the subagent's file"
 
 step "an agent delegates from plain English: a background tab starts on the brief"
-tab_p=$(dev_tab "$TMP/proj/main")
+tab_p=$(dev_tab "$TMP/proj/main") || exit 1
 oc_p=$(pane opencode "$tab_p")
 sid_p=$(start_conversation "$oc_p" "$TMP/proj/main")
 tabs_before=$(zj list-tabs --json | jq length)
@@ -253,6 +259,23 @@ zj go-to-tab-by-id "$back"
 [[ $(tab_name "$tab") != [$'\uf0f3\uf057\uf00c\U000f051f']* ]] \
   || fail "a tab that was active when its agent finished should show no icon, got: $(tab_name "$tab")"
 
+step "the top bar's totals count the marks in the tab names"
+expected_totals() { # what zjstatus should get for the current tab names
+  local -a names parts
+  local mark icon colour n
+  names=("${(@f)$(zj list-tabs --json | jq -r '.[].name')}")
+  for mark icon colour in waiting $'\uf0f3' '#fab387' failed $'\uf057' '#f38ba8' \
+    done $'\uf00c' '#a6e3a1' working $'\U000f051f' '#f9e2af'; do
+    n=${#${(M)names:#$icon *}}
+    (( n )) && parts+=("#[fg=$colour]$icon $n")
+  done
+  print -r -- "zjstatus::pipe::pipe_agents::${(pj:  :)parts:- }"
+}
+totals_current() { [[ -s $TMP/pipes.log && $(tail -n 1 "$TMP/pipes.log") == "$(expected_totals)" ]]; }
+wait_for 30 totals_current \
+  || fail "the last totals don't match the tab names: '$(tail -n 1 "$TMP/pipes.log" 2>/dev/null)' vs '$(expected_totals)'"
+[[ $(expected_totals) == *$'\uf00c'* ]] || fail "expected some done tabs in the totals: $(expected_totals)"
+
 step "from a tab you are not on: opens in its Helix, and you stay where you are"
 zj new-tab --name elsewhere >/dev/null
 sleep 2
@@ -262,7 +285,7 @@ wait_for 10 screen_has "$ed" "I am A/bg" || fail "Helix in the background tab di
 [[ $(active_tab) == "$here" ]] || fail "show_file switched you to another tab"
 
 step "a background tab without Helix: nothing opens, you stay, the caller is told"
-tab_c=$(dev_tab "$TMP/C" no-editor)
+tab_c=$(dev_tab "$TMP/C" no-editor) || exit 1
 oc_c=$(pane opencode "$tab_c")
 sid_c=$(start_conversation "$oc_c" "$TMP/C")
 zj go-to-tab-by-id "$here"
@@ -273,7 +296,7 @@ msg=$(show "$sid_c" "$TMP/C/none.md")
 [[ -z $(pane editor "$tab_c") ]] || fail "show_file opened Helix in a background tab"
 
 step "two panes showing one conversation: exactly one opens the file"
-tab_2=$(dev_tab "$TMP/A")
+tab_2=$(dev_tab "$TMP/A") || exit 1
 ed_2=$(pane editor "$tab_2") oc_2=$(pane opencode "$tab_2")
 zj new-pane --in-place --pane-id "terminal_$oc_2" --close-replaced-pane --name opencode --cwd "$TMP/A" \
   -- opencode --session "$sid" >/dev/null

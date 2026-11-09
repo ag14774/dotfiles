@@ -54,6 +54,8 @@ export const Ade = {
       }),
       output: object({ states: { type: "object", additionalProperties: text } }),
     },
+    // Recount the agent marks in this Zellij session's tab names for the top bar.
+    totals: { input: object({ zellij: text }), output: empty },
     // An OpenCode pane in Zellij shows this conversation: attach the
     // environment instructions to it.
     attach: { input: object({ sessionID: text }), output: empty },
