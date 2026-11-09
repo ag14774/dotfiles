@@ -19,7 +19,7 @@ export const Ade = {
   methods: {
     // The fingerprint of the server code that is running (see digest.ts).
     info: { input: empty, output: object({ digest: text }) },
-    // What the show_file and delegate tools do, for scripts and tests.
+    // What the show_file, delegate and status tools do, for scripts and tests.
     show_file: {
       input: object({ sessionID: text, paths: { type: "array", items: text, minItems: 1 } }),
       output: result,
@@ -37,6 +37,13 @@ export const Ade = {
       ),
       output: result,
     },
+    status: {
+      input: object({ sessionID: text }),
+      output: object(
+        { ok: { type: "boolean" }, message: text, worktrees: { type: "array", items: { type: "object" } } },
+        ["ok", "message", "worktrees"],
+      ),
+    },
     // An OpenCode pane in Zellij shows this conversation: attach the
     // environment instructions to it.
     attach: { input: object({ sessionID: text }), output: empty },
@@ -52,7 +59,7 @@ export const Ade = {
         {
           id: text,
           sessionID: text,
-          action: { type: "string", enum: ["show_file", "delegate"] },
+          action: { type: "string", enum: ["show_file", "delegate", "status"] },
           args: { type: "array", items: text },
           cwd: text,
           timeout: { type: "number" },

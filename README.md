@@ -216,8 +216,14 @@ including "no OpenCode pane in Zellij is showing this conversation".
     The original conversation stays in its tab, unchanged.
   - OpenCode's own `worktree_create`/`worktree_list` tools are hidden from
     agents: they make detached worktrees elsewhere, without a tab.
+- `status` answers "how are the other worktrees doing?" from any tab: for each
+  of the project's worktrees, its branch, uncommitted changes, commits ahead of
+  `origin/HEAD`, whether it has a tab (`wt-core ls --json`, run from the pane),
+  and its latest conversation: working, waiting for you (a permission request
+  or question), idle, failed or interrupted, with the start of its last answer.
+  Read-only; a tab you only use to delegate and ask this acts as a coordinator.
 - Each conversation a pane in Zellij shows gets short instructions about this
-  setup (tabs, `show_file`, delegating only when asked), as a per-conversation
+  setup (tabs, `show_file`, `status`, delegating only when asked), as a per-conversation
   instruction entry rather than a global `AGENTS.md`, so OpenCode elsewhere
   never sees them.
 - The server part (`plugins/ade.ts`, loaded automatically) also removes the
@@ -225,8 +231,8 @@ including "no OpenCode pane in Zellij is showing this conversation".
   never had a pane (a subagent, a fork not yet opened) would otherwise get the
   variables of whichever pane started the service, and act on that pane's tab.
 - The app part (`tui-plugins/ade`) is listed in `cli.json`; the installer adds
-  it. `rpc.ts` holds the calls between the two parts; its `show_file` and
-  `delegate` methods do what the tools do, for scripts, e.g. `opencode api POST
+  it. `rpc.ts` holds the calls between the two parts; its `show_file`,
+  `delegate` and `status` methods do what the tools do, for scripts, e.g. `opencode api POST
   "/api/rpc/ade/show_file?location%5Bdirectory%5D=DIR" -d
   '{"input":{"sessionID":"ses_…","paths":["/abs/file"]}}'` (RPC calls take
   their folder from `location[directory]`, not `directory`).
@@ -242,7 +248,7 @@ service runs, OpenCode panes say so in a warning; run `opencode service
 restart` (this interrupts running conversations). `tests/ade_plugin_smoke.zsh`
 tests this checkout's plugin with a private OpenCode service and a throwaway
 Zellij session, so it needs no restart and never touches your session or
-service. It makes three model calls.
+service. It makes six short model calls.
 
 ### OpenCode BTW
 

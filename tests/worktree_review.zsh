@@ -399,6 +399,15 @@ for caller in 999 agent; do
   zellij action close-tab-by-id "$tab"
 done
 
+# ls --json reports each worktree's branch, changes and tab, for the plugin.
+wt -b listed >/dev/null 2>&1
+print change > "$project/listed/notes.md"
+json=$("$ROOT/config/.local/bin/wt-core" ls --json)
+entry() { jq -c --arg p "$project/$1" '.[] | select(.path == $p) | {branch, changed, ahead, behind, tab}' <<< "$json"; }
+assert_eq "$(entry listed)" '{"branch":"listed","changed":1,"ahead":0,"behind":0,"tab":"sure"}'
+assert_eq "$(entry main)" '{"branch":"main","changed":0,"ahead":0,"behind":0,"tab":null}'
+wtrm -f listed >/dev/null 2>&1
+
 # Outside Zellij, -p fails before creating anything and -t changes directory.
 unset ZELLIJ ZELLIJ_SESSION_NAME ZELLIJ_PANE_ID
 if wt -p 'x' outside >/dev/null 2>&1; then fail "wt -p outside Zellij should fail"; fi

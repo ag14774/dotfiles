@@ -54,6 +54,9 @@ rpc() { # $1 = method, $2 = directory, $3 = input (JSON): the answer's message
   oc_cli api POST "/api/rpc/ade/$1?location%5Bdirectory%5D=$(uri "$2")" -d "{\"input\":$3}" 2>&1 \
     | jq -r '.output.message // .message // .'
 }
+rpc_raw() { # $1 = method, $2 = directory, $3 = input (JSON): the whole answer
+  oc_cli api POST "/api/rpc/ade/$1?location%5Bdirectory%5D=$(uri "$2")" -d "{\"input\":$3}" 2>/dev/null
+}
 show() { # $1 = session, then absolute paths
   local sid=$1
   shift
@@ -221,6 +224,22 @@ compacted=$(newest "$TMP/proj/feat-compact")
 history "$compacted" | jq -e '[.data // . | .[] | select(.type == "compaction")] | length > 0' >/dev/null \
   || fail "the copy was not compacted"
 wait_for 60 history_has "$compacted" "word compacted" || fail "the compacted copy did not get the brief"
+
+step "status shows the project's worktrees, their tabs and conversations"
+(cd "$TMP/proj/main" && wt-core open --stay quiet >/dev/null 2>&1) || fail "could not add a worktree without a tab"
+status_of() { rpc_raw status "$TMP/proj/main" "{\"sessionID\":\"$sid_p\"}"; }
+worktree() { jq -c --arg p "$TMP/proj/$1" '.output.worktrees[] | select(.path == $p)' <<< "$2"; }
+settled() { worktree feat-full "$(status_of)" | jq -e '.conversation.state == "idle" and (.conversation.last // "" | test("copied"; "i"))' >/dev/null; }
+wait_for 90 settled || fail "status should show the copy idle with its answer: $(worktree feat-full "$(status_of)")"
+report=$(status_of)
+[[ $(jq -r '.output.ok' <<< "$report") == true ]] || fail "status failed: $report"
+[[ $(worktree main "$report" | jq -r '[.tab, .conversation.id] | join(" ")') == "sure $sid_p" ]] \
+  || fail "unexpected main worktree: $(worktree main "$report")"
+[[ $(worktree feat-x "$report" | jq -r '.tab') == sure ]] || fail "unexpected feat-x worktree: $(worktree feat-x "$report")"
+[[ $(worktree quiet "$report" | jq -c '[.tab, .conversation]') == '[null,null]' ]] \
+  || fail "unexpected quiet worktree: $(worktree quiet "$report")"
+jq -r '.output.message' <<< "$report" | grep -q "proj/main (this conversation): branch main" \
+  || fail "unexpected status text: $(jq -r '.output.message' <<< "$report")"
 
 step "from a tab you are not on: opens in its Helix, and you stay where you are"
 zj new-tab --name elsewhere >/dev/null

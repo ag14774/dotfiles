@@ -20,7 +20,7 @@ type Request = {
 }
 
 // The only commands a request may run, by action.
-const COMMANDS: Record<string, string> = { show_file: "hx-open", delegate: "wt-core" }
+const COMMANDS: Record<string, string> = { show_file: "hx-open", delegate: "wt-core", status: "wt-core" }
 
 export default Plugin.define({
   id: "local.ade",

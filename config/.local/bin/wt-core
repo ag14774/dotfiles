@@ -788,7 +788,39 @@ wtrm() {
 }
 
 # list worktrees
-wtls() { git worktree list; }
+# list worktrees; --json: one object per worktree (for the OpenCode plugin):
+# path, branch (null when detached), changed (files with uncommitted changes),
+# ahead/behind (commits relative to origin/HEAD, null without it) and tab
+# ("sure", "unsure" or null: see _wt_tabs_in; null outside Zellij).
+wtls() {
+  [[ ${1-} == --json ]] || { git worktree list; return; }
+  emulate -L zsh
+  local line wtpath= branch= base
+  local -a items
+  git rev-parse --git-dir >/dev/null 2>&1 || { print -u2 "wtls: not inside a git repo"; return 1; }
+  base=$(git rev-parse --verify --quiet origin/HEAD 2>/dev/null)
+  _wt_ls_item() { # the worktree read so far, if any
+    local counts= tab=
+    [[ -n $wtpath && -d $wtpath ]] || return 0
+    [[ -n $base ]] && counts=$(git -C "$wtpath" rev-list --left-right --count "$base...HEAD" 2>/dev/null)
+    _wt_in_zellij && _wt_tabs_in "$wtpath" && tab=${reply[1]#*:}
+    items+=("$(jq -cn --arg path "$wtpath" --arg branch "$branch" --arg counts "$counts" --arg tab "$tab" \
+      --argjson changed "$(git -C "$wtpath" status --porcelain 2>/dev/null | wc -l)" \
+      'def opt: if . == "" then null else . end;
+       ($counts | opt | if . then split("\t") | map(tonumber) else [null, null] end) as [$behind, $ahead]
+       | {path: $path, branch: ($branch | opt), changed: $changed, ahead: $ahead, behind: $behind,
+          tab: ($tab | opt)}')")
+  }
+  for line in ${(f)"$(git worktree list --porcelain 2>/dev/null)"}; do
+    case $line in
+      ("worktree "*) _wt_ls_item; wtpath=${line#worktree } branch= ;;
+      ("branch refs/heads/"*) branch=${line#branch refs/heads/} ;;
+      ("bare") wtpath= ;;
+    esac
+  done
+  _wt_ls_item
+  print -r -- "[${(j:,:)items}]"
+}
 
 # Is <branch> merged? Used by `wtprune --merged`. Sets $REPLY to a short reason.
 # GITHUB ONLY: asks gh for a MERGED PR whose merged commit (headRefOid) EQUALS the
@@ -1063,7 +1095,7 @@ commands (interactive shell equivalent in parentheses):
   change                    turn the current review into the PR branch (wtchange)
   rm [-f] <name>            remove a worktree by branch or directory, closing
                             its tabs, except the tab of the caller (wtrm)
-  ls                        list worktrees (wtls)
+  ls [--json]               list worktrees (wtls); --json for programs
   prune [-y] [-n] [-m]      remove deleted-remote/merged worktrees (wtprune)
   convert [-y]              convert the normal clone in CWD (wtconvert)
   help                      show this help
@@ -1103,7 +1135,7 @@ fi
 cmd=${1:-help}
 (( $# )) && shift
 case $cmd in
-  ls) wtls; exit ;;
+  ls) wtls "$@"; exit ;;
   help | -h | --help) _wt_core_usage; exit ;;
   clone) fn=wtclone ;;
   open) fn=wt ;;

@@ -51,7 +51,7 @@ wt() { _wt_core open "$@"; }
 wtreview() { _wt_core review "$@"; }
 wtchange() { _wt_core change "$@"; }
 wtrm() { _wt_core rm "$@"; }
-wtls() { _wt_core ls; }
+wtls() { _wt_core ls "$@"; }
 wtprune() { _wt_core prune "$@"; }
 wtconvert() { _wt_core convert "$@"; }
 
