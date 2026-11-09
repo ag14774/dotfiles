@@ -8,9 +8,9 @@
 # (your auth, model preferences and ~/.config/zsh/secrets.zsh are reused), in a
 # throwaway Zellij session, so it never touches `main` or your OpenCode service.
 # Most steps call the plugin's RPC methods directly; two have an agent use the
-# tools (show_file after /cd, delegate from plain English), and the delegated
-# tab answers its brief: three model calls with your most recent model (or
-# ADE_TEST_MODEL).
+# tools (show_file after /cd, delegate from plain English). Delegated tabs
+# answer their briefs, and one copy is compacted: six short model calls with
+# your most recent model (or ADE_TEST_MODEL).
 
 set -u
 
@@ -194,6 +194,33 @@ oc_cli api GET "/api/command?location%5Bdirectory%5D=$(uri "$TMP/proj/main")" 2>
 step "delegate refuses a worktree that already has a tab"
 msg=$(rpc delegate "$TMP/proj/main" "$(jq -cn --arg s "$sid_p" '{sessionID: $s, branch: "feat-x", brief: "again"}')")
 [[ $msg == "Nothing was delegated:"*"already has a tab"* ]] || fail "unexpected answer: $msg"
+
+step "delegate with full context: a copy of the conversation continues in the new tab"
+oc_cli api POST "/api/session/$sid_p/shell" -d '{"command":"echo copy-marker"}' >/dev/null 2>&1
+sleep 3
+msg=$(rpc delegate "$TMP/proj/main" "$(jq -cn --arg s "$sid_p" \
+  '{sessionID: $s, branch: "feat-full", brief: "Reply with exactly the word copied.", context: "full"}')")
+[[ $msg == "Opened a background tab for feat-full"*"copy of this conversation"* ]] || fail "unexpected answer: $msg"
+wait_for 60 gives tab_in "$TMP/proj/feat-full" || fail "no tab for the copy"
+copy=$(newest "$TMP/proj/feat-full")
+[[ -n $copy && $copy != "$sid_p" ]] || fail "no copied conversation in the new worktree"
+history() { oc_cli api GET "/api/session/$1/context" 2>/dev/null; }
+history "$copy" | grep -q copy-marker || fail "the copy lacks the conversation's history"
+history_has() { history "$1" | grep -q -- "$2"; }
+wait_for 60 history_has "$copy" "word copied" || fail "the copy did not get the brief"
+[[ $(oc_cli api GET "/api/session/$sid_p" 2>/dev/null | jq -r '.data.location.directory') == "$TMP/proj/main" ]] \
+  || fail "the original conversation should stay where it was"
+
+step "delegate with compact context: the copy is compacted before the brief"
+msg=$(rpc delegate "$TMP/proj/main" "$(jq -cn --arg s "$sid_p" \
+  '{sessionID: $s, branch: "feat-compact", brief: "Reply with exactly the word compacted.", context: "compact"}')")
+[[ $msg == "Opened a background tab for feat-compact"*"compacted copy"* ]] || fail "unexpected answer: $msg"
+wait_for 60 gives tab_in "$TMP/proj/feat-compact" || fail "no tab for the compacted copy"
+compacted=$(newest "$TMP/proj/feat-compact")
+[[ -n $compacted ]] || fail "no compacted conversation in the new worktree"
+history "$compacted" | jq -e '[.data // . | .[] | select(.type == "compaction")] | length > 0' >/dev/null \
+  || fail "the copy was not compacted"
+wait_for 60 history_has "$compacted" "word compacted" || fail "the compacted copy did not get the brief"
 
 step "from a tab you are not on: opens in its Helix, and you stay where you are"
 zj new-tab --name elsewhere >/dev/null

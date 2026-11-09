@@ -8,7 +8,16 @@ import { createEffect, createMemo, createRoot } from "solid-js"
 import { serverDigest } from "./digest"
 import { Ade } from "./rpc"
 
-type Request = { id: string; sessionID: string; action: string; args: string[]; cwd: string; timeout: number }
+type Copy = { sessionID: string; before?: string; compact: boolean; prepare: string[] }
+type Request = {
+  id: string
+  sessionID: string
+  action: string
+  args: string[]
+  cwd: string
+  timeout: number
+  copy?: Copy
+}
 
 // The only commands a request may run, by action.
 const COMMANDS: Record<string, string> = { show_file: "hx-open", delegate: "wt-core" }
@@ -79,6 +88,27 @@ export default Plugin.define({
         })
       })
 
+    // Copy the conversation into the worktree `prepare` creates (compacting the
+    // copy if asked), then run the request's command on the copy.
+    const runOnCopy = async (command: string, request: Request, copy: Copy) => {
+      const prepared = await run(command, { ...request, args: copy.prepare })
+      if (!prepared.ok) return prepared
+      const client = context.client
+      const fork = await client.session.fork({ sessionID: copy.sessionID, before: copy.before })
+      try {
+        await client.session.move({ sessionID: fork.id, directory: prepared.stdout.trim() })
+        if (copy.compact) await client.session.compact({ sessionID: fork.id })
+        await client.experimental.session.wait({ sessionID: fork.id })
+        const [verb, ...rest] = request.args
+        const result = await run(command, { ...request, args: [verb, "--session", fork.id, ...rest] })
+        if (!result.ok) await client.session.remove({ sessionID: fork.id }).catch(() => {})
+        return result
+      } catch (error) {
+        await client.session.remove({ sessionID: fork.id }).catch(() => {})
+        throw error
+      }
+    }
+
     const handle = async (request: Request) => {
       const command = COMMANDS[request.action]
       if (!command || !(await shows(request.sessionID))) return
@@ -86,9 +116,9 @@ export default Plugin.define({
       if (!granted) return
       let result = { ok: false, stdout: "", stderr: "" }
       try {
-        result = await run(command, request)
+        result = request.copy ? await runOnCopy(command, request, request.copy) : await run(command, request)
       } catch (error) {
-        result.stderr = String(error)
+        result.stderr = (error as { message?: string })?.message ?? JSON.stringify(error)
       }
       await ade.finish({ id: request.id, ...result })
     }

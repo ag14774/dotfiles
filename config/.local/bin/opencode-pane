@@ -1,14 +1,17 @@
 #!/usr/bin/env bash
 # opencode-pane -- run the OpenCode TUI in a Zellij pane.
 #
-#   opencode-pane [--prompt PROMPT]   start OpenCode, optionally on PROMPT
+#   opencode-pane [--session ID] [--prompt PROMPT]
+#                                     start OpenCode, optionally on conversation
+#                                     ID and/or sending PROMPT
 #   opencode-pane --resume            continue this directory's most recent
 #                                     conversation, if it has one
 #
 # Zellij saves each pane's own command line to restore it after a restart. A
 # fresh start therefore re-runs this script as `opencode-pane --resume` and
-# passes "fresh" (and any prompt) in the environment for this run only: a
-# restored pane resumes its conversation and a prompt is never sent twice.
+# passes "fresh" (and any conversation and prompt) in the environment for this
+# run only: a restored pane resumes its directory's conversation, and a prompt
+# is never sent twice.
 #
 # OpenCode runs in an interactive zsh for ~/.zshrc's PATH and secrets, with job
 # control off (+m) so it stays in this pane's process group: Zellij then records
@@ -17,34 +20,47 @@
 set -u
 
 usage() {
-  printf 'usage: opencode-pane [--prompt PROMPT | --resume]\n' >&2
+  printf 'usage: opencode-pane [--session ID] [--prompt PROMPT] | --resume\n' >&2
   exit 2
 }
-case "${1:-}" in
-  "") OPENCODE_PANE_FRESH=1 exec "$0" --resume ;;
-  --prompt)
-    [ "$#" -eq 2 ] || usage
-    OPENCODE_PANE_FRESH=1 OPENCODE_PANE_PROMPT=$2 exec "$0" --resume
-    ;;
-  --resume) [ "$#" -eq 1 ] || usage ;;
-  *) usage ;;
-esac
+if [ "${1:-}" = --resume ]; then
+  [ "$#" -eq 1 ] || usage
+else
+  session="" prompt=""
+  [ "${1-x}" != "" ] || shift # an empty first argument means none, as before
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --session)
+        [ "$#" -ge 2 ] && [ -n "$2" ] || usage
+        session=$2
+        ;;
+      --prompt)
+        [ "$#" -ge 2 ] || usage
+        prompt=$2
+        ;;
+      *) usage ;;
+    esac
+    shift 2
+  done
+  OPENCODE_PANE_FRESH=1 OPENCODE_PANE_SESSION=$session OPENCODE_PANE_PROMPT=$prompt exec "$0" --resume
+fi
 
 fresh=${OPENCODE_PANE_FRESH:-}
+session=${OPENCODE_PANE_SESSION:-}
 prompt=${OPENCODE_PANE_PROMPT:-}
-unset OPENCODE_PANE_FRESH OPENCODE_PANE_PROMPT
+unset OPENCODE_PANE_FRESH OPENCODE_PANE_SESSION OPENCODE_PANE_PROMPT
 
 # shellcheck disable=SC2016 # expanded by zsh, not here
 code='
-fresh=$1 prompt=$2
+fresh=$1 session=$2 prompt=$3
 args=()
-if [[ -n $prompt ]]; then
-  args=(--prompt "$prompt")
-elif [[ -z $fresh ]]; then
+[[ -n $session ]] && args+=(--session "$session")
+[[ -n $prompt ]] && args+=(--prompt "$prompt")
+if [[ -z $fresh ]]; then
   dir=$(jq -rn --arg d "$PWD" "\$d | @uri")
   opencode api get "/api/session?limit=1&order=desc&parentID=null&directory=$dir" 2>/dev/null \
     | jq -e ".data | length > 0" >/dev/null 2>&1 && args=(--continue)
 fi
 opencode "${args[@]}"'
-zsh -i +m -c "$code" opencode-pane "$fresh" "$prompt"
+zsh -i +m -c "$code" opencode-pane "$fresh" "$session" "$prompt"
 exit $?

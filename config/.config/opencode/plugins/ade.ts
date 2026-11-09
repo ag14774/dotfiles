@@ -13,6 +13,10 @@ import { serverDigest } from "../tui-plugins/ade/digest"
 import { Ade } from "../tui-plugins/ade/rpc"
 
 type Action = "show_file" | "delegate"
+// Copy conversation sessionID (up to message `before`) into the worktree that
+// `prepare` creates, and run the request's command on the copy (delegate).
+type Copy = { sessionID: string; before?: string; compact: boolean; prepare: string[] }
+type Task = { branch: string; brief: string; base?: string; context?: "none" | "full" | "compact" }
 // ran: the pane ran the command (otherwise `message` says why not).
 type Result = { ok: boolean; ran: boolean; stdout: string; message: string }
 type Pending = { claimed: boolean; finish: (result: Result) => void }
@@ -28,6 +32,7 @@ const RUNNING = serverDigest(new URL("../", import.meta.url)) ?? "unknown"
 
 const CLAIM_TIMEOUT_MS = 5_000
 const TIMEOUT_MS: Record<Action, number> = { show_file: 15_000, delegate: 120_000 }
+const COMPACT_TIMEOUT_MS = 300_000
 
 // Attached to each conversation an OpenCode pane in Zellij shows (see attach).
 const ENVIRONMENT_KEY = "ade.environment"
@@ -77,7 +82,7 @@ export default Plugin.define({
 
     // Ask the pane showing the conversation to run `action` with `args` in `cwd`,
     // and wait for its answer.
-    const ask = (sessionID: string, action: Action, args: string[], signal: AbortSignal) =>
+    const ask = (sessionID: string, action: Action, args: string[], signal: AbortSignal, copy?: Copy) =>
       new Promise<Result>((resolveResult) => {
         const id = randomUUID()
         const request: Pending = { claimed: false, finish: () => {} }
@@ -96,12 +101,13 @@ export default Plugin.define({
         const claimTimer = setTimeout(() => {
           if (!request.claimed) refuse("No OpenCode pane in Zellij is showing this conversation, so nothing was done.")
         }, CLAIM_TIMEOUT_MS)
+        const timeout = TIMEOUT_MS[action] + (copy?.compact ? COMPACT_TIMEOUT_MS : 0)
         const resultTimer = setTimeout(
           () => refuse("The OpenCode pane did not report back in time."),
-          TIMEOUT_MS[action] + CLAIM_TIMEOUT_MS,
+          timeout + CLAIM_TIMEOUT_MS,
         )
         signal.addEventListener("abort", cancel)
-        const data = { id, sessionID, action, args, cwd: ctx.location.directory, timeout: TIMEOUT_MS[action] }
+        const data = { id, sessionID, action, args, cwd: ctx.location.directory, timeout, ...(copy ? { copy } : {}) }
         void Promise.resolve(rpc.events.emit("request", data)).catch((error) =>
           refuse(`Could not reach the OpenCode panes: ${error}`),
         )
@@ -115,25 +121,45 @@ export default Plugin.define({
       return { ok: false, message: result.message || "The editor could not open the files." }
     }
 
-    type Task = { branch: string; brief: string; base?: string }
-    const delegate = async (sessionID: string, task: Task, signal: AbortSignal) => {
+    // `before`: copy the conversation up to this message (the request to delegate).
+    const delegate = async (sessionID: string, task: Task, signal: AbortSignal, before?: string) => {
       const names = [task.branch, task.base ?? ""]
       if (!task.branch.trim() || names.some((name) => name.startsWith("-") || /\s/.test(name)))
         return { ok: false, message: "Nothing was delegated: branch and base must be names without spaces." }
-      const args = ["open", "--prompt", task.brief, task.branch, ...(task.base ? [task.base] : [])]
-      const result = await ask(sessionID, "delegate", args, signal)
+      const base = task.base ? [task.base] : []
+      const mode = task.context ?? "none"
+      const copy =
+        mode === "none"
+          ? undefined
+          : {
+              sessionID,
+              ...(before ? { before } : {}),
+              compact: mode === "compact",
+              prepare: ["open", "--stay", task.branch, ...base],
+            }
+      const brief = copy
+        ? `This conversation was copied into the worktree for branch ${task.branch}, which is now its ` +
+          "folder, to work on the task below. The original conversation goes on in its own tab; work only " +
+          `here, and don't delegate this again.\n\n${task.brief}`
+        : task.brief
+      const result = await ask(sessionID, "delegate", ["open", "--prompt", brief, task.branch, ...base], signal, copy)
       if (result.ok)
         return {
           ok: true,
           message:
             `Opened a background tab for ${task.branch} (worktree ${result.stdout.trim()}); its OpenCode is ` +
-            "working on the brief. You are not told when it finishes; the user follows it in that tab.",
+            (copy ? `working on the brief in a ${copy.compact ? "compacted " : ""}copy of this conversation. ` : "working on the brief. ") +
+            "You are not told when it finishes; the user follows it in that tab.",
         }
       if (!result.ran) return { ok: false, message: result.message }
       return { ok: false, message: `Nothing was delegated: ${result.message || "wt-core failed."}` }
     }
 
     await ctx.tool.transform((editor) => {
+      // Worktrees come from wt, through delegate (OpenCode's make detached,
+      // tab-less worktrees elsewhere).
+      editor.remove("opencode_worktree_create")
+      editor.remove("opencode_worktree_list")
       editor.add({
         name: "show_file",
         description:
@@ -167,7 +193,9 @@ export default Plugin.define({
           "it when the user asks to delegate something, to work on it in parallel, or to do it in a new worktree " +
           "or tab; never on your own initiative. The new conversation sees nothing of this one, so write a " +
           "complete brief: the goal, what you already know (files, findings, decisions), constraints, and how " +
-          "to check the result. It returns once the tab is open and does not wait for the work.",
+          "to check the result. Set `context` when the user wants the new conversation to keep this one's " +
+          "history (\"with the context\": full; \"with a summary\": compact). It returns once the tab is open " +
+          "and does not wait for the work.",
         input: {
           type: "object",
           properties: {
@@ -180,13 +208,26 @@ export default Plugin.define({
               type: "string",
               description: "Where a new branch starts (a branch or commit). Default: the remote's default branch.",
             },
+            context: {
+              type: "string",
+              enum: ["none", "full", "compact"],
+              description:
+                "none (default): a new conversation starts on the brief. full: a copy of this conversation " +
+                "continues there. compact: like full, but the copy is compacted (summarized) first.",
+            },
           },
           required: ["branch", "brief"],
           additionalProperties: false,
         },
         options: { codemode: false },
         execute: async (input, context) => {
-          const result = await delegate(context.sessionID, input as Task, context.signal)
+          const task = input as Task
+          let before: string | undefined
+          if (task.context && task.context !== "none") {
+            const messages = await ctx.session.context({ sessionID: context.sessionID })
+            before = messages.filter((message) => message.type === "user").at(-1)?.id
+          }
+          const result = await delegate(context.sessionID, task, context.signal, before)
           return { content: result.message }
         },
       })

@@ -25,7 +25,16 @@ export const Ade = {
       output: result,
     },
     delegate: {
-      input: object({ sessionID: text, branch: text, brief: text, base: text }, ["sessionID", "branch", "brief"]),
+      input: object(
+        {
+          sessionID: text,
+          branch: text,
+          brief: text,
+          base: text,
+          context: { type: "string", enum: ["none", "full", "compact"] },
+        },
+        ["sessionID", "branch", "brief"],
+      ),
       output: result,
     },
     // An OpenCode pane in Zellij shows this conversation: attach the
@@ -39,14 +48,23 @@ export const Ade = {
   },
   events: {
     request: {
-      schema: object({
-        id: text,
-        sessionID: text,
-        action: { type: "string", enum: ["show_file", "delegate"] },
-        args: { type: "array", items: text },
-        cwd: text,
-        timeout: { type: "number" },
-      }),
+      schema: object(
+        {
+          id: text,
+          sessionID: text,
+          action: { type: "string", enum: ["show_file", "delegate"] },
+          args: { type: "array", items: text },
+          cwd: text,
+          timeout: { type: "number" },
+          // delegate with context: first copy this conversation into the
+          // worktree `prepare` creates; the command then runs on the copy.
+          copy: object(
+            { sessionID: text, before: text, compact: { type: "boolean" }, prepare: { type: "array", items: text } },
+            ["sessionID", "compact", "prepare"],
+          ),
+        },
+        ["id", "sessionID", "action", "args", "cwd", "timeout"],
+      ),
     },
   },
 } as const

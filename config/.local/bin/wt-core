@@ -16,7 +16,7 @@
 # Output: progress, prompts and errors go to stderr. stdout carries only the
 # result (a worktree path, or `ls`/`help` output), so callers can capture it.
 
-typeset -g _WT_CWD_FILE= _WT_RESULT= _WT_MODE=cd _WT_PROMPT=
+typeset -g _WT_CWD_FILE= _WT_RESULT= _WT_MODE=cd _WT_PROMPT= _WT_SESSION=
 typeset -g _WT_OPENCODE_PANE=${0:A:h}/opencode-pane
 
 _wt_in_zellij() { [[ -n ${ZELLIJ:-} && -n ${ZELLIJ_SESSION_NAME:-} ]]; }
@@ -38,13 +38,14 @@ _wt_chdir() {
 }
 
 # Parse the landing options shared by open/review. Sets _WT_MODE (cd, stay,
-# tab, background) and _WT_PROMPT; leaves the remaining arguments in $reply.
+# tab, background), _WT_PROMPT and _WT_SESSION; leaves the remaining arguments
+# in $reply.
 _wt_parse_landing() { # $1=command name for messages, then its arguments
   emulate -L zsh
   local name=$1 mode
   local -a modes
   shift
-  _WT_PROMPT=
+  _WT_PROMPT= _WT_SESSION=
   while (( $# )); do
     case $1 in
       -s | --stay) modes+=(stay) ;;
@@ -56,6 +57,11 @@ _wt_parse_landing() { # $1=command name for messages, then its arguments
         shift
         ;;
       --prompt=*) _WT_PROMPT=${1#--prompt=} ;;
+      --session)
+        [[ -n ${2-} ]] || { print -u2 "$name: $1 needs a conversation ID"; return 1; }
+        _WT_SESSION=$2
+        shift
+        ;;
       --) shift; break ;;
       -*) print -u2 "$name: unknown option '$1'"; return 1 ;;
       *) break ;;
@@ -65,9 +71,9 @@ _wt_parse_landing() { # $1=command name for messages, then its arguments
   modes=(${(u)modes})
   (( $#modes <= 1 )) || { print -u2 "$name: choose one of -s, -t or -b"; return 1; }
   mode=${modes[1]-}
-  if [[ -n $_WT_PROMPT ]]; then
-    [[ $mode == stay ]] && { print -u2 "$name: -p needs a tab; it cannot be combined with -s"; return 1; }
-    _wt_in_zellij || { print -u2 "$name: -p starts OpenCode in a Zellij tab; not inside Zellij"; return 1; }
+  if [[ -n $_WT_PROMPT$_WT_SESSION ]]; then
+    [[ $mode == stay ]] && { print -u2 "$name: -p/--session need a tab; they cannot be combined with -s"; return 1; }
+    _wt_in_zellij || { print -u2 "$name: -p/--session start OpenCode in a Zellij tab; not inside Zellij"; return 1; }
     [[ -n $mode ]] || mode=background
   fi
   _WT_MODE=${mode:-cd}
@@ -119,15 +125,18 @@ _wt_tabs_in() { # $1=worktree
 
 # Focus or open the tab for worktree $1: the dev layout, like Alt-t, in the
 # worktree. Naming the layout matters in a resurrected session, whose saved
-# new-tab template starts commands suspended. With a prompt, the new tab's
-# OpenCode starts on it.
+# new-tab template starts commands suspended. With a prompt and/or a
+# conversation (_WT_SESSION), the new tab's OpenCode starts on them.
 _wt_tab_open() { # $1=worktree $2=command name $3=focus(1|0) $4=prompt
   emulate -L zsh
   local wt=${1:A} name=$2 focus=$3 prompt=$4 tab=${1:t} id pane i
+  local -a start=()
+  [[ -n $_WT_SESSION ]] && start+=(--session "$_WT_SESSION")
+  [[ -n $prompt ]] && start+=(--prompt "$prompt")
   # Focusing an unsure tab is harmless; opening a duplicate is not.
   if _wt_tabs_in "$wt"; then
     id=${reply[1]%%:*}
-    if [[ -n $prompt ]]; then
+    if (( $#start )); then
       print -u2 "$name: $tab already has a tab; send the prompt to its OpenCode instead"
       return 1
     fi
@@ -144,7 +153,7 @@ _wt_tab_open() { # $1=worktree $2=command name $3=focus(1|0) $4=prompt
   id=$(_wt_zellij new-tab "${opts[@]}") && [[ $id == <-> ]] \
     || { print -u2 "$name: could not open a Zellij tab for $tab"; return 1; }
   (( focus )) || print "$name: opened tab $tab in the background"
-  [[ -n $prompt ]] || return 0
+  (( $#start )) || return 0
 
   # Replace the layout's plain OpenCode pane with one started on the prompt.
   for (( i = 0; i < 40; i++ )); do
@@ -160,7 +169,7 @@ _wt_tab_open() { # $1=worktree $2=command name $3=focus(1|0) $4=prompt
   }
   _wt_zellij new-pane --in-place --pane-id "$pane" --close-replaced-pane --no-focus \
     --close-on-exit --name opencode --cwd "$wt" \
-    -- "$_WT_OPENCODE_PANE" --prompt "$prompt" >/dev/null \
+    -- "$_WT_OPENCODE_PANE" "${start[@]}" >/dev/null \
     || { print -u2 "$name: could not start OpenCode with the prompt in tab $tab"; return 1; }
   print "$name: OpenCode in tab $tab is working on the prompt"
 }
@@ -478,7 +487,7 @@ wt() {
   _wt_parse_landing wt "$@" || return 1
   set -- "${reply[@]}"
   if [[ -z ${1-} ]] || (( $# > 2 )) || [[ $1 == -* || ${2-} == -* ]]; then
-    print -u2 "usage: wt [-s|-t|-b] [-p PROMPT] <branch> [base]   (options before the branch)"
+    print -u2 "usage: wt [-s|-t|-b] [-p PROMPT] [--session ID] <branch> [base]   (options before the branch)"
     return 1
   fi
   local branch="$1" base="${2:-origin/HEAD}"
@@ -1066,6 +1075,8 @@ LAND (open/review) chooses what happens after the worktree exists:
   -b, --background          open its tab without moving focus
   -p, --prompt PROMPT       start OpenCode in a new tab with PROMPT (implies -b;
                             fails if the worktree already has a tab)
+  --session ID              like -p, on OpenCode conversation ID (with or
+                            without a prompt)
   The tab of a worktree is any tab whose panes are all inside the worktree.
   Outside Zellij, -t and -b fall back to changing directory and staying; -p fails.
 

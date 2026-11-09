@@ -68,6 +68,7 @@ wthelp() {
      -t                 focus its Zellij tab, opening one (with OpenCode) if needed
      -b                 open its tab in the background; your focus stays here
      -p PROMPT          start OpenCode in a new background tab with PROMPT
+     --session ID       like -p, on OpenCode conversation ID (with or without -p)
                         (outside Zellij: -t changes directory, -b stays, -p fails)
   wtreview <pr>         create/reuse review-pr-<number> for a GitHub PR;
                         highlights PR changes and seeds local files (needs gh);

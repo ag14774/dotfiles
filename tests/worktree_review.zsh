@@ -331,6 +331,21 @@ if wt -p 'again' prompted >/dev/null 2>&1; then
   fail "wt -p should refuse a worktree whose tab already exists"
 fi
 
+# --session opens a background tab whose OpenCode shows that conversation, with
+# or without a prompt; like -p, it needs a tab.
+wt --session ses_1 -p 'carry on' sessioned >/dev/null 2>&1
+tab=$(tab_in "$project/sessioned")
+assert_eq "$(focused_tab)" 1
+[[ $(opencode_command "$tab") == */opencode-pane' --session ses_1 --prompt carry on' ]] \
+  || fail "OpenCode should start on the conversation and prompt, got: $(opencode_command "$tab")"
+wt --session ses_2 sessioned-quiet >/dev/null 2>&1
+[[ $(opencode_command "$(tab_in "$project/sessioned-quiet")") == */opencode-pane' --session ses_2' ]] \
+  || fail "OpenCode should start on the conversation, got: $(opencode_command "$(tab_in "$project/sessioned-quiet")")"
+if wt -s --session ses_3 sessioned-stay >/dev/null 2>&1; then fail "--session should refuse -s"; fi
+[[ ! -d $project/sessioned-stay ]] || fail "--session with -s should create nothing"
+wtrm sessioned >/dev/null 2>&1
+wtrm sessioned-quiet >/dev/null 2>&1
+
 # wtrm closes the worktree's tab.
 wtrm -f prompted >/dev/null 2>&1
 [[ -z $(tab_in "$project/prompted") ]] || fail "wtrm should close the worktree's tab"

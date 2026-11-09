@@ -128,10 +128,11 @@ this): inside a zellij session run
     plugin). The tab is the one of `$ZELLIJ_PANE_ID`; it refuses to guess when
     that pane is gone, and never switches you to another tab: in a tab you are
     not on, it only uses an existing editor, without focusing it
-  - `opencode-pane [--prompt PROMPT | --resume]` — run OpenCode in a pane with
-    your shell environment, in a way Zellij restores as `--resume`, which
-    continues the directory's latest conversation; a prompt is never resent
-    (used by the layout, `ocreload` and `wt -p`)
+  - `opencode-pane [--session ID] [--prompt PROMPT] | --resume` — run OpenCode
+    in a pane with your shell environment, optionally on a given conversation,
+    in a way Zellij restores as `--resume`, which continues the directory's
+    latest conversation; a prompt is never resent (used by the layout,
+    `ocreload`, `wt -p` and `wt --session`)
 
   The `wt*` functions, `ocreload` and the `Alt-y` picker call this checkout's
   copies directly. Rerun `install.sh` (or its stow step) to put new commands on
@@ -208,6 +209,13 @@ including "no OpenCode pane in Zellij is showing this conversation".
   OpenCode starts on a brief the agent writes. The calling conversation stays
   where it is and isn't told when the new one finishes. (In a plain clone, as
   with `wt`, the worktree goes inside the repository folder.)
+  - Say "with the context" (or "with a summary") to carry this conversation
+    over: the pane first creates the worktree (`wt-core open --stay`), copies
+    the conversation up to your request into it (compacting the copy for a
+    summary), and the same `wt-core open --prompt` runs with `--session COPY`.
+    The original conversation stays in its tab, unchanged.
+  - OpenCode's own `worktree_create`/`worktree_list` tools are hidden from
+    agents: they make detached worktrees elsewhere, without a tab.
 - Each conversation a pane in Zellij shows gets short instructions about this
   setup (tabs, `show_file`, delegating only when asked), as a per-conversation
   instruction entry rather than a global `AGENTS.md`, so OpenCode elsewhere
@@ -276,8 +284,10 @@ The same renderer powers `cheat --pretty`.
 a different landing with `-s` (stay here and print the path), `-t` (focus the
 worktree's Zellij tab, opening one with OpenCode if needed), or `-b` (open that
 tab in the background). `wt -p "fix the flaky test" <branch>` opens a background
-tab whose OpenCode immediately starts on the prompt. `wtreview` accepts the same
-options. Outside Zellij, `-t` changes directory, `-b` stays, and `-p` fails.
+tab whose OpenCode immediately starts on the prompt; `--session ID` (with or
+without `-p`) opens it on an existing OpenCode conversation. `wtreview` accepts
+the same options. Outside Zellij, `-t` changes directory, `-b` stays, and `-p`
+fails.
 
 A worktree's tab is any tab whose panes are all inside the worktree's
 directory; names and tab IDs play no part, so renaming a tab or restoring the
