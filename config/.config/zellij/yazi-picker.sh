@@ -62,12 +62,7 @@ if [ -s "$cwdf" ]; then
   [ -d "$d" ] && start="$d"
 fi
 
-# Force Yazi's Chafa (Unicode-block) preview instead of zellij's Sixel, which is
-# buggy and smears/tears on scroll (e.g. PDFs). Posing as kitty makes Yazi try
-# the kitty graphics protocol, which zellij doesn't support, so it falls back to
-# Chafa -- plain text cells that render + clear correctly. Yazi runs chafa with
-# `-f symbols`, so this TERM doesn't make chafa emit real kitty graphics.
-TERM=xterm-kitty yazi ${start:+"$start"} --chooser-file="$chooser" --cwd-file="$cwdf"
+yazi ${start:+"$start"} --chooser-file="$chooser" --cwd-file="$cwdf"
 log "chooser: [$(cat "$chooser" 2>/dev/null)]"
 [ -s "$chooser" ] || {
   log "no selection -> exit"
