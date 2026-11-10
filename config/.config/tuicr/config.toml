@@ -1,0 +1,5 @@
+# tuicr: code review in the terminal. Alt-v in Zellij runs it on the tab's
+# worktree (see ~/.config/zellij/review.sh). Options: tuicr's docs/CONFIG.md.
+theme = "catppuccin-mocha"
+# The package manager updates it; this also skips a network call at startup.
+no_update_check = true

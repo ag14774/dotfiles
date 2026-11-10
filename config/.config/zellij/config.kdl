@@ -190,6 +190,20 @@ keybinds clear-defaults=true {
                 height "86%"
             }
         }
+        // Review this tab's worktree in tuicr: everything since it left the
+        // remote's default branch, committed or not. `y` sends your comments to
+        // this tab's OpenCode; `e` opens a file in the editor pane.
+        bind "Alt v" {
+            Run "bash" "-c" "$HOME/.config/zellij/review.sh" {
+                floating true
+                close_on_exit true
+                name "review"
+                x "4%"
+                y "4%"
+                width "92%"
+                height "90%"
+            }
+        }
         // Floating cheatsheet: glow-rendered CHEATSHEET.md (scroll, q closes).
         // bash -c so $HOME expands (zellij doesn't expand it in layout paths).
         bind "Alt /" {

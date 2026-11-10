@@ -136,7 +136,8 @@ this): inside a zellij session run
   - `opencode-send FILE [START [END [LANGUAGE]]] [< SELECTION]` — paste a
     reference (`FILE:START-END`) and the selection, as a fenced block, into the
     current tab's OpenCode prompt and focus it; nothing is submitted. Not tied to
-    an editor; Helix calls it from `+ a` (see "OpenCode agents and Zellij")
+    an editor; Helix calls it from `+ a` (see "OpenCode agents and Zellij").
+    `opencode-send --text < TEXT` pastes text as it is (the `Alt-v` review)
   - `opencode-pane [--session ID] [--prompt PROMPT] | --resume` — run OpenCode
     in a pane with your shell environment, optionally on a given conversation,
     in a way Zellij restores as `--resume`, which continues the directory's
@@ -327,6 +328,20 @@ except the tab you run them from. Tabs with a pane elsewhere, such as a tab
 where one shell `cd`'d into the worktree, are never focused or closed. Options
 go before the branch.
 
+### Reviewing changes
+
+`Alt-v` opens a [tuicr](https://tuicr.dev) review of the worktree of the pane
+you are in, in a floating pane: everything it changed since it left the
+remote's default branch (`origin/HEAD`, the base `wt` uses), committed or not.
+That covers an agent's commits, which Helix's gutter and Yazi no longer show.
+In a `wtreview` worktree, it shows the PR plus your own edits.
+
+In tuicr, `c` comments on a line, `v` selects lines for a range comment, `e`
+opens the file in the tab's editor pane (`Alt-v` brings the review back), and
+`y` ends the review and pastes your comments into the tab's OpenCode prompt,
+ready to send. `:q` quits without sending. `zsh tests/review_scope.zsh` checks
+what the review covers.
+
 ### Pull request worktrees
 
 `wtreview <number-or-url>` creates a detached `review-pr-<number>` worktree
@@ -403,5 +418,6 @@ and `shell/cheatsheet.zsh`.
 - The `shell/*.zsh` files are plain zsh functions (not oh-my-zsh plugins);
   completions register via `compdef` if `compinit` has run.
 - Zellij: `Alt-y` summons a Yazi picker that opens files into a named `editor`
-  (Helix) pane; `dev.kdl` uses a swap layout (editor top / terminal bottom /
+  (Helix) pane, and `Alt-v` reviews the tab's changes in tuicr (see "Reviewing
+  changes"); `dev.kdl` uses a swap layout (editor top / terminal bottom /
   opencode right).

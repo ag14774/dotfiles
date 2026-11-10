@@ -161,6 +161,11 @@ download_release_asset "zellij-org/zellij" \
   "^zellij-$RELEASE_ARCH-unknown-linux-musl\\.tar\\.gz$" "$TMP_DIR/zellij.tar.gz"
 tar -xzf "$TMP_DIR/zellij.tar.gz" -C "$HOME/.local/bin" zellij
 
+echo "==> tuicr (official release)"
+download_release_asset "agavra/tuicr" \
+  "^tuicr-[0-9.]+-$RELEASE_ARCH-unknown-linux-musl\\.tar\\.gz$" "$TMP_DIR/tuicr.tar.gz"
+tar -xzf "$TMP_DIR/tuicr.tar.gz" -C "$HOME/.local/bin" tuicr
+
 echo "==> Taplo (official release)"
 download_release_asset "tamasfe/taplo" \
   "^taplo-linux-$RELEASE_ARCH\\.gz$" "$TMP_DIR/taplo.gz"

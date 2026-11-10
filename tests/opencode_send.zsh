@@ -71,6 +71,15 @@ send 2 "$TMP/repo" "some text" "[scratch]" 1 1 text || fail "scratch: $(<"$TMP/e
 [[ $(sed -n 1p "$FAKE_LOG") == "write-chars|--pane-id|terminal_3|$P\`\`\`text" ]] \
   || fail "a scratch buffer should send only the selection: $(<"$FAKE_LOG")"
 
+# --text pastes the text as it is: no reference, no fence (the Alt-v review).
+send 1 "$TMP/repo" $'1. `a.txt:2` - Use a constant\n2. `b.txt` - Why?' --text || fail "text: $(<"$TMP/err")"
+expect "write-chars|--pane-id|terminal_3|${P}1. \`a.txt:2\` - Use a constant
+2. \`b.txt\` - Why?$E
+focus-pane-id|terminal_3"
+if send 1 "$TMP/repo" "" --text; then fail "--text without text should refuse"; fi
+grep -q -- "no text to send" "$TMP/err" || fail "expected 'no text to send', got: $(<"$TMP/err")"
+[[ ! -s $FAKE_LOG ]] || fail "a refusal must not touch any pane: $(<"$FAKE_LOG")"
+
 # It refuses, touching nothing, without an OpenCode pane in the tab or a caller pane.
 for case in "4|this tab has no OpenCode pane" "42|does not exist"; do
   if send "${case%%|*}" "$TMP/repo" "x" src/app.py 1 1; then fail "pane ${case%%|*} should refuse"; fi

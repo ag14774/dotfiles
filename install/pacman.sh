@@ -41,6 +41,7 @@ PACKAGES=(
   curl
   stow
   git-delta
+  tuicr
   github-cli
   glow
   pandoc-cli

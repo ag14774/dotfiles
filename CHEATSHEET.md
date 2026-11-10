@@ -18,6 +18,7 @@ The handful you reach for constantly. Each also has a home in its tool's section
 | Key / cmd | Action |
 |---|---|
 | ★ `Alt-y` | Summon Yazi (zellij); the file you pick opens in the Helix pane |
+| ★ `Alt-v` | Review everything this worktree changed, committed or not (tuicr); `y` sends your comments to OpenCode |
 | ★ `Ctrl-r` | Reload files from disk in Helix (after opencode edits them) |
 | ★ `+` `m` (Helix) · `mdview [FILE]` (shell) | Read Markdown in the browser with images; `mdview` alone opens this directory's README |
 | `gd` → `Ctrl-o` | Goto definition (incl. `.venv` libs), then jump back |
@@ -39,6 +40,7 @@ Default mode = **locked**, so keys pass through to Helix/Yazi. Unlock with `Ctrl
 | `Ctrl-g` | Lock ⇄ unlock |
 | `Alt-h/j/k/l` · `Alt-←↓↑→` | Move focus between panes / switch tab |
 | ★ `Alt-y` | Yazi file picker (floating) |
+| ★ `Alt-v` | Review this worktree's changes in tuicr (floating) |
 | ★ `Alt-/` | This cheatsheet (floating; `q` closes) |
 | `Alt-f` | Toggle floating panes |
 | `Alt-n` · `Alt-t` | New pane · new tab |
@@ -276,6 +278,10 @@ Multi-step workflows and the reasoning. The individual keys are in the tables ab
 
 ### Reviewing opencode's changes
 
+**Everything at once, commits included:** ★ `Alt-v` reviews all the worktree changed since it left `origin/HEAD` in tuicr. `c` comments on a line (`v` for a range), `e` opens the file in Helix (`Alt-v` returns), `y` pastes your comments into OpenCode, `:q` quits without sending.
+
+**Uncommitted edits in Helix:**
+
 1. **What changed** — `Alt-y` (Yazi git signs) or `Space g` in Helix.
 2. **Open it** — pick the file, then ★ `Ctrl-r` to reload from disk.
 3. **What lines** — skim the gutter bars; `]g`/`[g` to hop between changes.
@@ -285,7 +291,7 @@ Multi-step workflows and the reasoning. The individual keys are in the tables ab
 ### Reviewing a pull request in Helix
 
 1. **Open a highlighted review worktree** — `wtreview 123` (a PR URL also works), then open Helix there. The full PR appears in the Git gutter even though its commits are already pushed; normal worktree seed files are copied too.
-2. **Separate PR changes from your edits** — `git diff --cached` is the original PR; `git diff` is only edits made during review; `git diff HEAD` combines both.
+2. **Separate PR changes from your edits** — `git diff --cached` is the original PR; `git diff` is only edits made during review; `git diff HEAD` combines both. ★ `Alt-v` reviews both in tuicr.
 3. **Turn the review into a normal branch** — run `wtchange`. It preserves your edits, attaches the PR branch and its push remote, copies normal seed files, and leaves only your own edits highlighted.
 4. **Commit and update the PR** — use the normal `git add` / `gcai` / `ggpush` flow. Fork PR pushes still require GitHub permission or “Allow edits by maintainers.”
 5. **Clean up** — `wtrm review-pr-123` removes a clean review; `wtprune -m` removes clean reviews whose exact PR head was merged. Reviews with personal edits are retained.
