@@ -1,0 +1,13 @@
+{
+  "name": "opencode-ade-status",
+  "version": "0.0.0",
+  "private": true,
+  "description": "OpenCode plugin: what each tab's agents are doing, as icons on the tabs and totals in the bar",
+  "type": "module",
+  "exports": {
+    ".": "./src/server.ts",
+    "./tui": "./src/tui.ts",
+    "./rpc": "./src/rpc.ts"
+  },
+  "scripts": { "test": "node --test test/*.test.ts" }
+}

@@ -108,6 +108,8 @@ After upgrading Zellij, Helix or OpenCode, run `zsh tests/zellij_restore_smoke.z
 It saves, kills and restores a throwaway session (never `main`) and checks that
 all of the above still holds. After upgrading OpenCode or changing the ADE
 plugin, also run `zsh tests/ade_plugin_smoke.zsh` (see "OpenCode agents and Zellij").
+After changing `packages/`, run `node --test` in `packages/ade-kit` and in
+`packages/opencode-ade-status` (Node's own test runner, no dependencies).
 After upgrading Zellij, Helix, Yazi or tuicr, or changing the scripts behind
 the keys, run `zsh tests/keys_smoke.zsh`: it checks `Alt-y`, Helix's `+ a` and
 the `Alt-v` review end to end in a throwaway session, with a stand-in for
@@ -115,7 +117,7 @@ OpenCode (no model calls).
 
 The top bar (zjstatus) shows the mode, the tabs (with the agent icons above) and
 an `Alt-t` hint on the left, and on the right how many tabs are waiting, failed,
-done or working (counted from those icons by the ADE plugin's server part and
+done or working (counted from those icons by the status plugin's server part and
 sent with `zellij pipe` whenever one changes). It has no clock: zjstatus redraws
 only on Zellij events, so a clock went stale while the session was idle. It is loaded by `dev.kdl`
 straight from its release URL, so
@@ -249,7 +251,11 @@ including "no OpenCode pane in Zellij is showing this conversation".
   wasn't active when the work ended, and clear when you visit it. The app in
   the pane renames its own tab (`rename-tab-by-id`); with several OpenCode
   panes in a tab, the most urgent state wins. Nothing relies on the names;
-  `wt` finds tabs by directory.
+  `wt` finds tabs by directory. This is the status plugin,
+  `packages/opencode-ade-status`, a package built on `packages/ade-kit`
+  (which reads the optional `~/.config/ade/config.json`; its defaults are this
+  setup). Stow links it as `~/.config/opencode/plugins/ade-status` (a link
+  committed under `config/`), which loads both its parts.
 - Each conversation a pane in Zellij shows gets short instructions about this
   setup (tabs, `show_file`, `status`, delegating only when asked), as a per-conversation
   instruction entry rather than a global `AGENTS.md`, so OpenCode elsewhere
@@ -273,7 +279,9 @@ when that pane no longer exists.
 The service keeps the server part it first loaded: OpenCode reloads changed
 plugins, but not symlinked ones like ours. When the files differ from what the
 service runs, OpenCode panes say so in a warning; run `opencode service
-restart` (this interrupts running conversations). `tests/ade_plugin_smoke.zsh`
+restart` (this interrupts running conversations). The status plugin, a package
+directory, is reloaded when its own files change, but not when `ade-kit`
+changes; it warns the same way. `tests/ade_plugin_smoke.zsh`
 tests this checkout's plugin with a private OpenCode service and a throwaway
 Zellij session, so it needs no restart and never touches your session or
 service. It makes six short model calls.

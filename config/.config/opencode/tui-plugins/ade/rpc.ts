@@ -44,18 +44,6 @@ export const Ade = {
         ["ok", "message", "worktrees"],
       ),
     },
-    // Report what this pane shows in its tab's name; get every pane's state in
-    // the same Zellij session.
-    tab_state: {
-      input: object({
-        zellij: text,
-        pane: text,
-        state: { type: "string", enum: ["none", "working", "waiting", "done", "failed"] },
-      }),
-      output: object({ states: { type: "object", additionalProperties: text } }),
-    },
-    // Recount the agent marks in this Zellij session's tab names for the top bar.
-    totals: { input: object({ zellij: text }), output: empty },
     // An OpenCode pane in Zellij shows this conversation: attach the
     // environment instructions to it.
     attach: { input: object({ sessionID: text }), output: empty },

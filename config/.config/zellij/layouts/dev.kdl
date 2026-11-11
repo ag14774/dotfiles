@@ -8,7 +8,8 @@ layout {
             // No session name (it is always main) and no clock: zjstatus redraws
             // only on Zellij events, so a clock went stale while the session idled.
             // Right: how many tabs' agents are waiting, failed, done or working,
-            // pushed by the ADE OpenCode plugin whenever a tab's mark changes.
+            // pushed by the ADE status plugin (packages/opencode-ade-status)
+            // whenever a tab's mark changes.
             format_right  "{pipe_agents}"
             pipe_agents_format     "{output} "
             pipe_agents_rendermode "dynamic"

@@ -1,13 +1,13 @@
 // App part of the ADE plugin: it runs in the OpenCode app inside each Zellij
 // pane, so its environment names that pane for certain. It carries out the
 // server part's requests for the conversation this pane shows, including those
-// of its subagents (they act for their parent).
+// of its subagents (they act for their parent). (The agent icons on the tabs
+// come from the status plugin, packages/opencode-ade-status.)
 import { execFile } from "node:child_process"
 import { Plugin } from "@opencode/plugin/tui"
 import { createEffect, createMemo, createRoot } from "solid-js"
 import { serverDigest } from "./digest"
 import { Ade } from "./rpc"
-import { type Mark, URGENCY, withMark } from "./tabs"
 
 type Copy = { sessionID: string; before?: string; compact: boolean; prepare: string[] }
 type Request = {
@@ -129,62 +129,6 @@ export default Plugin.define({
       })
     })
 
-    // The tab icon: what this pane's conversation (with its subagents) is doing,
-    // in front of the tab's name. "done" and "failed" last until you visit the
-    // tab; they are not shown when the tab is active as the work ends.
-    const zellij = (...args: string[]) =>
-      new Promise<string>((done, fail) =>
-        execFile("zellij", ["--session", env.ZELLIJ_SESSION_NAME!, "action", ...args], { env, timeout: 10_000 },
-          (error, stdout) => (error ? fail(error) : done(String(stdout)))),
-      )
-    let tabID: number | undefined
-    let mark: Mark = "none"
-    const syncTab = async () => {
-      const panes = JSON.parse(await zellij("list-panes", "--json")) as any[]
-      const me = panes.find((pane) => !pane.is_plugin && String(pane.id) === env.ZELLIJ_PANE_ID)
-      if (!me) return
-      tabID = me.tab_id
-      const report = { zellij: env.ZELLIJ_SESSION_NAME!, pane: env.ZELLIJ_PANE_ID!, state: mark }
-      const { states } = (await ade.tab_state(report)) as { states: Record<string, string> }
-      const inTab = panes.filter((pane) => !pane.is_plugin && pane.tab_id === me.tab_id).map((pane) => String(pane.id))
-      const top = URGENCY.find((state) => inTab.some((id) => states[id] === state)) ?? "none"
-      const tab = (JSON.parse(await zellij("list-tabs", "--json")) as any[]).find((tab) => tab.tab_id === me.tab_id)
-      if (!tab) return
-      const name = withMark(String(tab.name), top)
-      if (name !== tab.name) await zellij("rename-tab-by-id", String(me.tab_id), name)
-    }
-    let synced = Promise.resolve()
-    let visitTimer: ReturnType<typeof setInterval> | undefined
-    const setMark = (next: Mark, force = false) => {
-      if (next === mark && !force) return
-      mark = next
-      // Then the top bar's totals, counted from all tab names by the server part.
-      synced = synced
-        .then(syncTab)
-        .then(() => ade.totals({ zellij: env.ZELLIJ_SESSION_NAME! }))
-        .catch(() => {})
-      // Zellij doesn't tell programs about tab switches: while "done" or
-      // "failed" shows, check every few seconds whether the tab is active.
-      const unseen = mark === "done" || mark === "failed"
-      if (unseen && !visitTimer) visitTimer = setInterval(() => void seen(), 3_000)
-      if (!unseen && visitTimer) {
-        clearInterval(visitTimer)
-        visitTimer = undefined
-      }
-    }
-    const tabActive = async () => {
-      if (tabID === undefined) return false
-      return (JSON.parse(await zellij("list-tabs", "--json")) as any[]).some((tab) => tab.tab_id === tabID && tab.active)
-    }
-    const seen = async () => {
-      if ((mark === "done" || mark === "failed") && (await tabActive().catch(() => false))) setMark("none")
-    }
-    const onFocus = () => {
-      if (mark === "done" || mark === "failed") setMark("none")
-    }
-    context.renderer.on("focus", onFocus)
-    setMark("none", true) // a restored tab may still carry an old icon
-
     // Give each conversation this pane shows the environment instructions,
     // once the server has it (a new conversation is shown just before).
     const attach = async (sessionID: string) => {
@@ -205,40 +149,11 @@ export default Plugin.define({
         const sessionID = shown()
         if (sessionID) void attach(sessionID)
       })
-
-      const activity = createMemo(() => {
-        const sessionID = shown()
-        if (!sessionID) return "none"
-        const session = context.data.session
-        const ids = [...new Set([sessionID, ...session.family(sessionID)])]
-        const asks = (id: string) => (session.permission.list(id)?.length ?? 0) + (session.form.list(id)?.length ?? 0) > 0
-        if (ids.some(asks)) return "waiting"
-        if (ids.some((id) => session.status(id) === "running")) return "working"
-        const outcome = (session.get(sessionID) as { outcome?: string } | undefined)?.outcome
-        return outcome === "failed" || outcome === "interrupted" ? "failed" : "idle"
-      })
-      let previous = { sessionID: undefined as string | undefined, activity: "none" }
-      createEffect(() => {
-        const now = { sessionID: shown(), activity: activity() }
-        const was = previous.sessionID === now.sessionID ? previous.activity : "none"
-        previous = now
-        if (now.activity === "working" || now.activity === "waiting") return setMark(now.activity)
-        if (now.activity === "none" || was === "none") return setMark("none")
-        if (was === "working" || was === "waiting") {
-          const result = now.activity === "failed" ? "failed" : "done"
-          void tabActive()
-            .catch(() => false)
-            .then((active) => setMark(active ? "none" : result))
-        }
-      })
       return dispose
     })
     return () => {
       unsubscribe()
       stopAttaching()
-      context.renderer.off("focus", onFocus)
-      if (visitTimer) clearInterval(visitTimer)
-      setMark("none")
     }
   },
 })

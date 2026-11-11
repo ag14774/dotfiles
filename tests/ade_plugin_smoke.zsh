@@ -1,6 +1,7 @@
 #!/usr/bin/env zsh
 # Live check of the ADE plugin (server part plugins/ade.ts, app part
-# tui-plugins/ade) with this checkout's code, against the installed Zellij,
+# tui-plugins/ade) and the status plugin (packages/opencode-ade-status, the tab
+# icons and totals) with this checkout's code, against the installed Zellij,
 # Helix and OpenCode. The OpenCode app in the pane showing a conversation (or
 # its parent, for a subagent) opens files and delegated tabs for it.
 #
@@ -103,17 +104,20 @@ cleanup() {
 }
 trap cleanup EXIT
 
-# Private OpenCode: your config, with a copy of this checkout's plugin linked in
-# the way the installer links it (the stale-warning step edits the copy).
+# Private OpenCode: your config, with a copy of this checkout's plugins linked in
+# the way the installer links them (the stale-warning step edits the copy). The
+# status plugin is a package that imports ade-kit next to it.
 cp ~/.local/share/opencode/auth.json "$TMP/oc/data/opencode/" 2>/dev/null
 cp ~/.local/state/opencode/model.json "$TMP/oc/state/opencode/" 2>/dev/null
 cp -RL ~/.config/opencode "$TMP/oc/config/opencode" 2>/dev/null
 config=$TMP/oc/config/opencode
-rm -rf "$config"/{service.json,node_modules,plugins/ade.ts,tui-plugins/ade}
+rm -rf "$config"/{service.json,node_modules,plugins/ade.ts,plugins/ade-status,tui-plugins/ade}
 mkdir -p "$config"/{plugins,tui-plugins} "$TMP/src/tui-plugins"
 cp "$ROOT/config/.config/opencode/plugins/ade.ts" "$TMP/src/plugins/"
 cp -R "$ROOT/config/.config/opencode/tui-plugins/ade" "$TMP/src/tui-plugins/"
+cp -R "$ROOT/packages" "$TMP/src/"
 ln -s "$TMP/src/plugins/ade.ts" "$config/plugins/"
+ln -s "$TMP/src/packages/opencode-ade-status" "$config/plugins/ade-status"
 mkdir -p "$config/tui-plugins/ade"
 for f in "$TMP"/src/tui-plugins/ade/*; do ln -s "$f" "$config/tui-plugins/ade/"; done
 [[ -f $config/cli.json ]] || print '{}' > "$config/cli.json"
