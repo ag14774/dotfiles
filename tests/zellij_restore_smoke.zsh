@@ -194,6 +194,9 @@ if [[ $(panes | jq --argjson id "$editor" '[.[] | select(.id == $id and .is_plug
 else
   print "  (the restored editor pane stayed open, stopped)"
 fi
+# Alt-y runs in the tab you are on, and Alt-t moved you to a new one (hx-open
+# never switches you to another tab).
+zj go-to-tab-by-id 0
 (cd "$main" && in_session env ZELLIJ_PANE_ID="$main_pane" "$ROOT/config/.local/bin/hx-open" other.md) \
   || fail "hx-open failed on a stopped editor pane"
 wait_for 30 running 0 editor \
