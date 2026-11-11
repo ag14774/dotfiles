@@ -141,7 +141,8 @@ rm -f -- "$OPENCODE_TUI_PLUGINS/btw.tsx" "$OPENCODE_TUI_PLUGINS/btw-v2.tsx"
 if [ -L "$OPENCODE_TUI_PLUGINS/btw-v2" ]; then
   rm -- "$OPENCODE_TUI_PLUGINS/btw-v2"
 fi
-stow --no-folding -d "$DOTFILES" -t "$HOME" config
+# Restow, so links to files the repository no longer has go too.
+stow --no-folding --restow -d "$DOTFILES" -t "$HOME" config
 
 echo "==> Yazi flavor (catppuccin-mocha, from package.toml)"
 if ! YAZI_PACKAGE_OUTPUT="$(ya pkg install 2>&1)"; then
