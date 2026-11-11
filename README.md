@@ -108,6 +108,10 @@ After upgrading Zellij, Helix or OpenCode, run `zsh tests/zellij_restore_smoke.z
 It saves, kills and restores a throwaway session (never `main`) and checks that
 all of the above still holds. After upgrading OpenCode or changing the ADE
 plugin, also run `zsh tests/ade_plugin_smoke.zsh` (see "OpenCode agents and Zellij").
+After upgrading Zellij, Helix, Yazi or tuicr, or changing the scripts behind
+the keys, run `zsh tests/keys_smoke.zsh`: it checks `Alt-y`, Helix's `+ a` and
+the `Alt-v` review end to end in a throwaway session, with a stand-in for
+OpenCode (no model calls).
 
 The top bar (zjstatus) shows the mode, the tabs (with the agent icons above) and
 an `Alt-t` hint on the left, and on the right how many tabs are waiting, failed,
