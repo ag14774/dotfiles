@@ -49,7 +49,7 @@ ecosystem:
 | Manager | Installed by | Managed tools |
 | --- | --- | --- |
 | Homebrew/Pacman | platform backend | Node/npm, Ruff, Taplo, Marksman, ShellCheck, shfmt, GitHub CLI |
-| APT | `install/apt.sh` | Node/npm, ShellCheck, shfmt, GitHub CLI |
+| APT | `install/apt.sh` | Node/npm (NodeSource's repository, current LTS), ShellCheck, shfmt, GitHub CLI |
 | Upstream release assets | `install/apt.sh` | Helix (pinned `.deb` via APT), Yazi, Ghostty, Zellij, tuicr, Taplo, Marksman on Debian |
 | Official uv installer (`~/.local/bin`) | `install.sh` | uv |
 | `uv tool` | `install.sh` | Pyright, plus Ruff on Debian |

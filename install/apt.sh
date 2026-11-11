@@ -29,7 +29,6 @@ PACKAGES=(
   # Language servers and formatters
   shellcheck
   shfmt
-  nodejs
 
   # Tooling
   curl
@@ -76,17 +75,32 @@ case "$(dpkg --print-architecture)" in
 esac
 
 if ((EUID == 0)); then
-  APT=(apt-get)
+  AS_ROOT=()
 else
   command -v sudo >/dev/null 2>&1 || {
     echo "sudo is required to install APT packages." >&2
     exit 1
   }
-  APT=(sudo apt-get)
+  AS_ROOT=(sudo)
 fi
+APT=("${AS_ROOT[@]}" apt-get)
 
 "${APT[@]}" update
 "${APT[@]}" install -y "${PACKAGES[@]}"
+
+# Node.js from NodeSource: Debian 13's own nodejs is Node 20, end-of-life since
+# April 2026 and too old to run TypeScript files directly (Node 22.18+), which
+# the ADE's `ade` command needs. Keep NODE_MAJOR on a current LTS release.
+NODE_MAJOR=26
+NODESOURCE_KEY=/etc/apt/keyrings/nodesource.asc
+echo "==> Node.js $NODE_MAJOR (NodeSource)"
+"${AS_ROOT[@]}" install -d -m 0755 /etc/apt/keyrings
+curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key |
+  "${AS_ROOT[@]}" tee "$NODESOURCE_KEY" >/dev/null
+printf 'deb [signed-by=%s] https://deb.nodesource.com/node_%s.x nodistro main\n' "$NODESOURCE_KEY" "$NODE_MAJOR" |
+  "${AS_ROOT[@]}" tee /etc/apt/sources.list.d/nodesource.list >/dev/null
+"${APT[@]}" update
+"${APT[@]}" install -y nodejs
 
 # NodeSource's nodejs package includes npm and conflicts with Debian's separate
 # package. Install npm only when the selected nodejs package did not provide it.
