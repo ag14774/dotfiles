@@ -38,7 +38,7 @@ const merge = (base: unknown, over: unknown): unknown => {
 // The settings ade-kit itself reads must have the right type.
 const check = (config: Config, path: string) => {
   const zellij: Record<string, unknown> = isObject(config.zellij) ? config.zellij : {}
-  const panes = isObject(zellij.panes) ? Object.entries(zellij.panes) : [["", undefined]]
+  const panes: [string, unknown][] = isObject(zellij.panes) ? Object.entries(zellij.panes) : [["", undefined]]
   const values: Record<string, unknown> = {
     multiplexer: config.multiplexer,
     "zellij.layout": zellij.layout,
