@@ -237,7 +237,7 @@ Change bars (added / modified / deleted) show in the gutter automatically. See t
 | `Z` | zoxide jump |
 | `~` · `F1` | help (searchable); `q` quits |
 
-Files show ★ git status signs (M/A/D/…) automatically, a quick "what changed" view.
+Files show ★ git status signs (M/A/D/…) automatically, a quick "what changed" view: yellow, green, red or magenta for uncommitted changes, and blue (to their left) for what this branch's commits changed since it left `origin/HEAD`, the same changes `Alt-v` reviews. An open Yazi notices a new commit only when you re-enter the folder.
 
 ## fzf (inside Yazi `z`)
 
@@ -282,7 +282,7 @@ Multi-step workflows and the reasoning. The individual keys are in the tables ab
 
 **Uncommitted edits in Helix:**
 
-1. **What changed** — `Alt-y` (Yazi git signs) or `Space g` in Helix.
+1. **What changed** — `Alt-y` (Yazi git signs; blue ones are already committed) or `Space g` in Helix.
 2. **Open it** — pick the file, then ★ `Ctrl-r` to reload from disk.
 3. **What lines** — skim the gutter bars; `]g`/`[g` to hop between changes.
 4. **Peek one block** — ★ `+` `g` on a changed line: a floating pane shows just that hunk (delta, vs HEAD); `q` closes it.

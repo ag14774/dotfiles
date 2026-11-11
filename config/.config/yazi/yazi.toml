@@ -21,3 +21,14 @@ group = "git"
 url   = "*/"
 run   = "git"
 group = "git"
+
+# git-branch.yazi: the same for this branch's commits (see init.lua).
+[[plugin.prepend_fetchers]]
+url   = "*"
+run   = "git-branch"
+group = "git-branch"
+
+[[plugin.prepend_fetchers]]
+url   = "*/"
+run   = "git-branch"
+group = "git-branch"

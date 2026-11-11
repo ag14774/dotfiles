@@ -29,7 +29,7 @@ itself when needed.
 Homebrew must already be installed on macOS. The Linux backends support Debian
 13 (Trixie, amd64 only) and Pacman-based distributions such as Manjaro and Arch Linux.
 Because several tools are not in Debian 13, its backend installs Yazi, Zellij,
-Taplo, and Marksman from their upstream GitHub releases. Ghostty uses
+tuicr, Taplo, and Marksman from their upstream GitHub releases. Ghostty uses
 the community Debian package linked from
 [Ghostty's official installation docs](https://ghostty.org/docs/install/binary#debian-and-ubuntu).
 
@@ -50,7 +50,7 @@ ecosystem:
 | --- | --- | --- |
 | Homebrew/Pacman | platform backend | Node/npm, Ruff, Taplo, Marksman, ShellCheck, shfmt, GitHub CLI |
 | APT | `install/apt.sh` | Node/npm, ShellCheck, shfmt, GitHub CLI |
-| Upstream release assets | `install/apt.sh` | Helix (pinned `.deb` via APT), Yazi, Ghostty, Zellij, Taplo, Marksman on Debian |
+| Upstream release assets | `install/apt.sh` | Helix (pinned `.deb` via APT), Yazi, Ghostty, Zellij, tuicr, Taplo, Marksman on Debian |
 | Official uv installer (`~/.local/bin`) | `install.sh` | uv |
 | `uv tool` | `install.sh` | Pyright, plus Ruff on Debian |
 | npm (`~/.local`) | `install.sh` | TypeScript plus bash/yaml/json language servers |
@@ -333,7 +333,7 @@ go before the branch.
 `Alt-v` opens a [tuicr](https://tuicr.dev) review of the worktree of the pane
 you are in, in a floating pane: everything it changed since it left the
 remote's default branch (`origin/HEAD`, the base `wt` uses), committed or not.
-That covers an agent's commits, which Helix's gutter and Yazi no longer show.
+That covers an agent's commits, which Helix's gutter no longer shows.
 In a `wtreview` worktree, it shows the PR plus your own edits.
 
 In tuicr, `c` comments on a line, `v` selects lines for a range comment, `e`
@@ -341,6 +341,12 @@ opens the file in the tab's editor pane (`Alt-v` brings the review back), and
 `y` ends the review and pastes your comments into the tab's OpenCode prompt,
 ready to send. `:q` quits without sending. `zsh tests/review_scope.zsh` checks
 what the review covers.
+
+Yazi marks the same changes: git.yazi's yellow, green, red and magenta signs
+for uncommitted changes, and, to their left, the same signs in blue for what
+the branch's commits changed since `origin/HEAD` (a local plugin,
+`config/.config/yazi/plugins/git-branch.yazi`). Like git.yazi, an open Yazi
+picks up a new commit when you re-enter the folder; each `Alt-y` starts fresh.
 
 ### Pull request worktrees
 
