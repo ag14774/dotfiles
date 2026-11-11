@@ -3,7 +3,7 @@
 Stack: **zellij** (multiplexer) + **Helix** (`hx`/`helix`, editor) + **Yazi** (files) + **fzf** + **zoxide**.
 
 **Legend:** `★` = custom to this setup · `Space` = leader key · `→` press keys in sequence · `·` separates alternatives · `⏎` Enter.
-**Read this sheet:** `Alt-/` (floating) · `cheat` (pager) · `cheat --pretty` (browser, real fonts) · edit: `$EDITOR ~/dotfiles/CHEATSHEET.md`.
+**Read this sheet:** `Alt-/` (floating) · `cheat` (pager) · `cheat --pretty` (browser, real fonts) · edit: `CHEATSHEET.md` in the dotfiles checkout.
 
 > **You don't need to memorize this.** Each tool is self-documenting: Helix `Space ?` (command palette), or press `Space` / `g` / `m` / `z` / `Ctrl-w` / `+`; Yazi `~` or `F1`; Zellij's bottom bar (unlock with `Ctrl-g`). This sheet just **surfaces the frequently-used keys** so you don't have to dig through those menus.
 

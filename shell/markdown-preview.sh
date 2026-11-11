@@ -21,7 +21,7 @@ if [[ -z "$md" || ! -f "$md" ]]; then
   exit 1
 fi
 if ! command -v pandoc >/dev/null 2>&1; then
-  printf 'mdview needs pandoc; rerun ~/dotfiles/install.sh\n' >&2
+  printf 'mdview needs pandoc; rerun the dotfiles install.sh\n' >&2
   exit 1
 fi
 if command -v xdg-open >/dev/null 2>&1; then
