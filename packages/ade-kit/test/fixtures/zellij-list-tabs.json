@@ -1,0 +1,46 @@
+[
+  {
+    "position": 0,
+    "name": "A",
+    "active": false,
+    "panes_to_hide": 0,
+    "is_fullscreen_active": false,
+    "is_sync_panes_active": false,
+    "are_floating_panes_visible": true,
+    "other_focused_clients": [],
+    "active_swap_layout_name": "BASE",
+    "is_swap_layout_dirty": true,
+    "viewport_rows": 48,
+    "viewport_columns": 200,
+    "display_area_rows": 50,
+    "display_area_columns": 200,
+    "selectable_tiled_panes_count": 4,
+    "selectable_floating_panes_count": 2,
+    "tab_id": 0,
+    "has_bell_notification": false,
+    "is_flashing_bell": false
+  },
+  {
+    "position": 1,
+    "name": "󰔟 B",
+    "active": true,
+    "panes_to_hide": 0,
+    "is_fullscreen_active": false,
+    "is_sync_panes_active": false,
+    "are_floating_panes_visible": false,
+    "other_focused_clients": [
+      1
+    ],
+    "active_swap_layout_name": null,
+    "is_swap_layout_dirty": false,
+    "viewport_rows": 48,
+    "viewport_columns": 200,
+    "display_area_rows": 50,
+    "display_area_columns": 200,
+    "selectable_tiled_panes_count": 1,
+    "selectable_floating_panes_count": 0,
+    "tab_id": 1,
+    "has_bell_notification": false,
+    "is_flashing_bell": false
+  }
+]

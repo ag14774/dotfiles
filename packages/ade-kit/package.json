@@ -1,0 +1,9 @@
+{
+  "name": "ade-kit",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Agentic development environment kit: multiplexer, editor and agent adapters, standalone",
+  "type": "module",
+  "engines": { "node": ">=23.6" },
+  "scripts": { "test": "node --test test/*.test.ts" }
+}
