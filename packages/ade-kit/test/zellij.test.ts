@@ -32,12 +32,13 @@ test("list-tabs --json: IDs, names and which tab is active", () => {
   ])
 })
 
-test("here: inside Zellij only with its session and pane", () => {
+test("here: inside Zellij with its session, and the pane when Zellij names it", () => {
   const adapter = zellij(makeKit({ config: DEFAULTS, run: async () => ({ ok: true, stdout: "", stderr: "" }) }))
   const env = { ZELLIJ: "0", ZELLIJ_SESSION_NAME: "main", ZELLIJ_PANE_ID: "7" }
   assert.deepEqual(adapter.here(env), { session: "main", pane: "7" })
-  for (const name of Object.keys(env)) assert.equal(adapter.here({ ...env, [name]: undefined }), undefined)
-  assert.equal(adapter.here({ ...env, ZELLIJ_PANE_ID: "" }), undefined)
+  for (const name of ["ZELLIJ", "ZELLIJ_SESSION_NAME"]) assert.equal(adapter.here({ ...env, [name]: undefined }), undefined)
+  assert.deepEqual(adapter.here({ ...env, ZELLIJ_PANE_ID: undefined }), { session: "main" })
+  assert.deepEqual(adapter.here({ ...env, ZELLIJ_PANE_ID: "" }), { session: "main" })
 })
 
 // The adapter with a kit whose run() records the commands and answers from

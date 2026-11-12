@@ -51,6 +51,7 @@ test("callerDir: the tab's focused tiled pane, else its agent pane, else its she
   assert.equal(callerDir(tab.filter((p) => p.id !== "2"), { session: "s", pane: "4" }), "/shell")
   assert.equal(callerDir(tab.filter((p) => p.id === "3" || p.id === "4"), { session: "s", pane: "4" }), undefined)
   assert.equal(callerDir(tab, { session: "s", pane: "9" }), undefined)
+  assert.equal(callerDir(tab, { session: "s" }), undefined) // the pane isn't known
 })
 
 test("tabsIn: a tab with a running pane inside the worktree and none elsewhere", () => {

@@ -50,8 +50,8 @@ export default (kit: Kit): MultiplexerAdapter => ({
   name: "zellij",
   label: "Zellij",
   here: (env) =>
-    env.ZELLIJ && env.ZELLIJ_SESSION_NAME && env.ZELLIJ_PANE_ID
-      ? { session: env.ZELLIJ_SESSION_NAME, pane: env.ZELLIJ_PANE_ID }
+    env.ZELLIJ && env.ZELLIJ_SESSION_NAME
+      ? { session: env.ZELLIJ_SESSION_NAME, ...(env.ZELLIJ_PANE_ID ? { pane: env.ZELLIJ_PANE_ID } : {}) }
       : undefined,
   connect: (where) => {
     const options = kit.config.zellij

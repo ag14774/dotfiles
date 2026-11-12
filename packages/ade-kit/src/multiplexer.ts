@@ -10,7 +10,7 @@ export const isActive = (tabs: readonly Tab[], tab: string) => tabs.some((t) => 
 // its agent or shell pane. (A floating pane started by a key starts in the
 // session's directory, not in that of the pane you were in.)
 export function callerDir(panes: readonly Pane[], where: Where): string | undefined {
-  const tab = tabOf(panes, where.pane)
+  const tab = where.pane === undefined ? undefined : tabOf(panes, where.pane)
   if (tab === undefined) return undefined
   const tiled = panes.filter((p) => p.tab === tab && !p.floating && p.cwd !== undefined)
   const pane =

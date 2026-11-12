@@ -5,9 +5,9 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { test } from "node:test"
 import type { Terminal } from "../src/actions.ts"
-import { ADE, fileRef, open, pastes, review, send } from "../src/actions.ts"
+import { ADE, fileRef, open, pastes, review, send, tabs as tabsOf } from "../src/actions.ts"
 import { DEFAULTS } from "../src/config.ts"
-import { makeKit } from "../src/kit.ts"
+import { makeKit, run } from "../src/kit.ts"
 import type { Config, Key, Multiplexer, Pane, Role, Tab } from "../src/types.ts"
 
 const temp = realpathSync(mkdtempSync(join(tmpdir(), "ade-actions-")))
@@ -27,7 +27,7 @@ writeFileSync(
     api: 1,
     name: "fake",
     label: "Fake",
-    here: (env) => (env.FAKE_PANE ? { session: "s", pane: env.FAKE_PANE } : undefined),
+    here: (env) => (env.FAKE_PANE ? { session: "s", pane: env.FAKE_PANE } : env.FAKE_SESSION ? { session: "s" } : undefined),
     connect: () => globalThis.recorder,
   })`,
 )
@@ -135,6 +135,7 @@ test("open refuses, touching nothing, when the caller's pane is gone or it is no
   const calls = record()
   await assert.rejects(open(kitWith(), ["a"], from("42")), /^Error: pane 42 does not exist; not guessing which tab to use$/)
   await assert.rejects(open(kitWith(), ["a"], from(undefined)), /^Error: not inside Fake$/)
+  await assert.rejects(open(kitWith(), ["a"], { env: { FAKE_SESSION: "1" }, cwd: dir }), /^Error: not inside Fake$/)
   await assert.rejects(open(kitWith({ multiplexer: "none" }), ["a"], from("1")), /^Error: Helix is reached through its pane, and no multiplexer is configured$/)
   assert.deepEqual(calls, [])
 })
@@ -298,4 +299,50 @@ test("review: comments that can't reach the agent are shown, and so is a reviewe
   const missing = terminal({ error: "spawn tuicr ENOENT" })
   await review(kitWith(), from("10", temp), missing.recorded)
   assert.deepEqual(missing.seen.at(-1), ["pause", "Could not run tuicr: spawn tuicr ENOENT"])
+})
+
+// For the actions on tabs: a plain clone with a worktree nested inside it, as
+// `wt` makes in a repository that isn't in the worktree layout.
+git(temp, "clone", "-q", join(temp, "origin.git"), "outer")
+const outer = join(temp, "outer")
+git(outer, "worktree", "add", "-q", "-b", "inner", "inner")
+const inner = join(outer, "inner")
+// Tab 1 works in outer, tab 2 in inner, tab 3 in outer with an agent that
+// hasn't said where it is, tab 4 in both; tab 5 is stopped panes only.
+const nested: Pane[] = [
+  pane("1", "1", "shell", { cwd: outer }),
+  pane("2", "2", "shell", { cwd: join(inner, "src") }),
+  pane("3", "2", "agent", { cwd: inner }),
+  pane("4", "3", "shell", { cwd: join(outer, "src") }),
+  pane("5", "3", "agent", { cwd: undefined }),
+  pane("6", "4", "shell", { cwd: outer }),
+  pane("7", "4", "agent", { cwd: inner }),
+  pane("8", "5", "shell", { cwd: undefined, running: false }),
+]
+const counted = () => {
+  const commands: string[][] = []
+  const kit = makeKit({
+    config: { ...structuredClone(DEFAULTS), multiplexer: fakeMux } as Config,
+    run: (argv, o) => (commands.push(argv), run(argv, o)),
+  })
+  return { kit, commands }
+}
+
+test("tabs: the tabs working in each worktree, a nested worktree's not counted for the outer one", async () => {
+  record(nested)
+  const { kit, commands } = counted()
+  assert.deepEqual(await tabsOf(kit, [outer, "outer/inner", join(temp, "elsewhere")], { env: { FAKE_PANE: "1" }, cwd: temp }), {
+    [outer]: [{ tab: "1", sure: true }, { tab: "3", sure: false }],
+    "outer/inner": [{ tab: "2", sure: true }],
+    [join(temp, "elsewhere")]: [],
+  })
+  // One look at the worktrees per repository.
+  assert.equal(commands.filter((argv) => argv.includes("worktree")).length, 2)
+})
+
+test("tabs works with the multiplexer's session alone, and not outside one", async () => {
+  record(nested)
+  assert.deepEqual(await tabsOf(kitWith(), [inner], { env: { FAKE_SESSION: "1" }, cwd: temp }), { [inner]: [{ tab: "2", sure: true }] })
+  await assert.rejects(tabsOf(kitWith(), [inner], from(undefined)), /^Error: not inside Fake$/)
+  await assert.rejects(tabsOf(kitWith({ multiplexer: "none" }), [inner], from("1")), /^Error: there are no tabs without a multiplexer/)
 })

@@ -7,10 +7,10 @@ import { existsSync } from "node:fs"
 import { resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 import { labelOf, loadAgent, loadEditor, loadMultiplexer, loadReviewer } from "./load.ts"
-import { isActive, paneWith, tabOf } from "./multiplexer.ts"
+import { isActive, paneWith, tabOf, tabsIn } from "./multiplexer.ts"
 import { reviewerEnv, scopeOf } from "./review.ts"
 import type { FileRef, Kit, Workspace } from "./types.ts"
-import { callerFolder, located, sessionOf, workspaceOf } from "./workspace.ts"
+import { callerFolder, located, realPath, sessionOf, workspaceOf, worktreesOf } from "./workspace.ts"
 
 type Env = Record<string, string | undefined>
 export type Caller = { env: Env; cwd: string }
@@ -32,12 +32,41 @@ async function callerTab(kit: Kit, caller: Caller, why: string) {
   const adapter = await loadMultiplexer(kit)
   if (!adapter) throw new Error(`${why}, and no multiplexer is configured`)
   const where = adapter.here(caller.env)
-  if (!where) throw new Error(`not inside ${labelOf(adapter)}`)
+  if (where?.pane === undefined) throw new Error(`not inside ${labelOf(adapter)}`)
   const mux = adapter.connect(where)
   const panes = await mux.panes()
   const tab = tabOf(panes, where.pane)
   if (tab === undefined) throw new Error(`pane ${where.pane} does not exist; not guessing which tab to use`)
   return { where, mux, panes, tab }
+}
+
+// The caller's multiplexer session, for the actions on its tabs (which don't
+// need the caller's pane).
+async function callerSession(kit: Kit, caller: Caller) {
+  const adapter = await loadMultiplexer(kit)
+  if (!adapter) throw new Error("there are no tabs without a multiplexer, and none is configured")
+  const where = adapter.here(caller.env)
+  if (!where) throw new Error(`not inside ${labelOf(adapter)}`)
+  return { adapter, where, mux: adapter.connect(where) }
+}
+
+export type TabIn = { tab: string; sure: boolean }
+
+// The tabs working in each of `dirs` (see tabsIn), by folder as given. Each
+// folder's repository tells which worktrees there are, so that a tab in a
+// nested worktree doesn't count for the outer one.
+export async function tabs(kit: Kit, dirs: string[], caller: Caller): Promise<Record<string, TabIn[]>> {
+  const { mux } = await callerSession(kit, caller)
+  const panes = await mux.panes()
+  const repositories: string[][] = []
+  const found: Record<string, TabIn[]> = {}
+  for (const dir of dirs) {
+    const path = realPath(resolve(caller.cwd, dir))
+    let worktrees = repositories.find((list) => list.includes(path))
+    if (!worktrees) repositories.push((worktrees = await worktreesOf(kit, path)))
+    found[dir] = tabsIn(panes, path, worktrees)
+  }
+  return found
 }
 
 // The workspace of `dir`; outside a repository, `dir` itself (programs reached

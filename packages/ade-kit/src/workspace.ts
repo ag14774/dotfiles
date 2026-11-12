@@ -1,7 +1,7 @@
 // Where am I: the workspace (the Git worktree the caller works in, with or
 // without a multiplexer), and the multiplexer location when there is one.
 import { createHash } from "node:crypto"
-import { statSync } from "node:fs"
+import { realpathSync, statSync } from "node:fs"
 import type { LoadOptions } from "./load.ts"
 import { loadMultiplexer } from "./load.ts"
 import { callerDir } from "./multiplexer.ts"
@@ -20,13 +20,36 @@ export async function workspaceOf(kit: Kit, dir: string): Promise<Workspace | un
   return result.ok && top ? { dir: top, session: sessionOf(top) } : undefined
 }
 
-export type Located = { adapter: MultiplexerAdapter; where: Where; mux: Multiplexer }
+// The worktrees of the repository `dir` is in (none outside one), as real
+// paths.
+export async function worktreesOf(kit: Kit, dir: string): Promise<string[]> {
+  const result = await kit.run(["git", "-C", dir, "worktree", "list", "--porcelain"])
+  if (!result.ok) return []
+  return result.stdout
+    .split(/\n\n+/)
+    .map((record) => record.split("\n"))
+    .filter((lines) => !lines.includes("bare"))
+    .flatMap((lines) => lines.filter((line) => line.startsWith("worktree ")).map((line) => realPath(line.slice(9))))
+}
 
-// The caller's multiplexer location, when it runs inside the configured one.
+// The path with its symbolic links resolved; as it is if it doesn't exist.
+export function realPath(path: string) {
+  try {
+    return realpathSync(path)
+  } catch {
+    return path
+  }
+}
+
+export type Located = { adapter: MultiplexerAdapter; where: Required<Where>; mux: Multiplexer }
+
+// The caller's multiplexer location, when it runs in a pane of the configured
+// one.
 export async function located(kit: Kit, env: Env = process.env, o: LoadOptions = {}): Promise<Located | undefined> {
   const adapter = await loadMultiplexer(kit, o)
   const where = adapter?.here(env)
-  return adapter && where ? { adapter, where, mux: adapter.connect(where) } : undefined
+  if (!adapter || where?.pane === undefined) return undefined
+  return { adapter, where: { session: where.session, pane: where.pane }, mux: adapter.connect(where) }
 }
 
 export const isDirectory = (path: string) => statSync(path, { throwIfNoEntry: false })?.isDirectory() ?? false

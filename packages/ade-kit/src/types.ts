@@ -6,8 +6,9 @@
 // own remote control (see workspace.ts).
 export type Workspace = { dir: string; session: string }
 
-// A multiplexer location: its session and the caller's pane.
-export type Where = { session: string; pane: string }
+// A multiplexer location: its session, and the caller's pane when it is known
+// (Zellij always says; a script run with only the session may not).
+export type Where = { session: string; pane?: string }
 
 // What a pane is for, from its name (see the multiplexer's options).
 export type Role = "agent" | "editor" | "shell" | "review"

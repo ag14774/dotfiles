@@ -8,7 +8,7 @@ import { spawn } from "node:child_process"
 import { once } from "node:events"
 import { appendFileSync } from "node:fs"
 import type { Terminal } from "./actions.ts"
-import { open, review, send } from "./actions.ts"
+import { open, review, send, tabs } from "./actions.ts"
 import { makeKit, run } from "./kit.ts"
 import { scopeOf, scopeWords } from "./review.ts"
 import type { RunOptions } from "./types.ts"
@@ -23,7 +23,12 @@ const USAGE = `usage: ade open FILE[:LINE[:COLUMN]]...
        ade review
          review this worktree's changes since origin/HEAD, then give the agent your comments
        ade review --scope
-         what a review here covers: -r BASE..HEAD (commits), -w (uncommitted changes)`
+         what a review here covers: -r BASE..HEAD (commits), -w (uncommitted changes)
+       ade tabs DIR
+         the tabs working in the worktree DIR (all their running panes are inside it), one per
+         line: ID:sure, or ID:unsure when one of its panes didn't say where it is
+       ade tabs --json DIR...
+         the same for each DIR, as JSON: {"DIR": [{"tab": "ID", "sure": true}, ...], ...}`
 
 class UsageError extends Error {}
 
@@ -94,6 +99,15 @@ async function main(command: string | undefined, args: string[]) {
       }
       if (args.length) throw new UsageError()
       return review(kit(), caller, terminal)
+    }
+    case "tabs": {
+      const json = args[0] === "--json"
+      const dirs = json ? args.slice(1) : args
+      if (json ? !dirs.length : dirs.length !== 1) throw new UsageError()
+      const found = await tabs(kit(), dirs, caller)
+      if (json) process.stdout.write(`${JSON.stringify(found)}\n`)
+      else for (const { tab, sure } of found[dirs[0]]) process.stdout.write(`${tab}:${sure ? "sure" : "unsure"}\n`)
+      return
     }
     case "help":
     case "--help":

@@ -1,13 +1,13 @@
 import assert from "node:assert/strict"
 import { execFileSync } from "node:child_process"
 import { createHash } from "node:crypto"
-import { mkdirSync, mkdtempSync, realpathSync, writeFileSync } from "node:fs"
+import { mkdirSync, mkdtempSync, realpathSync, symlinkSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { test } from "node:test"
 import { DEFAULTS } from "../src/config.ts"
 import { makeKit, run } from "../src/kit.ts"
-import { callerWorkspace, located, sessionOf, workspaceOf } from "../src/workspace.ts"
+import { callerWorkspace, located, sessionOf, workspaceOf, worktreesOf } from "../src/workspace.ts"
 import type { Config, Kit, Pane } from "../src/types.ts"
 
 const temp = realpathSync(mkdtempSync(join(tmpdir(), "ade-workspace-")))
@@ -44,7 +44,7 @@ writeFileSync(
   `export default () => ({
     api: 1,
     name: "fake",
-    here: (env) => (env.FAKE_PANE ? { session: "s", pane: env.FAKE_PANE } : undefined),
+    here: (env) => (env.FAKE_PANE ? { session: "s", pane: env.FAKE_PANE } : env.FAKE_SESSION ? { session: "s" } : undefined),
     connect: () => ({
       panes: async () => ${JSON.stringify(panes)},
       tabs: async () => [],
@@ -56,13 +56,30 @@ writeFileSync(
   })`,
 )
 
-test("located: the multiplexer location, when the caller is inside one", async () => {
+test("located: the multiplexer location, when the caller is in one of its panes", async () => {
   const at = await located(kitWith(fake), { FAKE_PANE: "2" })
   assert.deepEqual(at?.where, { session: "s", pane: "2" })
   assert.equal(at?.adapter.name, "fake")
   assert.equal((await at?.mux.panes())?.length, 3)
   assert.equal(await located(kitWith(fake), {}), undefined)
+  assert.equal(await located(kitWith(fake), { FAKE_SESSION: "1" }), undefined) // the session, but no pane
   assert.equal(await located(kitWith("none"), { FAKE_PANE: "2" }), undefined)
+})
+
+test("worktreesOf: the repository's worktrees as real paths, without a bare repository", async () => {
+  const git = (cwd: string, ...args: string[]) =>
+    execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@t", ...args], { cwd, stdio: "ignore" })
+  git(repo, "commit", "-q", "--allow-empty", "-m", "base")
+  git(repo, "worktree", "add", "-q", "-b", "inner", "inner")
+  const linked = join(temp, "linked")
+  symlinkSync(repo, linked)
+  assert.deepEqual(await worktreesOf(kitWith(), join(linked, "src")), [repo, join(repo, "inner")])
+  // The worktree layout: a bare repository with worktrees beside it.
+  git(temp, "clone", "-q", "--bare", repo, join(temp, "project", ".bare"))
+  writeFileSync(join(temp, "project", ".git"), "gitdir: ./.bare\n")
+  git(join(temp, "project"), "worktree", "add", "-q", "main", "HEAD")
+  assert.deepEqual(await worktreesOf(kitWith(), join(temp, "project", "main")), [join(temp, "project", "main")])
+  assert.deepEqual(await worktreesOf(kitWith(), elsewhere), [])
 })
 
 test("the caller's workspace is that of the pane it was in, else its own folder's", async () => {
