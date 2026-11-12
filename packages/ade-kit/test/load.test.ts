@@ -5,14 +5,16 @@ import { join } from "node:path"
 import { test } from "node:test"
 import { pathToFileURL } from "node:url"
 import { DEFAULTS } from "../src/config.ts"
-import { loadAdapter, loadMultiplexer } from "../src/load.ts"
+import { makeKit } from "../src/kit.ts"
+import { loadAdapter, loadEditor, loadMultiplexer } from "../src/load.ts"
 import type { Config, Kit } from "../src/types.ts"
 
 const dir = mkdtempSync(join(tmpdir(), "ade-load-"))
-const kitWith = (multiplexer: string): Kit => ({
-  config: { ...structuredClone(DEFAULTS), multiplexer } as Config,
-  run: async () => ({ ok: true, stdout: "", stderr: "" }),
-})
+const kitWith = (multiplexer: string, more: Partial<Config> = {}): Kit =>
+  makeKit({
+    config: { ...structuredClone(DEFAULTS), multiplexer, ...more } as Config,
+    run: async () => ({ ok: true, stdout: "", stderr: "" }),
+  })
 // A module of your own in the temporary folder, as a user would write one.
 const adapter = (name: string, body: string) => {
   const path = join(dir, `${name}.ts`)
@@ -21,7 +23,8 @@ const adapter = (name: string, body: string) => {
 }
 const fake = (fields: string) =>
   `export default (kit: Kit) => ({ name: "fake", here: () => undefined, ${fields} })`
-const mux = "connect: () => ({ panes: async () => [], tabs: async () => [] })"
+const operations = ["panes", "tabs", "start", "type", "focus"].map((name) => `${name}: async () => []`).join(", ")
+const mux = `connect: () => ({ ${operations} })`
 
 test("a built-in name loads the built-in adapter", async () => {
   const zellij = await loadMultiplexer(kitWith("zellij"))
@@ -72,11 +75,29 @@ test("an adapter missing a required operation is refused, naming what is missing
     error.message === `ade: the multiplexer ${path} lacks: name, here, connect`)
   const lazy = adapter("lazy", fake("api: 1, connect: () => ({ panes: async () => [] })"))
   const loaded = await loadMultiplexer(kitWith(lazy))
-  assert.throws(() => loaded?.connect({ session: "s", pane: "1" }), /the multiplexer "fake" lacks: tabs$/)
+  assert.throws(() => loaded?.connect({ session: "s", pane: "1" }), /the multiplexer "fake" lacks: tabs, start, type, focus$/)
 })
 
 test("a module that doesn't export a function, or can't be loaded, is refused", async () => {
   const path = adapter("object", "export default { api: 1 }")
   await assert.rejects(loadMultiplexer(kitWith(path)), /must export a function \(kit => adapter\)/)
   await assert.rejects(loadMultiplexer(kitWith(join(dir, "missing.ts"))), /cannot load the multiplexer \//)
+})
+
+test("the editor: a built-in name, or a module of your own that starts from a built-in", async () => {
+  const helix = await loadEditor(kitWith("zellij"))
+  assert.equal(helix.name, "helix")
+  assert.deepEqual(helix.programs, ["hx", "helix"])
+  const path = adapter("my-helix", 'export default (kit: Kit) => ({ ...kit.builtin.editor("helix"), programs: ["helix"] })')
+  const mine = await loadEditor(kitWith("zellij", { editor: path }))
+  assert.equal(mine.name, "helix")
+  assert.deepEqual(mine.programs, ["helix"])
+  assert.equal(typeof mine.open, "function")
+  await assert.rejects(loadEditor(kitWith("zellij", { editor: "vscode" })), /there is no built-in editor named "vscode"/)
+})
+
+test("an editor without its programs or what it supports is refused", async () => {
+  const path = adapter("bare", 'export default () => ({ api: 1, name: "bare", programs: "bare", start: () => [], open: async () => {} })')
+  await assert.rejects(loadEditor(kitWith("zellij", { editor: path })), (error: Error) =>
+    error.message === `ade: the editor ${path} lacks: programs, supports`)
 })

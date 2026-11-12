@@ -6,7 +6,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { test } from "node:test"
 import { DEFAULTS } from "../src/config.ts"
-import { run } from "../src/kit.ts"
+import { makeKit, run } from "../src/kit.ts"
 import { callerWorkspace, located, sessionOf, workspaceOf } from "../src/workspace.ts"
 import type { Config, Kit, Pane } from "../src/types.ts"
 
@@ -17,7 +17,7 @@ execFileSync("git", ["init", "-q", repo])
 const elsewhere = join(temp, "elsewhere")
 mkdirSync(elsewhere)
 
-const kitWith = (multiplexer = "none"): Kit => ({ config: { ...structuredClone(DEFAULTS), multiplexer } as Config, run })
+const kitWith = (multiplexer = "none"): Kit => makeKit({ config: { ...structuredClone(DEFAULTS), multiplexer } as Config, run })
 
 test("the derived session name: ade- and 8 hex digits of the path's SHA-1", () => {
   const sha = createHash("sha1").update("/home/me/project").digest("hex")
@@ -45,7 +45,13 @@ writeFileSync(
     api: 1,
     name: "fake",
     here: (env) => (env.FAKE_PANE ? { session: "s", pane: env.FAKE_PANE } : undefined),
-    connect: () => ({ panes: async () => ${JSON.stringify(panes)}, tabs: async () => [] }),
+    connect: () => ({
+      panes: async () => ${JSON.stringify(panes)},
+      tabs: async () => [],
+      start: async () => "",
+      type: async () => {},
+      focus: async () => {},
+    }),
   })`,
 )
 

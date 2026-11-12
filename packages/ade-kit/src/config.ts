@@ -8,9 +8,10 @@ import type { Config } from "./types.ts"
 
 type Env = Record<string, string | undefined>
 
-// Today's setup: Zellij with the dev layout and its pane names.
+// Today's setup: Zellij with the dev layout and its pane names, Helix.
 export const DEFAULTS: Config = {
   multiplexer: "zellij",
+  editor: "helix",
   zellij: {
     layout: "dev",
     panes: { agent: "opencode", shell: "main", editor: "editor", review: "review" },
@@ -39,6 +40,7 @@ const check = (config: Config, path: string) => {
   const panes: [string, unknown][] = isObject(zellij.panes) ? Object.entries(zellij.panes) : [["", undefined]]
   const values: Record<string, unknown> = {
     multiplexer: config.multiplexer,
+    editor: config.editor,
     "zellij.layout": zellij.layout,
     ...Object.fromEntries(panes.map(([role, name]) => [`zellij.panes${role ? `.${role}` : ""}`, name])),
   }

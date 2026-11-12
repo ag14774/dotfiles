@@ -23,11 +23,19 @@ export type Pane = {
 }
 export type Tab = { id: string; name: string; active: boolean }
 
+// A key typed into a pane: text, or a named key.
+export type Key = { text: string } | { key: "escape" | "enter" }
+
+// What an adapter gets to reach its program: always the workspace; the
+// multiplexer and the program's pane when there is a multiplexer.
+export type Reach = { workspace: Workspace; mux?: Multiplexer; pane?: string }
+
 // A multiplexer adapter answers "what is there" and acts on intents; layout
 // workarounds stay inside it.
 export type MultiplexerAdapter = {
   api: 1
   name: string
+  label?: string // its name in messages, such as "Zellij" (default: name)
   // The caller's location, when it runs inside this multiplexer.
   here(env: Record<string, string | undefined>): Where | undefined
   // Act in that session (and for that pane), from anywhere: the server part of
@@ -38,6 +46,45 @@ export type MultiplexerAdapter = {
 export interface Multiplexer {
   panes(): Promise<Pane[]>
   tabs(): Promise<Tab[]>
+  // Start `argv` in the tab's pane for `role`: a new pane (only in the tab
+  // you are on), or in place of the stopped pane `replace`. Returns its ID.
+  start(o: { tab: string; role: Role; argv: string[]; focus: boolean; replace?: string }): Promise<string>
+  type(pane: string, keys: Key[]): Promise<void>
+  focus(pane: string): Promise<void>
+}
+
+// A file to open, with the place to show when the editor supports it.
+export type FileRef = { path: string; line?: number; column?: number }
+
+export type EditorSupports = {
+  line: boolean // opens a file at a line
+  reload: "watches" | "command" | "none" // how it learns of files changed on disk
+  remote: boolean // has its own remote control (opens files without a multiplexer)
+}
+
+export interface Editor {
+  api: 1
+  name: string
+  label?: string
+  programs: string[] // the first on PATH starts it
+  supports: EditorSupports
+  // The command that starts it on `files` (under the workspace's derived name,
+  // for an editor with remote control).
+  start(files: FileRef[], workspace: Workspace): string[]
+  running?(workspace: Workspace): Promise<boolean> // remote control: is it up?
+  open(files: FileRef[], reach: Reach): Promise<void>
+  reload?(reach: Reach): Promise<void> // reload: "command"
+}
+
+// typedEditor (editor.ts): an editor reached by typing into its pane.
+export type TypedEditorOptions = {
+  name: string
+  label?: string
+  programs: string[]
+  start?(files: FileRef[], workspace: Workspace): string[] // default: the program and the paths
+  open(file: FileRef): Key[] // the keys that open one file
+  reload?(): Key[]
+  supports: Omit<EditorSupports, "remote">
 }
 
 // The ADE config (config.ts): choices, and options sections for adapters.
@@ -46,7 +93,9 @@ export type ZellijOptions = {
   panes: Record<Role, string> // pane names, by role
 }
 export type Config = {
-  multiplexer: string // a built-in name, a path to a module of your own, or "none"
+  // Each choice: a built-in name, or a path to a module of your own.
+  multiplexer: string // or "none"
+  editor: string
   zellij: ZellijOptions
   [section: string]: unknown
 }
@@ -59,4 +108,13 @@ export type Kit = {
   config: Config
   // Run a command (never through a shell); stdin is always closed.
   run(argv: string[], o?: RunOptions): Promise<RunResult>
+  // Quoted for an editor's command line, a quote inside doubled.
+  quote: {
+    double(text: string): string // "...", with "" for a " inside
+    single(text: string): string // '...', with '' for a ' inside
+  }
+  keys: { escape: Key; enter: Key; text(text: string): Key }
+  typedEditor(o: TypedEditorOptions): Editor
+  // The built-in adapters, to start from.
+  builtin: { editor(name: string): Editor }
 }
