@@ -288,7 +288,7 @@ mkdir -p "$TMP/xdg/ade"
 cp "$ROOT/config/.config/ade/config.json" "$TMP/xdg/ade/"
 ln -s "$ROOT/config/.local/bin/opencode-pane" "$TMP/bin/"
 export XDG_CONFIG_HOME=$TMP/xdg
-print 2 > "$ZJ_STATE/next"
+print 1000 > "$ZJ_STATE/next" # generated IDs never meet the hand-made ones below
 printf '1\thome\n' > "$ZJ_STATE/tabs"
 printf '1\t1\tmain\t%s\t-\n' "$TMP" > "$ZJ_STATE/panes"
 print 1 > "$ZJ_STATE/focus"
@@ -504,6 +504,55 @@ for caller in 999 agent; do
   [[ $out == *"$reason"* ]] || fail "wtrm ($caller) should say why the tab stays: $out"
   zellij action close-tab-by-id "$tab"
 done
+
+# What wtrm says about each tab, on stderr after "removed" (stdout stays
+# empty); it closes nothing when the worktree can't be removed.
+rm_engine() { # wt-core rm with these arguments; stdout in $out, stderr in $TMP/err
+  : > "$ZJ_STATE/log"
+  out=$("$ROOT/config/.local/bin/wt-core" rm "$@" 2>"$TMP/err")
+}
+has_tab() { grep -q "^$1	" "$ZJ_STATE/tabs"; }
+wt -b two >/dev/null 2>&1
+first=$(tab_in "$project/two")
+printf '900\ttwo again\n' >> "$ZJ_STATE/tabs"
+printf '901\t900\tmain\t%s\t-\n' "$project/two/src" >> "$ZJ_STATE/panes"
+print draft > "$project/two/notes.md"
+if rm_engine two; then fail "wtrm should refuse a worktree with untracked files"; fi
+has_tab "$first" && has_tab 900 || fail "a wtrm that removes nothing should close no tab"
+! called_with close-tab-by-id || fail "a wtrm that removes nothing should close no tab: $(<"$ZJ_STATE/log")"
+rm_engine -f two || fail "wtrm -f failed: $(<"$TMP/err")"
+assert_eq "$out" ""
+assert_eq "$(<"$TMP/err")" $'removed two\nclosed the tab of two\nclosed the tab of two'
+! has_tab "$first" && ! has_tab 900 || fail "wtrm should close both of the worktree's tabs"
+
+# Your own tab stays, and so does one with a pane of unknown directory.
+wt -b kept >/dev/null 2>&1
+own=$(tab_in "$project/kept")
+own_pane=$(awk -F'\t' -v t="$own" '$2 == t && $3 == "main" { print $1 }' "$ZJ_STATE/panes")
+printf '910\tkept unsure\n' >> "$ZJ_STATE/tabs"
+printf '911\t910\tmain\t%s\t-\n912\t910\topencode\t\t-\n' "$project/kept" >> "$ZJ_STATE/panes"
+(cd "$project/kept" && ZELLIJ_PANE_ID=$own_pane rm_engine kept) || fail "wtrm kept failed: $(<"$TMP/err")"
+assert_eq "$(<"$TMP/err")" \
+  $'removed kept\nleft a tab of kept open (Zellij did not report where all its panes are)\nleft the tab of kept open (you are in it)'
+has_tab "$own" && has_tab 910 || fail "wtrm should leave your tab and the unsure one open"
+zellij action close-tab-by-id "$own"
+zellij action close-tab-by-id 910
+
+# A tab Zellij won't close is a warning, not a failure. Without a pane ID,
+# which tab is yours is unknown: nothing closes.
+wt -b stuck >/dev/null 2>&1
+stuck=$(tab_in "$project/stuck")
+ZJ_FAIL=close-tab-by-id rm_engine stuck || fail "wtrm should succeed when a tab won't close: $(<"$TMP/err")"
+assert_eq "$(head -n 1 "$TMP/err")" "removed stuck"
+assert_eq "$(tail -n 1 "$TMP/err")" "warning: could not close the tab of stuck"
+has_tab "$stuck" || fail "the tab that would not close should still be there"
+zellij action close-tab-by-id "$stuck"
+wt -b paneless >/dev/null 2>&1
+paneless=$(tab_in "$project/paneless")
+(unset ZELLIJ_PANE_ID; rm_engine paneless) || fail "wtrm without a pane ID failed: $(<"$TMP/err")"
+assert_eq "$(<"$TMP/err")" $'removed paneless\nleft the tabs of paneless open (could not tell which tab you are in)'
+has_tab "$paneless" || fail "wtrm without a pane ID should close no tab"
+zellij action close-tab-by-id "$paneless"
 
 # ls --json reports each worktree's branch, changes and tab, for the plugin.
 wt -b listed >/dev/null 2>&1
