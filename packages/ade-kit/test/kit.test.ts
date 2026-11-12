@@ -53,4 +53,5 @@ test("the built-in adapters, by name, to start from", () => {
   assert.throws(() => kit.builtin.editor("toString"), /there is no built-in editor named "toString"/)
   assert.equal(kit.builtin.agent("opencode").name, "opencode")
   assert.throws(() => kit.builtin.agent("helix"), /there is no built-in agent named "helix"/)
+  assert.equal(kit.builtin.reviewer("tuicr").name, "tuicr")
 })

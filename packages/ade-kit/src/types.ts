@@ -108,6 +108,25 @@ export type PasteAgentOptions = {
   start(o: { session?: string; prompt?: string }): string[]
 }
 
+// What a review covers: the commits since the merge base with origin/HEAD
+// (`base`), and uncommitted changes (new files included). In a wtreview
+// worktree, HEAD is the merge base, so only `uncommitted` is set: the PR plus
+// your edits.
+export type Scope = { dir: string; base?: string; commits: boolean; uncommitted: boolean }
+
+export interface Reviewer {
+  api: 1
+  name: string
+  label?: string
+  // The command for an interactive review of `scope`, run in `scope.dir`.
+  // When you end it, the comments for the agent come out on stdout (nothing:
+  // nothing to send).
+  command(scope: Scope): string[]
+  // The environment variable its "open this file" key uses (tuicr: EDITOR),
+  // set to `ade open` so files open in the tab's editor.
+  editorVariable?: string
+}
+
 // The ADE config (config.ts): choices, and options sections for adapters.
 export type ZellijOptions = {
   layout: string
@@ -118,6 +137,10 @@ export type Config = {
   multiplexer: string // or "none"
   editor: string
   agent: string
+  reviewer: string
+  // How review comments reach the agent: "insert" fills in its input for you
+  // to send, "submit" sends them.
+  review: { deliver: "insert" | "submit" }
   zellij: ZellijOptions
   [section: string]: unknown
 }
@@ -139,5 +162,5 @@ export type Kit = {
   typedEditor(o: TypedEditorOptions): Editor
   pasteAgent(o: PasteAgentOptions): Agent
   // The built-in adapters, to start from.
-  builtin: { editor(name: string): Editor; agent(name: string): Agent }
+  builtin: { editor(name: string): Editor; agent(name: string): Agent; reviewer(name: string): Reviewer }
 }

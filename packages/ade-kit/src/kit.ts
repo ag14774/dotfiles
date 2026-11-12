@@ -6,7 +6,8 @@ import { readConfig } from "./config.ts"
 import { typedEditor } from "./editor.ts"
 import helix from "./editors/helix.ts"
 import mitos from "./editors/mitos.ts"
-import type { Agent, Config, Editor, Key, Kit, RunOptions, RunResult } from "./types.ts"
+import tuicr from "./reviewers/tuicr.ts"
+import type { Agent, Config, Editor, Key, Kit, Reviewer, RunOptions, RunResult } from "./types.ts"
 
 const TIMEOUT_MS = 10_000
 
@@ -43,6 +44,7 @@ export const keys = {
 
 const EDITORS: Record<string, (kit: Kit) => Editor> = { helix, mitos }
 const AGENTS: Record<string, (kit: Kit) => Agent> = { opencode }
+const REVIEWERS: Record<string, (kit: Kit) => Reviewer> = { tuicr }
 
 const builtin = <T>(adapters: Record<string, (kit: Kit) => T>, kind: string, name: string, kit: Kit) => {
   const make = Object.hasOwn(adapters, name) ? adapters[name] : undefined
@@ -63,6 +65,7 @@ export function makeKit(
     builtin: {
       editor: (name) => builtin(EDITORS, "editor", name, kit),
       agent: (name) => builtin(AGENTS, "agent", name, kit),
+      reviewer: (name) => builtin(REVIEWERS, "reviewer", name, kit),
     },
   }
   return kit

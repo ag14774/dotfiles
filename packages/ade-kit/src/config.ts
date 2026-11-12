@@ -8,11 +8,14 @@ import type { Config } from "./types.ts"
 
 type Env = Record<string, string | undefined>
 
-// Today's setup: Zellij with the dev layout and its pane names, Helix, OpenCode.
+// Today's setup: Zellij with the dev layout and its pane names, Helix,
+// OpenCode, and tuicr's comments filled in for you to send.
 export const DEFAULTS: Config = {
   multiplexer: "zellij",
   editor: "helix",
   agent: "opencode",
+  reviewer: "tuicr",
+  review: { deliver: "insert" },
   zellij: {
     layout: "dev",
     panes: { agent: "opencode", shell: "main", editor: "editor", review: "review" },
@@ -43,11 +46,15 @@ const check = (config: Config, path: string) => {
     multiplexer: config.multiplexer,
     editor: config.editor,
     agent: config.agent,
+    reviewer: config.reviewer,
     "zellij.layout": zellij.layout,
     ...Object.fromEntries(panes.map(([role, name]) => [`zellij.panes${role ? `.${role}` : ""}`, name])),
   }
   const wrong = Object.keys(values).filter((key) => typeof values[key] !== "string")
   if (wrong.length) throw new Error(`ade: in ${path}, these must be strings: ${wrong.join(", ")}`)
+  const deliver = isObject(config.review) ? config.review.deliver : undefined
+  if (deliver !== "insert" && deliver !== "submit")
+    throw new Error(`ade: in ${path}, review.deliver must be "insert" or "submit"`)
 }
 
 export function readConfig(env: Env = process.env): Config {

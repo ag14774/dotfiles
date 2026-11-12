@@ -7,17 +7,18 @@ import { homedir } from "node:os"
 import { dirname, join, resolve } from "node:path"
 import { fileURLToPath, pathToFileURL } from "node:url"
 import { configPath } from "./config.ts"
-import type { Agent, Editor, Kit, Multiplexer, MultiplexerAdapter } from "./types.ts"
+import type { Agent, Editor, Kit, Multiplexer, MultiplexerAdapter, Reviewer } from "./types.ts"
 
 export const API = 1
 
-type Kind = "multiplexer" | "editor" | "agent"
+type Kind = "multiplexer" | "editor" | "agent" | "reviewer"
 // Per kind: the folder of the built-ins, the operations an adapter needs, and
 // the other fields it needs, with their types.
 const KINDS: Record<Kind, { dir: string; required: string[]; fields?: Record<string, "array" | "object"> }> = {
   multiplexer: { dir: "multiplexers", required: ["here", "connect"] },
   editor: { dir: "editors", required: ["start", "open"], fields: { programs: "array", supports: "object" } },
   agent: { dir: "agents", required: ["start", "insert", "submit"] },
+  reviewer: { dir: "reviewers", required: ["command"] },
 }
 // What a connected multiplexer must do (the rest is optional).
 const MULTIPLEXER_REQUIRED = ["panes", "tabs", "start", "type", "paste", "focus"]
@@ -90,6 +91,9 @@ export const loadEditor = async (kit: Kit, o: LoadOptions = {}) =>
 
 export const loadAgent = async (kit: Kit, o: LoadOptions = {}) =>
   (await loadAdapter(kit, "agent", kit.config.agent, o)) as Agent
+
+export const loadReviewer = async (kit: Kit, o: LoadOptions = {}) =>
+  (await loadAdapter(kit, "reviewer", kit.config.reviewer, o)) as Reviewer
 
 // An adapter's name in messages.
 export const labelOf = (adapter: { name: string; label?: string }) => adapter.label ?? adapter.name

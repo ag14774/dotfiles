@@ -6,7 +6,7 @@ import { test } from "node:test"
 import { pathToFileURL } from "node:url"
 import { DEFAULTS } from "../src/config.ts"
 import { makeKit } from "../src/kit.ts"
-import { loadAdapter, loadAgent, loadEditor, loadMultiplexer } from "../src/load.ts"
+import { loadAdapter, loadAgent, loadEditor, loadMultiplexer, loadReviewer } from "../src/load.ts"
 import type { Config, Kit } from "../src/types.ts"
 
 const dir = mkdtempSync(join(tmpdir(), "ade-load-"))
@@ -109,4 +109,11 @@ test("the agent: a built-in name, or a module of your own; one that can't insert
   const lazy = adapter("lazy-agent", 'export default () => ({ api: 1, name: "lazy", start: () => [] })')
   await assert.rejects(loadAgent(kitWith("zellij", { agent: lazy })), (error: Error) =>
     error.message === `ade: the agent ${lazy} lacks: insert, submit`)
+})
+
+test("the reviewer: a built-in name, or a module of your own; one without a command is refused", async () => {
+  assert.equal((await loadReviewer(kitWith("zellij"))).name, "tuicr")
+  const path = adapter("no-command", 'export default () => ({ api: 1, name: "mine", editorVariable: "EDITOR" })')
+  await assert.rejects(loadReviewer(kitWith("zellij", { reviewer: path })), (error: Error) =>
+    error.message === `ade: the reviewer ${path} lacks: command`)
 })
