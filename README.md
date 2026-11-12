@@ -194,6 +194,10 @@ Zellij.app and copy Zellij into a folder of its own.
       say where it is (`ID:unsure`). Found by directories, never by tab names;
       a tab in a nested worktree doesn't count for the outer one. `--json` takes
       several folders (`wt-core` uses it for `wtrm` and `ls --json`)
+    - `ade close-tabs DIR [ID:sure|ID:unsure...]` — close the tabs of a
+      removed worktree (those `ade tabs` found before `wtrm` removed it),
+      except yours and the unsure ones; none when run by an agent or when
+      `$ZELLIJ_PANE_ID` no longer exists
   - `hx-open FILE...` and `opencode-send ...` — run `ade open` and `ade send`
     (kept for their callers until they call `ade`; `HX_OPEN_LOG=FILE` traces
     `hx-open`); `config/.config/zellij/review.sh`, which `Alt-v` runs, runs

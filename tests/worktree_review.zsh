@@ -79,13 +79,18 @@ case $cmd in
     print $tab
     ;;
   list-panes)
-    jq -Rn --rawfile tabs $st/tabs '
+    # A pane whose folder is gone reports it as Linux's /proc does.
+    while IFS= read -r line; do
+      f=("${(@ps:\t:)line}")
+      [[ -n $f[4] && ! -d $f[4] ]] && f[4]="$f[4] (deleted)"
+      print -r -- "${(pj:\t:)f}"
+    done < $st/panes | jq -Rn --rawfile tabs $st/tabs '
       ($tabs | split("\n") | map(select(length > 0) | split("\t") | {key: .[0], value: .[1]})
         | from_entries) as $names
       | [inputs | split("\t") | {id: (.[0] | tonumber), tab_id: (.[1] | tonumber),
           tab_name: $names[.[1]], title: .[2], terminal_command: .[4],
           pane_cwd: (if .[3] == "" then null else .[3] end), exited: (.[5] == "exited"),
-          is_plugin: false}]' < $st/panes
+          is_plugin: false}]'
     ;;
   go-to-tab-by-id) print $1 > $st/focus ;;
   close-tab-by-id)
