@@ -1,6 +1,7 @@
 #!/usr/bin/env zsh
-# What the Alt-v review covers (review.sh --scope): the commits since the merge
-# base with origin/HEAD (-r BASE..HEAD) and uncommitted changes (-w).
+# What the Alt-v review covers (ade review --scope, behind review.sh): the
+# commits since the merge base with origin/HEAD (-r BASE..HEAD) and
+# uncommitted changes (-w).
 
 set -eu
 
@@ -15,12 +16,12 @@ fail() {
 }
 scope() { # $1 = directory
   local out
-  out=$(cd "$1" && bash "$ROOT/config/.config/zellij/review.sh" --scope) || return
+  out=$(cd "$1" && "$ROOT/config/.local/bin/ade" review --scope) || return
   print -r -- ${(j: :)${(f)out}}
 }
 check() { # $1 = case, $2 = directory, $3 = expected scope
   local got
-  got=$(scope "$2") || fail "$1: review.sh --scope failed"
+  got=$(scope "$2") || fail "$1: ade review --scope failed"
   [[ $got == "$3" ]] || fail "$1: expected '$3', got '$got'"
 }
 

@@ -4,17 +4,26 @@
 // for wrong usage and 1 when the action fails. Stowed as ~/.local/bin/ade.
 //
 // Debug: set ADE_LOG to a file to append each command it runs.
+import { spawn } from "node:child_process"
+import { once } from "node:events"
 import { appendFileSync } from "node:fs"
-import { open, send } from "./actions.ts"
+import type { Terminal } from "./actions.ts"
+import { open, review, send } from "./actions.ts"
 import { makeKit, run } from "./kit.ts"
+import { scopeOf, scopeWords } from "./review.ts"
 import type { RunOptions } from "./types.ts"
+import { workspaceOf } from "./workspace.ts"
 
 const USAGE = `usage: ade open FILE[:LINE[:COLUMN]]...
          open files in this tab's editor
        ade send FILE [START [END [LANGUAGE]]] [< SELECTION]
          give this tab's agent a place in a file (and the text selected there), then focus it
        ade send --text [--submit] < TEXT
-         give it text as it is (with --submit, send it as a message)`
+         give it text as it is (with --submit, send it as a message)
+       ade review
+         review this worktree's changes since origin/HEAD, then give the agent your comments
+       ade review --scope
+         what a review here covers: -r BASE..HEAD (commits), -w (uncommitted changes)`
 
 class UsageError extends Error {}
 
@@ -24,6 +33,28 @@ const input = async () => {
   const chunks: Buffer[] = []
   for await (const chunk of process.stdin) chunks.push(chunk as Buffer)
   return Buffer.concat(chunks).toString("utf8").replace(/\n+$/, "")
+}
+
+// The review runs in this terminal, which shows its messages until a key.
+const terminal: Terminal = {
+  interact: (argv, o) =>
+    new Promise((done) => {
+      const [command, ...args] = argv
+      const child = spawn(command, args, { cwd: o.cwd, env: o.env, stdio: ["inherit", "pipe", "inherit"] })
+      const chunks: Buffer[] = []
+      child.stdout.on("data", (chunk: Buffer) => chunks.push(chunk))
+      child.on("error", (error) => done({ stdout: "", error: error.message }))
+      child.on("close", () => done({ stdout: Buffer.concat(chunks).toString("utf8") }))
+    }),
+  pause: async (message) => {
+    process.stderr.write(`${message}\n\nPress any key to close.`)
+    if (!process.stdin.isTTY) return
+    process.stdin.setRawMode(true)
+    process.stdin.resume()
+    await once(process.stdin, "data")
+    process.stdin.setRawMode(false)
+    process.stdin.pause()
+  },
 }
 
 const traced = (log: string) => async (argv: string[], o?: RunOptions) => {
@@ -52,6 +83,17 @@ async function main(command: string | undefined, args: string[]) {
       if (args.length < 1 || args.length > 4) throw new UsageError()
       const [file, start, end, language] = args
       return send(kit(), { file, start, end, language, selection: await input() }, caller)
+    }
+    case "review": {
+      if (args.length === 1 && args[0] === "--scope") {
+        const k = kit()
+        const workspace = await workspaceOf(k, caller.cwd)
+        if (!workspace) throw new Error(`${caller.cwd} is not in a Git repository`)
+        for (const word of scopeWords(await scopeOf(k, workspace.dir))) process.stdout.write(`${word}\n`)
+        return
+      }
+      if (args.length) throw new UsageError()
+      return review(kit(), caller, terminal)
     }
     case "help":
     case "--help":

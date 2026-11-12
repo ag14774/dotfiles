@@ -1,9 +1,11 @@
 import assert from "node:assert/strict"
+import { execFileSync } from "node:child_process"
 import { chmodSync, mkdirSync, mkdtempSync, realpathSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { test } from "node:test"
-import { fileRef, open, pastes, send } from "../src/actions.ts"
+import type { Terminal } from "../src/actions.ts"
+import { ADE, fileRef, open, pastes, review, send } from "../src/actions.ts"
 import { DEFAULTS } from "../src/config.ts"
 import { makeKit } from "../src/kit.ts"
 import type { Config, Key, Multiplexer, Pane, Role, Tab } from "../src/types.ts"
@@ -202,4 +204,98 @@ test("send refuses, touching nothing, without text, an agent pane in the tab, or
   await assert.rejects(send(kitWith(), at("a.md"), from("42")), /^Error: pane 42 does not exist/)
   await assert.rejects(send(kitWith({ multiplexer: "none" }), at("a.md"), from("1")), /^Error: OpenCode is reached through its pane, and no multiplexer is configured$/)
   assert.deepEqual(calls, [])
+})
+
+// For review: a clone whose branch has a commit, and a clone with nothing to
+// review; tab 1's panes work in the first.
+const git = (cwd: string, ...args: string[]) =>
+  execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@t", ...args], { cwd, encoding: "utf8" }).trim()
+git(temp, "init", "-q", "--bare", "origin.git")
+git(temp, "clone", "-q", join(temp, "origin.git"), "clean")
+const clean = join(temp, "clean")
+writeFileSync(join(clean, "a.txt"), "one\n")
+git(clean, "add", "a.txt")
+git(clean, "commit", "-qm", "base")
+git(clean, "push", "-q", "origin", "HEAD")
+git(clean, "remote", "set-head", "origin", "--auto")
+git(temp, "clone", "-q", join(temp, "origin.git"), "branch")
+const branch = join(temp, "branch")
+const base = git(branch, "rev-parse", "HEAD")
+git(branch, "switch", "-qc", "agent")
+writeFileSync(join(branch, "a.txt"), "two\n")
+git(branch, "commit", "-qam", "agent work")
+
+// Tab 1 works in `branch`; you press the key in its floating pane 10.
+const reviewing = (more: Pane[] = []) => [
+  ...session.filter((p) => p.tab !== "1"),
+  pane("1", "1", "shell", { cwd: branch }),
+  pane("5", "1", "agent", { cwd: branch }),
+  pane("10", "1", "review", { floating: true, focused: true, cwd: temp }),
+  ...more,
+]
+// A terminal that records what it runs and shows; the reviewer prints `output`.
+const terminal = (output: string | { error: string } = "") => {
+  const seen: unknown[][] = []
+  const recorded: Terminal = {
+    interact: async (argv, o) => {
+      seen.push(["interact", argv, o.cwd, o.env.EDITOR])
+      return typeof output === "string" ? { stdout: output } : { stdout: "", error: output.error }
+    },
+    pause: async (message) => void seen.push(["pause", message]),
+  }
+  return { recorded, seen }
+}
+const editorVariable = `'${ADE}' open`
+
+test("review: the reviewer on the worktree of the pane you were in; its comments filled in for the agent", async () => {
+  const calls = record(reviewing())
+  const { recorded, seen } = terminal("1. `a.txt:1` - Why?\n\n")
+  await review(kitWith(), from("10", temp), recorded)
+  assert.deepEqual(seen, [["interact", ["tuicr", "-r", `${base}..HEAD`, "--stdout"], branch, editorVariable]])
+  assert.deepEqual(calls, [["paste", "5", "1. `a.txt:1` - Why?"], ["focus", "5"]])
+})
+
+test("review: with review.deliver submit, the comments are sent; with no comments, nothing", async () => {
+  const calls = record(reviewing())
+  await review(kitWith({ review: { deliver: "submit" } }), from("10", temp), terminal("comments\n").recorded)
+  assert.deepEqual(calls, [["paste", "5", "comments"], ["type", "5", [{ key: "enter" }]], ["focus", "5"]])
+  const none = record(reviewing())
+  await review(kitWith(), from("10", temp), terminal("").recorded)
+  assert.deepEqual(none, [])
+})
+
+test("review: one per tab; a second shows the open one", async () => {
+  const calls = record(reviewing([pane("11", "1", "review", { floating: true, cwd: temp })]))
+  const { recorded, seen } = terminal()
+  await review(kitWith(), from("10", temp), recorded)
+  assert.deepEqual([calls, seen], [[["focus", "11"]], []])
+  // A stopped one doesn't count, nor one in another tab.
+  const others = record(reviewing([pane("11", "1", "review", { running: false }), pane("12", "2", "review")]))
+  await review(kitWith(), from("10", temp), terminal().recorded)
+  assert.deepEqual(others, [])
+})
+
+test("review: nothing to review is said, and waits for a key", async () => {
+  record(reviewing().map((p) => (p.tab === "1" && p.cwd === branch ? { ...p, cwd: clean } : p)))
+  const { recorded, seen } = terminal()
+  await review(kitWith(), from("10", temp), recorded)
+  assert.deepEqual(seen, [["pause", `Nothing to review in ${clean}: no commits since origin/HEAD and no uncommitted changes.`]])
+  const plain = terminal()
+  await review(kitWith({ multiplexer: "none" }), from(undefined, dir), plain.recorded)
+  assert.deepEqual(plain.seen, [["pause", `Nothing to review: ${dir} is not in a Git repository.`]])
+})
+
+test("review: comments that can't reach the agent are shown, and so is a reviewer that won't start", async () => {
+  record(reviewing().filter((p) => p.id !== "5"))
+  const { recorded, seen } = terminal("1. Why?\n")
+  await review(kitWith(), from("10", temp), recorded)
+  assert.deepEqual(seen.at(-1), ["pause", "1. Why?\n\nThe comments above could not be sent: this tab has no OpenCode pane."])
+  // Outside the multiplexer it reviews this folder, and can't send.
+  const outside = terminal("1. Why?")
+  await review(kitWith(), from(undefined, branch), outside.recorded)
+  assert.deepEqual(outside.seen.at(-1), ["pause", "1. Why?\n\nThe comments above could not be sent: not inside Fake."])
+  record(reviewing())
+  const missing = terminal({ error: "spawn tuicr ENOENT" })
+  await review(kitWith(), from("10", temp), missing.recorded)
+  assert.deepEqual(missing.seen.at(-1), ["pause", "Could not run tuicr: spawn tuicr ENOENT"])
 })

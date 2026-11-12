@@ -110,8 +110,9 @@ all of the above still holds. After upgrading OpenCode or changing the ADE
 plugin, also run `zsh tests/ade_plugin_smoke.zsh` (see "OpenCode agents and Zellij").
 After changing `packages/`, run `node --test` in `packages/ade-kit` and in
 `packages/opencode-ade-status` (Node's own test runner, no dependencies), and
-`zsh tests/hx_open.zsh` and `zsh tests/opencode_send.zsh`, which check `ade open`
-and `ade send` against a stand-in for Zellij.
+`zsh tests/hx_open.zsh`, `zsh tests/opencode_send.zsh` and
+`zsh tests/review_scope.zsh`, which check `ade open` and `ade send` against a
+stand-in for Zellij, and what `ade review` covers.
 After upgrading Zellij, Helix, Yazi or tuicr, or changing the scripts behind
 the keys, run `zsh tests/keys_smoke.zsh`: it checks `Alt-y`, Helix's `+ a` and
 the `Alt-v` review end to end in a throwaway session, with a stand-in for
@@ -176,9 +177,13 @@ Zellij.app and copy Zellij into a folder of its own.
       focus it; nothing is submitted. Not tied to an editor; Helix calls it from
       `+ a` (see "OpenCode agents and Zellij"). `ade send --text < TEXT` pastes
       text as it is (the `Alt-v` review); with `--submit` it also presses Enter
+    - `ade review` — the `Alt-v` review (see "Reviewing changes"); `ade review
+      --scope` prints what a review here covers (`-r BASE..HEAD` for the
+      commits, `-w` for uncommitted changes)
   - `hx-open FILE...` and `opencode-send ...` — run `ade open` and `ade send`
     (kept for their callers until they call `ade`; `HX_OPEN_LOG=FILE` traces
-    `hx-open`)
+    `hx-open`); `config/.config/zellij/review.sh`, which `Alt-v` runs, runs
+    `ade review`
   - `opencode-pane [--session ID] [--prompt PROMPT] | --resume` — run OpenCode
     in a pane with your shell environment, optionally on a given conversation,
     in a way Zellij restores as `--resume`, which continues the directory's
@@ -387,8 +392,10 @@ In a `wtreview` worktree, it shows the PR plus your own edits.
 In tuicr, `c` comments on a line, `v` selects lines for a range comment, `e`
 opens the file in the tab's editor pane (`Alt-v` brings the review back), and
 `y` ends the review and pastes your comments into the tab's OpenCode prompt,
-ready to send. `:q` quits without sending. `zsh tests/review_scope.zsh` checks
-what the review covers.
+ready to send. `:q` quits without sending. `Alt-v` runs `ade review`, which
+takes the reviewer from the ADE config (tuicr; `"review": {"deliver":
+"submit"}` would send the comments instead of filling them in).
+`zsh tests/review_scope.zsh` checks what the review covers.
 
 Yazi marks the same changes: git.yazi's yellow, green, red and magenta signs
 for uncommitted changes, and, to their left, the same signs in blue for what

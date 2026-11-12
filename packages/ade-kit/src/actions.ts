@@ -5,12 +5,18 @@
 // is gone.
 import { existsSync } from "node:fs"
 import { resolve } from "node:path"
-import { labelOf, loadAgent, loadEditor, loadMultiplexer } from "./load.ts"
+import { fileURLToPath } from "node:url"
+import { labelOf, loadAgent, loadEditor, loadMultiplexer, loadReviewer } from "./load.ts"
 import { isActive, paneWith, tabOf } from "./multiplexer.ts"
+import { reviewerEnv, scopeOf } from "./review.ts"
 import type { FileRef, Kit, Workspace } from "./types.ts"
-import { callerFolder, sessionOf, workspaceOf } from "./workspace.ts"
+import { callerFolder, located, sessionOf, workspaceOf } from "./workspace.ts"
 
-export type Caller = { env: Record<string, string | undefined>; cwd: string }
+type Env = Record<string, string | undefined>
+export type Caller = { env: Env; cwd: string }
+
+// The `ade` command (for the reviewer's "open this file" key).
+export const ADE = fileURLToPath(new URL("./cli.ts", import.meta.url))
 
 // FILE[:LINE[:COLUMN]], relative to `cwd`. A file whose own name ends that
 // way is taken as it is.
@@ -113,4 +119,50 @@ export async function send(kit: Kit, what: Sending, caller: Caller) {
   else if (what.submit) await agent.submit(what.text, reach)
   else await agent.insert(what.text, reach)
   await mux.focus(pane.id)
+}
+
+// What `review` needs from the terminal it runs in.
+export type Terminal = {
+  // Run an interactive command here; its stdout is collected (error: it
+  // could not start).
+  interact(argv: string[], o: { cwd: string; env: Env }): Promise<{ stdout: string; error?: string }>
+  // Show a message until you press a key.
+  pause(message: string): Promise<void>
+}
+
+// Review the worktree of the pane you were in (see callerDir) with the
+// reviewer, then hand its comments to the tab's agent (review.deliver: filled
+// in for you to send, or sent). One review per tab: if the tab has one open
+// (hidden after opening a file, say), show it instead of starting another.
+export async function review(kit: Kit, caller: Caller, terminal: Terminal) {
+  const at = await located(kit, caller.env)
+  const panes = at && (await at.mux.panes())
+  if (at && panes) {
+    const tab = tabOf(panes, at.where.pane)
+    const open = panes.find((p) => p.tab === tab && p.role === "review" && p.id !== at.where.pane && p.running)
+    if (tab !== undefined && open) return at.mux.focus(open.id)
+  }
+  const dir = callerFolder(panes, at?.where, caller.cwd)
+  const workspace = await workspaceOf(kit, dir)
+  if (!workspace) return terminal.pause(`Nothing to review: ${dir} is not in a Git repository.`)
+  const scope = await scopeOf(kit, workspace.dir)
+  if (!scope.commits && !scope.uncommitted) {
+    const remote = await kit.run(["git", "-C", workspace.dir, "rev-parse", "--verify", "--quiet", "origin/HEAD"])
+    return terminal.pause(
+      remote.ok
+        ? `Nothing to review in ${workspace.dir}: no commits since origin/HEAD and no uncommitted changes.`
+        : `Nothing to review in ${workspace.dir}: no uncommitted changes (and no origin/HEAD to compare commits with).`,
+    )
+  }
+  const reviewer = await loadReviewer(kit)
+  const env = reviewerEnv(reviewer, caller.env, ADE)
+  const result = await terminal.interact(reviewer.command(scope), { cwd: workspace.dir, env })
+  if (result.error) return terminal.pause(`Could not run ${labelOf(reviewer)}: ${result.error}`)
+  const comments = result.stdout.replace(/\n+$/, "")
+  if (!comments) return
+  try {
+    await send(kit, { text: comments, submit: kit.config.review.deliver === "submit" }, caller)
+  } catch (error) {
+    await terminal.pause(`${comments}\n\nThe comments above could not be sent: ${(error as Error).message}.`)
+  }
 }
