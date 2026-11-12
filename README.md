@@ -108,8 +108,9 @@ After upgrading Zellij, Helix or OpenCode, run `zsh tests/zellij_restore_smoke.z
 It saves, kills and restores a throwaway session (never `main`) and checks that
 all of the above still holds. After upgrading OpenCode or changing the ADE
 plugin, also run `zsh tests/ade_plugin_smoke.zsh` (see "OpenCode agents and Zellij").
-After changing `packages/`, run `node --test` in `packages/ade-kit` and in
-`packages/opencode-ade-status` (Node's own test runner, no dependencies), and
+After changing `packages/`, run `node --test` in each of `packages/ade-kit`,
+`packages/opencode-ade` and `packages/opencode-ade-status` (Node's own test
+runner, no dependencies), and
 `zsh tests/hx_open.zsh`, `zsh tests/opencode_send.zsh` and
 `zsh tests/review_scope.zsh`, which check `ade open` and `ade send` against a
 stand-in for Zellij, and what `ade review` covers.
@@ -220,7 +221,9 @@ If `cli.json` is absent, supported global `tui.json(c)` settings and persisted
 preferences are migrated into it and validated against V2's published schema,
 with the [BTW plugin](#opencode-btw) enabled.
 An existing `cli.json` is validated and preserved on reruns, except for replacing
-an old BTW plugin file reference if V2 already auto-migrated it. This is a real file,
+an old BTW plugin file reference if V2 already auto-migrated it, and removing the
+ADE plugin's old app part (`./tui-plugins/ade`; the plugin is a package in
+`plugins/` now, see "OpenCode agents and Zellij"). This is a real file,
 owned by the client; `cli.json.example` documents the defaults. Other V1 plugins
 are reported and left in the original V1 file, since their implementation must be
 ported before V2 can load them.
@@ -258,7 +261,7 @@ parent's pane) to do the work with that pane's own environment. One pane
 carries it out (the first to claim it), and the agent is told what happened,
 including "no OpenCode pane in Zellij is showing this conversation".
 
-- `show_file` opens files in the tab's Helix (`hx-open`), also after `/cd`.
+- `show_file` opens files in the tab's Helix (as `ade open` does), also after `/cd`.
 - The other way round, in Helix press `+` then `a` to ask this tab's OpenCode
   about the code: it gets `file:line`, or for a selection `file:start-end` and
   the selected text (shown as `[Pasted ~N lines]`, unsaved edits included), and
@@ -300,27 +303,30 @@ including "no OpenCode pane in Zellij is showing this conversation".
 - Each conversation a pane in Zellij shows gets short instructions about this
   setup (tabs, `show_file`, `status`, delegating only when asked), as a per-conversation
   instruction entry rather than a global `AGENTS.md`, so OpenCode elsewhere
-  never sees them.
-- The server part (`plugins/ade.ts`, loaded automatically) also removes the
-  Zellij variables from the service's own environment. A conversation that
+  never sees them. They name the multiplexer and editor of the ADE config.
+- The plugin is `packages/opencode-ade`, which uses `ade-kit` (`show_file` runs
+  `ade open`'s code in the app part). Stow links it as
+  `~/.config/opencode/plugins/ade` (a link committed under `config/`), and
+  OpenCode loads both its parts from there.
+- The server part also removes the Zellij variables from the service's own
+  environment. A conversation that
   never had a pane (a subagent, a fork not yet opened) would otherwise get the
   variables of whichever pane started the service, and act on that pane's tab.
-- The app part (`tui-plugins/ade`) is listed in `cli.json`; the installer adds
-  it. `rpc.ts` holds the calls between the two parts; its `show_file`,
+- `src/rpc.ts` holds the calls between the two parts; its `show_file`,
   `delegate` and `status` methods do what the tools do, for scripts, e.g. `opencode api POST
   "/api/rpc/ade/show_file?location%5Bdirectory%5D=DIR" -d
   '{"input":{"sessionID":"ses_…","paths":["/abs/file"]}}'` (RPC calls take
   their folder from `location[directory]`, not `directory`).
 
-Agents can still run `hx-open` or `wtrm` through the shell: `hx-open` refuses
+Agents can still run `ade open` or `wtrm` through the shell: `ade open` refuses
 when `$ZELLIJ_PANE_ID` no longer exists, and `wtrm`/`wtprune` close no tabs when
 run by an agent (OpenCode marks its commands with `OPENCODE_TERMINAL=1`) or
 when that pane no longer exists.
 
-The service keeps the server part it first loaded: OpenCode reloads changed
-plugins, but not symlinked ones like ours. When the files differ from what the
-service runs, OpenCode panes say so in a warning; run `opencode service
-restart` (this interrupts running conversations). The status plugin has no
+The service can go on running an old server part: OpenCode reloads a changed
+package plugin, but not after a reload that fails. When the files differ from
+what the service runs, OpenCode panes say so in a warning; run `opencode
+service restart` (this interrupts running conversations). The status plugin has no
 server part: restart the OpenCode panes (`ocreload`) after it changes.
 `tests/ade_plugin_smoke.zsh`
 tests this checkout's plugin with a private OpenCode service and a throwaway

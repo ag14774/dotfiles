@@ -13,9 +13,9 @@ import json5
 import jsonschema
 
 
-# The app part of the ADE plugin (its server part, plugins/ade.ts, loads on its
-# own). TUI-only plugins must be listed in cli.json.
-ADE_TUI_PLUGIN = "./tui-plugins/ade"
+# The ADE plugin's old app part. The plugin is now a package (plugins/ade,
+# packages/opencode-ade) that loads both its parts by itself, so the entry goes.
+OLD_ADE_TUI_PLUGIN = "./tui-plugins/ade"
 
 
 def read(path):
@@ -43,9 +43,11 @@ def prepare(config, state, schema_path, keybind_path, output):
             changes.append(
                 "Replacing the bundled BTW file reference with a V2 plugin directory"
             )
-        if ADE_TUI_PLUGIN not in plugins:
-            plugins.append(ADE_TUI_PLUGIN)
-            changes.append(f"Enabling the ADE plugin's app part ({ADE_TUI_PLUGIN})")
+        if OLD_ADE_TUI_PLUGIN in plugins:
+            plugins = [item for item in plugins if item != OLD_ADE_TUI_PLUGIN]
+            changes.append(
+                f"Removing the ADE plugin's old app part ({OLD_ADE_TUI_PLUGIN}); plugins/ade loads both parts now"
+            )
         if changes:
             existing["plugins"] = plugins
             jsonschema.validate(existing, schema)
@@ -154,7 +156,7 @@ def prepare(config, state, schema_path, keybind_path, output):
     if "animations_enabled" in kv:
         result["animations"] = kv["animations_enabled"]
     # The dotfiles' BTW plugin replaces the built-in one, as in cli.json.example.
-    result["plugins"] = ["-opencode.btw", "./tui-plugins/btw-v2", ADE_TUI_PLUGIN]
+    result["plugins"] = ["-opencode.btw", "./tui-plugins/btw-v2"]
     for entry in legacy.get("plugin", []):
         package = entry if isinstance(entry, str) else entry[0]
         if package != "./tui-plugins/btw.tsx":

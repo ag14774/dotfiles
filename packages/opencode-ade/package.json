@@ -1,0 +1,13 @@
+{
+  "name": "opencode-ade",
+  "version": "0.0.0",
+  "private": true,
+  "description": "OpenCode plugin: show_file, delegate and status, carried out by the OpenCode app in the pane showing the conversation",
+  "type": "module",
+  "exports": {
+    ".": "./src/server.ts",
+    "./tui": "./src/tui.ts",
+    "./rpc": "./src/rpc.ts"
+  },
+  "scripts": { "test": "node --test test/*.test.ts" }
+}

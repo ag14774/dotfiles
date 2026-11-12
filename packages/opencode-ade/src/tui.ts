@@ -1,13 +1,19 @@
-// App part of the ADE plugin: it runs in the OpenCode app inside each Zellij
-// pane, so its environment names that pane for certain. It carries out the
-// server part's requests for the conversation this pane shows, including those
-// of its subagents (they act for their parent). (The agent icons on the tabs
-// come from the status plugin, packages/opencode-ade-status.)
+// App part of the ADE plugin: it runs in the OpenCode app inside each
+// multiplexer pane, so its environment names that pane for certain. It carries
+// out the server part's requests for the conversation this pane shows,
+// including those of its subagents (they act for their parent): show_file
+// here, through ade-kit's open; delegate and status through wt-core. (The
+// agent statuses on the tabs come from the status plugin,
+// packages/opencode-ade-status.)
 import { execFile } from "node:child_process"
 import { Plugin } from "@opencode/plugin/tui"
 import { createEffect, createMemo, createRoot } from "solid-js"
-import { serverDigest } from "./digest"
-import { Ade } from "./rpc"
+import { open } from "../../ade-kit/src/actions.ts"
+import { makeKit } from "../../ade-kit/src/kit.ts"
+import { located } from "../../ade-kit/src/workspace.ts"
+import { serverDigest } from "./digest.ts"
+import { environmentFor } from "./environment.ts"
+import { Ade } from "./rpc.ts"
 
 type Copy = { sessionID: string; before?: string; compact: boolean; prepare: string[] }
 type Request = {
@@ -19,23 +25,25 @@ type Request = {
   timeout: number
   copy?: Copy
 }
+type Result = { ok: boolean; stdout: string; stderr: string }
 
-// The only commands a request may run, by action.
-const COMMANDS: Record<string, string> = { show_file: "hx-open", delegate: "wt-core", status: "wt-core" }
+// The only command a request may run, by action (show_file runs none).
+const COMMANDS: Record<string, string> = { delegate: "wt-core", status: "wt-core" }
 
 export default Plugin.define({
   id: "local.ade",
   setup(context) {
     const ade = context.client.rpc(Ade)
 
-    // A running OpenCode service keeps the server part it first loaded (it does
-    // not reload symlinked plugins), so after the files change it runs old code.
+    // The OpenCode service can go on running old server code after the files
+    // change: it reloads a changed package plugin, but not after a failed
+    // reload, and it never reloaded the symlinked file this plugin once was.
     const warn = (message: string) =>
       context.ui.toast.show({ variant: "warning", title: "ADE plugin", message, duration: 15_000 })
     const stale = "The OpenCode service runs an older version of this plugin. Run `opencode service restart` " +
       "(it interrupts running conversations)."
     const checkServer = async () => {
-      const expected = serverDigest(new URL("../../", import.meta.url))
+      const expected = serverDigest()
       if (!expected) return
       for (let attempt = 1; attempt <= 6; attempt++) {
         try {
@@ -48,12 +56,13 @@ export default Plugin.define({
         }
         await new Promise((done) => setTimeout(done, 2_000))
       }
-      warn("The plugin's server part (plugins/ade.ts) is not running; see the OpenCode log.")
+      warn("The plugin's server part (packages/opencode-ade) is not running; see the OpenCode log.")
     }
     void checkServer()
 
     const env = process.env
-    if (!env.ZELLIJ || !env.ZELLIJ_SESSION_NAME || !env.ZELLIJ_PANE_ID) return
+    // The ADE config is read each time, so a change applies at once.
+    const kit = () => makeKit({ env })
 
     // The conversation a session belongs to: its top-level ancestor.
     const parents = new Map<string, string | undefined>()
@@ -81,7 +90,7 @@ export default Plugin.define({
     }
 
     const run = (command: string, request: Request) =>
-      new Promise<{ ok: boolean; stdout: string; stderr: string }>((done) => {
+      new Promise<Result>((done) => {
         const options = { env, cwd: request.cwd, timeout: request.timeout }
         execFile(command, request.args, options, (error, stdout, stderr) => {
           const message = String(stderr) || (error ? String(error.message) : "")
@@ -110,50 +119,77 @@ export default Plugin.define({
       }
     }
 
+    // In this pane's tab; the server part made the paths absolute.
+    const showFile = async (request: Request): Promise<Result> => {
+      await open(kit(), request.args, { env, cwd: request.cwd })
+      return { ok: true, stdout: "", stderr: "" }
+    }
+
     const handle = async (request: Request) => {
       const command = COMMANDS[request.action]
-      if (!command || !(await shows(request.sessionID))) return
+      if ((!command && request.action !== "show_file") || !(await shows(request.sessionID))) return
       const { granted } = (await ade.claim({ id: request.id })) as { granted: boolean }
       if (!granted) return
-      let result = { ok: false, stdout: "", stderr: "" }
+      let result: Result = { ok: false, stdout: "", stderr: "" }
       try {
-        result = request.copy ? await runOnCopy(command, request, request.copy) : await run(command, request)
+        if (!command) result = await showFile(request)
+        else result = request.copy ? await runOnCopy(command, request, request.copy) : await run(command, request)
       } catch (error) {
         result.stderr = (error as { message?: string })?.message ?? JSON.stringify(error)
       }
       await ade.finish({ id: request.id, ...result })
     }
-    const unsubscribe = ade.events.on("request", (event) => {
-      void handle(event.data as Request).catch((error) => {
-        context.ui.toast.show({ variant: "error", title: "ADE plugin", message: String(error?.message ?? error) })
-      })
-    })
 
     // Give each conversation this pane shows the environment instructions,
     // once the server has it (a new conversation is shown just before).
     const attach = async (sessionID: string) => {
+      const instructions = await environmentFor(kit())
+      if (!instructions) return
       for (let attempt = 1; attempt <= 5; attempt++) {
         try {
-          return await ade.attach({ sessionID })
+          return await ade.attach({ sessionID, instructions })
         } catch {
           await new Promise((done) => setTimeout(done, 1_000))
         }
       }
     }
-    const stopAttaching = createRoot((dispose) => {
-      const shown = createMemo(() => {
-        const route = context.ui.router.current()
-        return route.type === "session" && context.data.session.get(route.sessionID) ? route.sessionID : undefined
+
+    const follow = () => {
+      const unsubscribe = ade.events.on("request", (event) => {
+        void handle(event.data as Request).catch((error) => {
+          context.ui.toast.show({ variant: "error", title: "ADE plugin", message: String(error?.message ?? error) })
+        })
       })
-      createEffect(() => {
-        const sessionID = shown()
-        if (sessionID) void attach(sessionID)
+      const stopAttaching = createRoot((dispose) => {
+        const shown = createMemo(() => {
+          const route = context.ui.router.current()
+          return route.type === "session" && context.data.session.get(route.sessionID) ? route.sessionID : undefined
+        })
+        createEffect(() => {
+          const sessionID = shown()
+          if (sessionID) void attach(sessionID).catch(() => {})
+        })
+        return dispose
       })
-      return dispose
-    })
+      return () => {
+        unsubscribe()
+        stopAttaching()
+      }
+    }
+
+    // Only an OpenCode in a pane of the configured multiplexer acts for its
+    // conversations and gives them the instructions.
+    let stop: (() => void) | undefined
+    let stopped = false
+    located(kit(), env).then(
+      (at) => {
+        if (at && !stopped) stop = follow()
+      },
+      (error) => warn(`The ADE config can't be used: ${error?.message ?? error}`),
+    )
     return () => {
-      unsubscribe()
-      stopAttaching()
+      stopped = true
+      stop?.()
     }
   },
 })

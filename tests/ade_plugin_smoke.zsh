@@ -1,10 +1,10 @@
 #!/usr/bin/env zsh
-# Live check of the ADE plugin (server part plugins/ade.ts, app part
-# tui-plugins/ade) and the status plugin (packages/opencode-ade-status, which
-# tells Zellij when an OpenCode pane's work is done) with this checkout's code,
-# against the installed Zellij (0.46 or newer), Helix and OpenCode. The OpenCode
-# app in the pane showing a conversation (or its parent, for a subagent) opens
-# files and delegated tabs for it.
+# Live check of the ADE plugin (packages/opencode-ade, with ade-kit) and the
+# status plugin (packages/opencode-ade-status, which tells Zellij when an
+# OpenCode pane's work is done) with this checkout's code, against the
+# installed Zellij (0.46 or newer), Helix and OpenCode. The OpenCode app in the
+# pane showing a conversation (or its parent, for a subagent) opens files and
+# delegated tabs for it.
 #
 # OpenCode runs a private background service with temporary data and config
 # (your auth, model preferences and ~/.config/zsh/secrets.zsh are reused), in a
@@ -68,6 +68,10 @@ has_environment() { # $1 = session
   oc_cli api GET "/api/experimental/session/$1/instructions/entries" 2>/dev/null \
     | jq -e '[.data // . | .[] | select(.key == "ade.environment")] | length > 0' >/dev/null
 }
+environment_of() { # $1 = session: its environment instructions
+  oc_cli api GET "/api/experimental/session/$1/instructions/entries" 2>/dev/null \
+    | jq -r '[.data // . | .[] | select(.key == "ade.environment")][0].value // empty'
+}
 tab_in() { # $1 = directory: a tab with a pane there
   zj list-panes --json 2>/dev/null | jq -r --arg d "$1" '[.[] | select(.is_plugin == false and .pane_cwd == $d)][0].tab_id // empty'
 }
@@ -111,19 +115,16 @@ cp ~/.local/share/opencode/auth.json "$TMP/oc/data/opencode/" 2>/dev/null
 cp ~/.local/state/opencode/model.json "$TMP/oc/state/opencode/" 2>/dev/null
 cp -RL ~/.config/opencode "$TMP/oc/config/opencode" 2>/dev/null
 config=$TMP/oc/config/opencode
-rm -rf "$config"/{service.json,node_modules,plugins/ade.ts,plugins/ade-status,tui-plugins/ade}
-mkdir -p "$config"/{plugins,tui-plugins} "$TMP/src/tui-plugins"
-cp "$ROOT/config/.config/opencode/plugins/ade.ts" "$TMP/src/plugins/"
-cp -R "$ROOT/config/.config/opencode/tui-plugins/ade" "$TMP/src/tui-plugins/"
+rm -rf "$config"/{service.json,node_modules,plugins/ade.ts,plugins/ade,plugins/ade-status,tui-plugins/ade}
+mkdir -p "$config/plugins"
 cp -R "$ROOT/packages" "$TMP/src/"
-ln -s "$TMP/src/plugins/ade.ts" "$config/plugins/"
+ln -s "$TMP/src/packages/opencode-ade" "$config/plugins/ade"
 ln -s "$TMP/src/packages/opencode-ade-status" "$config/plugins/ade-status"
-mkdir -p "$config/tui-plugins/ade"
-for f in "$TMP"/src/tui-plugins/ade/*; do ln -s "$f" "$config/tui-plugins/ade/"; done
+# The plugin's old app part, which the installer removes from cli.json.
 [[ -f $config/cli.json ]] || print '{}' > "$config/cli.json"
-jq '.plugins = ((.plugins // []) - ["./tui-plugins/ade"] + ["./tui-plugins/ade"])' "$config/cli.json" \
+jq '.plugins = ((.plugins // []) - ["./tui-plugins/ade"])' "$config/cli.json" \
   > "$config/cli.json.new" && mv "$config/cli.json.new" "$config/cli.json"
-ln -s "$ROOT/config/.local/bin/hx-open" "$ROOT/config/.local/bin/wt-core" "$TMP/bin/"
+ln -s "$ROOT/config/.local/bin/wt-core" "$TMP/bin/"
 export XDG_DATA_HOME=$TMP/oc/data XDG_STATE_HOME=$TMP/oc/state XDG_CACHE_HOME=$TMP/oc/cache \
   XDG_CONFIG_HOME=$TMP/oc/config PATH="$TMP/bin:$PATH"
 unset OPENCODE_PASSWORD OPENCODE_SERVER_PASSWORD
@@ -143,8 +144,8 @@ git -C "$TMP/seed" push -q "$TMP/remote.git" HEAD:main && git --git-dir="$TMP/re
 (cd "$TMP" && wt-core clone "$TMP/remote.git" proj && cd proj && wt-core open --stay main) >/dev/null 2>&1
 [[ -d $TMP/proj/main ]] || fail "could not set up a wt project"
 
-# Zellij passes this environment (private OpenCode, this checkout's hx-open and
-# wt-core) on to its panes.
+# Zellij passes this environment (private OpenCode, this checkout's wt-core) on
+# to its panes.
 (cd "$TMP/A" && tail -n 0 -f "$TMP/keys" | env -u ZELLIJ -u ZELLIJ_SESSION_NAME -u ZELLIJ_PANE_ID TERM=xterm-256color \
   script -q /dev/null zsh -fc "stty rows 50 cols 200; exec zellij --config-dir '$TMP/zj' attach --create --force-run-commands $S" \
   >"$TMP/client.log" 2>&1 &) >/dev/null 2>&1
@@ -157,6 +158,8 @@ sid=$(start_conversation "$oc" "$TMP/A")
 
 step "a conversation a pane shows gets the environment instructions; one no pane shows doesn't"
 wait_for 15 has_environment "$sid" || fail "no environment instructions on the conversation"
+[[ $(environment_of "$sid") == *"inside a Zellij terminal tab"*"a Helix editor pane"*"with git, wt, zellij"* ]] \
+  || fail "unexpected environment instructions: $(environment_of "$sid")"
 loose=$(oc_cli api POST /api/session -d "{\"location\":{\"directory\":\"$TMP/C\"}}" 2>/dev/null | jq -r '.data.id // empty')
 [[ -n $loose ]] || fail "could not create a conversation without a pane"
 sleep 3
@@ -317,18 +320,14 @@ oc_cli api POST "/api/session/$loose/shell" \
 wait_for 30 test -s "$TMP/C/seen" || fail "the shell command did not run"
 [[ $(<"$TMP/C/seen") == "[]" ]] || fail "a conversation without a pane saw Zellij: $(<"$TMP/C/seen")"
 
-step "after the server part changes on disk, OpenCode panes say the service is out of date"
-digest() { oc_cli api POST "/api/rpc/ade/info?location%5Bdirectory%5D=$(uri "$TMP/A")" -d '{"input":{}}' 2>/dev/null | jq -r '.output.digest'; }
-before=$(digest)
-print '// changed' >> "$TMP/src/plugins/ade.ts"
+# The service reloads a package plugin whose files change, but not when that
+# reload fails: then it goes on running the old code.
+step "after the server part changes on disk into code that can't load, new OpenCode panes say so"
+print 'this is not code (' >> "$TMP/src/packages/opencode-ade/src/server.ts"
 sleep 8
-if [[ $(digest) != "$before" ]]; then
-  print "  (OpenCode reloaded the symlinked plugin: the stale warning may no longer be needed)"
-else
-  zj new-pane --cwd "$TMP/C" -- opencode >/dev/null
-  sleep 2
-  fresh=$(zj list-panes --json | jq -r '[.[] | select(.is_plugin == false)] | max_by(.id) | .id')
-  wait_for 30 screen_has "$fresh" "ADE plugin" || fail "no stale warning in a new OpenCode pane"
-fi
+zj new-pane --cwd "$TMP/C" -- opencode >/dev/null
+sleep 2
+fresh=$(zj list-panes --json | jq -r '[.[] | select(.is_plugin == false)] | max_by(.id) | .id')
+wait_for 30 screen_has "$fresh" "ADE plugin" || fail "no stale warning in a new OpenCode pane"
 
 print "ade plugin smoke test: ok"

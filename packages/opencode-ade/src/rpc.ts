@@ -3,10 +3,9 @@
 // request, runs the action's command with its own pane's environment, and
 // reports back.
 //
-// A plain object: `Rpc.define` only returns its argument, and the OpenCode app
-// cannot resolve `@opencode/plugin/rpc` for a plugin outside a package.
-// OpenCode 2.2.5 fails calls to methods without an output schema, and ignores
-// a definition without `events`.
+// A plain object: `Rpc.define` only returns its argument, and nothing else has
+// to resolve. OpenCode 2.2.5 fails calls to methods without an output schema,
+// and ignores a definition without `events`.
 
 const object = (properties: Record<string, unknown>, required: string[] = Object.keys(properties)) =>
   ({ type: "object", properties, required, additionalProperties: false }) as const
@@ -44,9 +43,9 @@ export const Ade = {
         ["ok", "message", "worktrees"],
       ),
     },
-    // An OpenCode pane in Zellij shows this conversation: attach the
-    // environment instructions to it.
-    attach: { input: object({ sessionID: text }), output: empty },
+    // An OpenCode pane in a multiplexer shows this conversation: attach the
+    // environment instructions (built from the ADE config) to it.
+    attach: { input: object({ sessionID: text, instructions: text }), output: empty },
     claim: { input: object({ id: text }), output: object({ granted: { type: "boolean" } }) },
     finish: {
       input: object({ id: text, ok: { type: "boolean" }, stdout: text, stderr: text }),

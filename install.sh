@@ -143,6 +143,12 @@ if [ -L "$OPENCODE_TUI_PLUGINS/btw-v2" ]; then
 fi
 # Restow, so links to files the repository no longer has go too.
 stow --no-folding --restow -d "$DOTFILES" -t "$HOME" config
+# The ADE plugin's old app part (now inside its package, plugins/ade): stow
+# doesn't look into a folder the repository no longer has, so its links stay.
+if [ -d "$OPENCODE_TUI_PLUGINS/ade" ]; then
+  find "$OPENCODE_TUI_PLUGINS/ade" -maxdepth 1 -type l -delete
+  rmdir "$OPENCODE_TUI_PLUGINS/ade" 2>/dev/null || true
+fi
 
 echo "==> Yazi flavor (catppuccin-mocha, from package.toml)"
 if ! YAZI_PACKAGE_OUTPUT="$(ya pkg install 2>&1)"; then

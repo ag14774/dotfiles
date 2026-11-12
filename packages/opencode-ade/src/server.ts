@@ -6,12 +6,12 @@
 // So the Zellij variables are removed from it, and anything that must act in
 // "the user's tab" is done by the OpenCode app in the pane showing the
 // conversation (tui.ts), which knows its own pane for certain. (The agent
-// icons on the tabs come from the status plugin, packages/opencode-ade-status.)
+// statuses on the tabs come from the status plugin, packages/opencode-ade-status.)
 import { randomUUID } from "node:crypto"
 import { isAbsolute, resolve } from "node:path"
 import { Plugin } from "@opencode/plugin"
-import { serverDigest } from "../tui-plugins/ade/digest"
-import { Ade } from "../tui-plugins/ade/rpc"
+import { serverDigest } from "./digest.ts"
+import { Ade } from "./rpc.ts"
 
 type Action = "show_file" | "delegate" | "status"
 // Copy conversation sessionID (up to message `before`) into the worktree that
@@ -44,23 +44,14 @@ const WAITING_EVENTS = ["permission.asked", "permission.replied", "form.created"
 
 // Taken once, when this module is evaluated: a running service keeps evaluated
 // code, so this describes what runs even after the files change.
-const RUNNING = serverDigest(new URL("../", import.meta.url)) ?? "unknown"
+const RUNNING = serverDigest() ?? "unknown"
 
 const CLAIM_TIMEOUT_MS = 5_000
 const TIMEOUT_MS: Record<Action, number> = { show_file: 15_000, delegate: 120_000, status: 30_000 }
 const COMPACT_TIMEOUT_MS = 300_000
 
-// Attached to each conversation an OpenCode pane in Zellij shows (see attach).
+// The environment instructions, which the app part builds from the ADE config.
 const ENVIRONMENT_KEY = "ade.environment"
-const ENVIRONMENT = [
-  "This conversation is shown in OpenCode inside a Zellij terminal tab. Each tab belongs to one git worktree of",
-  "the project, managed with the user's `wt` command, and also has a shell pane and a Helix editor pane.",
-  "- To show the user a file, use the show_file tool. To see how the project's worktrees and their",
-  "  conversations are doing, use the status tool.",
-  "- Work in another worktree only when the user asks (for example \"delegate this\" or \"do this in a new",
-  "  worktree\"), with the delegate tool. Don't create worktrees, tabs or panes yourself (with git, wt, zellij",
-  "  or OpenCode's worktree tools).",
-].join("\n")
 
 export default Plugin.define({
   id: "local.ade",
@@ -95,10 +86,10 @@ export default Plugin.define({
       },
       status: async (input, context) => status((input as { sessionID: string }).sessionID, context.signal),
       attach: async (input) => {
-        const { sessionID } = input as { sessionID: string }
+        const { sessionID, instructions } = input as { sessionID: string; instructions: string }
         const entries = await ctx.session.instructions.entry.list({ sessionID })
-        if (!entries.some((entry) => entry.key === ENVIRONMENT_KEY && entry.value === ENVIRONMENT))
-          await ctx.session.instructions.entry.put({ sessionID, key: ENVIRONMENT_KEY, value: ENVIRONMENT })
+        if (!entries.some((entry) => entry.key === ENVIRONMENT_KEY && entry.value === instructions))
+          await ctx.session.instructions.entry.put({ sessionID, key: ENVIRONMENT_KEY, value: instructions })
         return {}
       },
       claim: async (input) => {
