@@ -1,9 +1,10 @@
 #!/usr/bin/env zsh
 # Live check of the ADE plugin (server part plugins/ade.ts, app part
-# tui-plugins/ade) and the status plugin (packages/opencode-ade-status, the tab
-# icons and totals) with this checkout's code, against the installed Zellij,
-# Helix and OpenCode. The OpenCode app in the pane showing a conversation (or
-# its parent, for a subagent) opens files and delegated tabs for it.
+# tui-plugins/ade) and the status plugin (packages/opencode-ade-status, which
+# tells Zellij when an OpenCode pane's work is done) with this checkout's code,
+# against the installed Zellij (0.46 or newer), Helix and OpenCode. The OpenCode
+# app in the pane showing a conversation (or its parent, for a subagent) opens
+# files and delegated tabs for it.
 #
 # OpenCode runs a private background service with temporary data and config
 # (your auth, model preferences and ~/.config/zsh/secrets.zsh are reused), in a
@@ -105,8 +106,7 @@ cleanup() {
 trap cleanup EXIT
 
 # Private OpenCode: your config, with a copy of this checkout's plugins linked in
-# the way the installer links them (the stale-warning step edits the copy). The
-# status plugin is a package that imports ade-kit next to it.
+# the way the installer links them (the stale-warning step edits the copy).
 cp ~/.local/share/opencode/auth.json "$TMP/oc/data/opencode/" 2>/dev/null
 cp ~/.local/state/opencode/model.json "$TMP/oc/state/opencode/" 2>/dev/null
 cp -RL ~/.config/opencode "$TMP/oc/config/opencode" 2>/dev/null
@@ -124,11 +124,6 @@ for f in "$TMP"/src/tui-plugins/ade/*; do ln -s "$f" "$config/tui-plugins/ade/";
 jq '.plugins = ((.plugins // []) - ["./tui-plugins/ade"] + ["./tui-plugins/ade"])' "$config/cli.json" \
   > "$config/cli.json.new" && mv "$config/cli.json.new" "$config/cli.json"
 ln -s "$ROOT/config/.local/bin/hx-open" "$ROOT/config/.local/bin/wt-core" "$TMP/bin/"
-# A pass-through zellij that records what is piped to zjstatus (the totals).
-print -rl '#!/bin/bash' \
-  "[[ \" \$* \" == *' pipe '* ]] && printf '%s\\n' \"\${@: -1}\" >> '$TMP/pipes.log'" \
-  "exec '$(command -v zellij)' \"\$@\"" > "$TMP/bin/zellij"
-chmod +x "$TMP/bin/zellij"
 export XDG_DATA_HOME=$TMP/oc/data XDG_STATE_HOME=$TMP/oc/state XDG_CACHE_HOME=$TMP/oc/cache \
   XDG_CONFIG_HOME=$TMP/oc/config PATH="$TMP/bin:$PATH"
 unset OPENCODE_PASSWORD OPENCODE_SERVER_PASSWORD
@@ -251,34 +246,28 @@ report=$(status_of)
 jq -r '.output.message' <<< "$report" | grep -q "proj/main (this conversation): branch main" \
   || fail "unexpected status text: $(jq -r '.output.message' <<< "$report")"
 
-step "tab icons: a tab that finished in the background shows done until you visit it"
-tab_name() { zj list-tabs --json 2>/dev/null | jq -r --argjson t "$1" '.[] | select(.tab_id == $t) | .name'; }
-name_is() { [[ $(tab_name "$1") == "$2" ]]; }
+step "agent status: a tab that finished in the background shows done until you see its pane"
+# What Zellij tracks for a pane (OpenCode reports working and waiting, the
+# status plugin done and failed); the bar draws it.
+pane_status() { # $1 = pane: its status and where it comes from
+  zj list-panes --json 2>/dev/null | jq -r --argjson p "$1" \
+    '.[] | select(.id == $p and (.is_plugin | not)) | "\(.attention.status) \(.attention.source // "-")"'
+}
+status_is() { [[ $(pane_status "$1") == "$2" ]]; }
+counts() { # $1 = tab: how many of its panes have each status
+  zj list-tabs --json 2>/dev/null | jq -c --argjson t "$1" '.[] | select(.tab_id == $t) | .attention.counts | with_entries(select(.value > 0))'
+}
 full_tab=$(tab_in "$TMP/proj/feat-full")
-wait_for 30 name_is "$full_tab" $'\uf00c feat-full' || fail "expected the done icon, got: $(tab_name "$full_tab")"
+full_oc=$(pane opencode "$full_tab")
+wait_for 30 status_is "$full_oc" "Done ProgramStatus" || fail "expected done from the status plugin, got: $(pane_status "$full_oc")"
+[[ $(counts "$full_tab") == '{"done":1}' ]] || fail "the tab (and so the bar) should count one done pane: $(counts "$full_tab")"
 back=$(active_tab)
 zj go-to-tab-by-id "$full_tab"
-wait_for 15 name_is "$full_tab" feat-full || fail "visiting the tab should clear its icon, got: $(tab_name "$full_tab")"
+wait_for 15 status_is "$full_oc" "Idle -" || fail "seeing the pane should clear done, got: $(pane_status "$full_oc")"
+[[ $(counts "$full_tab") == '{}' ]] || fail "the tab still counts: $(counts "$full_tab")"
 zj go-to-tab-by-id "$back"
-[[ $(tab_name "$tab") != [$'\uf0f3\uf057\uf00c\U000f051f']* ]] \
-  || fail "a tab that was active when its agent finished should show no icon, got: $(tab_name "$tab")"
-
-step "the top bar's totals count the marks in the tab names"
-expected_totals() { # what zjstatus should get for the current tab names
-  local -a names parts
-  local mark icon colour n
-  names=("${(@f)$(zj list-tabs --json | jq -r '.[].name')}")
-  for mark icon colour in waiting $'\uf0f3' '#fab387' failed $'\uf057' '#f38ba8' \
-    done $'\uf00c' '#a6e3a1' working $'\U000f051f' '#f9e2af'; do
-    n=${#${(M)names:#$icon *}}
-    (( n )) && parts+=("#[fg=$colour]$icon $n")
-  done
-  print -r -- "zjstatus::pipe::pipe_agents::${(pj:  :)parts:- }"
-}
-totals_current() { [[ -s $TMP/pipes.log && $(tail -n 1 "$TMP/pipes.log") == "$(expected_totals)" ]]; }
-wait_for 30 totals_current \
-  || fail "the last totals don't match the tab names: '$(tail -n 1 "$TMP/pipes.log" 2>/dev/null)' vs '$(expected_totals)'"
-[[ $(expected_totals) == *$'\uf00c'* ]] || fail "expected some done tabs in the totals: $(expected_totals)"
+[[ $(pane_status "$oc") != (Done|Failed)* ]] \
+  || fail "a pane in view when its agent finished should show neither done nor failed, got: $(pane_status "$oc")"
 
 step "from a tab you are not on: opens in its Helix, and you stay where you are"
 zj new-tab --name elsewhere >/dev/null

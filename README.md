@@ -115,15 +115,38 @@ the keys, run `zsh tests/keys_smoke.zsh`: it checks `Alt-y`, Helix's `+ a` and
 the `Alt-v` review end to end in a throwaway session, with a stand-in for
 OpenCode (no model calls).
 
-The top bar (zjstatus) shows the mode, the tabs (with the agent icons above) and
-an `Alt-t` hint on the left, and on the right how many tabs are waiting, failed,
-done or working (counted from those icons by the status plugin's server part and
-sent with `zellij pipe` whenever one changes). It has no clock: zjstatus redraws
-only on Zellij events, so a clock went stale while the session was idle. It is loaded by `dev.kdl`
-straight from its release URL, so
-the first time you must grant its plugin permission once (the installer prints
-this): inside a zellij session run
-`zellij plugin -f -- "<zjstatus-url>"`, press `y`, then close that pane.
+The top bar is [ade-zjstatus](https://github.com/ag14774/ade-zjstatus), a
+zjstatus fork that draws agent statuses (they need Zellij 0.46). It shows the
+mode, the tabs (each with the icon of its most urgent agent status, see
+"OpenCode agents and Zellij") and an `Alt-t` hint on the left, and on the right
+how many agents are waiting, failed, done or working. It has no clock: zjstatus
+redraws only on Zellij events, so a clock went stale while the session was
+idle. It is loaded by `dev.kdl` straight from its release URL, so the first
+time you must grant its plugin permission once (the installer prints this):
+inside a zellij session run `zellij plugin -f -- "<bar-url>"`, press `y`, then
+close that pane.
+
+### Upgrading Zellij
+
+A running Zellij keeps its version, and a newer `zellij` still attaches to it,
+so restart Zellij after an upgrade (`install.sh` upgrades it); `main` comes
+back by resurrection:
+
+1. `zellij action save-session` (Zellij saves only every 60 seconds, and not
+   when it is stopped), then `zellij kill-session main`.
+2. If the bar in `dev.kdl` changed (as from upstream zjstatus to ade-zjstatus),
+   run `python3 install/zellij-session-bar.py`: a resurrected tab keeps the bar
+   it was saved with, so this gives the saved tabs the new one (it keeps a copy
+   of the file it changes).
+3. Open a terminal.
+
+Zellij 0.46's own status features keep their defaults (`config.kdl` has no
+`attention` section). The bar shows only what agents report themselves
+(`attention_source "program_status"` in `dev.kdl`), not Zellij's guesses such
+as a long shell command that finished. Zellij's inbox is in the session manager
+(session mode `w`). A new session (not a resurrected one) starts with a welcome
+screen: press `Esc`, or `Ctrl-c` so it never shows again; `Enter` would install
+Zellij.app and copy Zellij into a folder of its own.
 
 ## Layout
 
@@ -245,17 +268,18 @@ including "no OpenCode pane in Zellij is showing this conversation".
   and its latest conversation: working, waiting for you (a permission request
   or question), idle, failed or interrupted, with the start of its last answer.
   Read-only; a tab you only use to delegate and ask this acts as a coordinator.
-- Each tab's name shows what its OpenCode is doing, with a Nerd Font icon in
-  front: 󰔟 working,  waiting for you (a permission request or question),
-   done and  failed or interrupted. Done and failed show only if the tab
-  wasn't active when the work ended, and clear when you visit it. The app in
-  the pane renames its own tab (`rename-tab-by-id`); with several OpenCode
-  panes in a tab, the most urgent state wins. Nothing relies on the names;
-  `wt` finds tabs by directory. This is the status plugin,
-  `packages/opencode-ade-status`, a package built on `packages/ade-kit`
-  (which reads the optional `~/.config/ade/config.json`; its defaults are this
-  setup). Stow links it as `~/.config/opencode/plugins/ade-status` (a link
-  committed under `config/`), which loads both its parts.
+- Each tab shows what its agents are doing, with a Nerd Font icon in front of
+  its name: 󰔟 working,  waiting for you (a permission request or question),
+   done and  failed or interrupted; with several agent panes in a tab,
+  the most urgent status wins. Zellij 0.46 tracks each pane's status from what
+  its program reports (OSC 7501), and the bar draws it. OpenCode reports
+  working and waiting itself; the status plugin, `packages/opencode-ade-status`,
+  adds done and failed, which OpenCode doesn't report yet (its issue #60411).
+  Done and failed show only if the pane wasn't in view when the work ended, and
+  clear once you have seen it (by visiting its tab, unless the pane is hidden
+  there). Tab names are left alone. Stow links the plugin as
+  `~/.config/opencode/plugins/ade-status` (a link committed under `config/`);
+  it has only an app part, which each OpenCode app loads when it starts.
 - Each conversation a pane in Zellij shows gets short instructions about this
   setup (tabs, `show_file`, `status`, delegating only when asked), as a per-conversation
   instruction entry rather than a global `AGENTS.md`, so OpenCode elsewhere
@@ -279,9 +303,9 @@ when that pane no longer exists.
 The service keeps the server part it first loaded: OpenCode reloads changed
 plugins, but not symlinked ones like ours. When the files differ from what the
 service runs, OpenCode panes say so in a warning; run `opencode service
-restart` (this interrupts running conversations). The status plugin, a package
-directory, is reloaded when its own files change, but not when `ade-kit`
-changes; it warns the same way. `tests/ade_plugin_smoke.zsh`
+restart` (this interrupts running conversations). The status plugin has no
+server part: restart the OpenCode panes (`ocreload`) after it changes.
+`tests/ade_plugin_smoke.zsh`
 tests this checkout's plugin with a private OpenCode service and a throwaway
 Zellij session, so it needs no restart and never touches your session or
 service. It makes six short model calls.
@@ -411,7 +435,7 @@ just unused.
 | delta UI (diff gutters, blame) | `config/.config/git/config` → `[delta "catppuccin-mocha"]` block | hardcoded hex: `blame-palette`, the `*-style` lines, `map-styles` |
 | glow (the `cheat` pager) | `config/.config/glow/catppuccin-mocha.json` | full markdown palette. **Also referenced by** `shell/cheatsheet.zsh` and `config/.config/zellij/config.kdl` (the cheatsheet pane) — edit in place, or rename the file and update both refs |
 | `cheat --pretty` HTML | `CHEATSHEET.css` | Catppuccin CSS vars at the top (`--base`, `--text`, `--red`, …) |
-| zjstatus top bar | `config/.config/zellij/layouts/dev.kdl` | hex inside the `format_*` / `mode_*` / `tab_*` strings; independent of Zellij's `theme` |
+| top bar (ade-zjstatus) | `config/.config/zellij/layouts/dev.kdl` | hex inside the `format_*` / `mode_*` / `tab_*` / `attention_*` strings; independent of Zellij's `theme` |
 | Zellij `onedark-custom` | `config/.config/zellij/config.kdl`, `themes {}` block | an **unused** custom theme (RGB triplets) — only matters if you set `theme` to it |
 
 Not themed here (they follow the terminal palette): `fzf`

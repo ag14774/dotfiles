@@ -52,6 +52,8 @@ Default mode = **locked**, so keys pass through to Helix/Yazi. Unlock with `Ctrl
 
 ★ Tabs, panes, Helix and OpenCode (its folder's latest conversation) come back after a restart; programs started in shells don't rerun. `zreset` starts clean.
 
+★ In front of each tab's name, what its agents are doing: 󰔟 working ·  waiting for you ·  done ·  failed; the top bar's right side counts them. Done and failed clear once you have seen that pane. Zellij's inbox: `Ctrl-g` → `o` → `w`.
+
 | Mode | Keys |
 |---|---|
 | Tab | `n` new · `x` close · `r` rename · ★ `<` `>` move tab · `1`–`9` jump |

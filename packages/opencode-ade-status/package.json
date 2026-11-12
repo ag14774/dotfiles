@@ -2,12 +2,10 @@
   "name": "opencode-ade-status",
   "version": "0.0.0",
   "private": true,
-  "description": "OpenCode plugin: what each tab's agents are doing, as icons on the tabs and totals in the bar",
+  "description": "OpenCode plugin: reports to the terminal when an OpenCode pane's work is done or failed (OSC 7501), next to OpenCode's own working and waiting",
   "type": "module",
   "exports": {
-    ".": "./src/server.ts",
-    "./tui": "./src/tui.ts",
-    "./rpc": "./src/rpc.ts"
+    "./tui": "./src/tui.ts"
   },
   "scripts": { "test": "node --test test/*.test.ts" }
 }

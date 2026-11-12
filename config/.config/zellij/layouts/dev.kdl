@@ -2,17 +2,15 @@ layout {
     // ============================ Reusable pieces ============================
     // TOP BAR: zjstatus (size is set where the template is used, not here).
     pane_template name="zjbar" borderless=true {
-        plugin location="https://github.com/dj95/zjstatus/releases/download/v0.23.0/zjstatus.wasm" {
+        // ade-zjstatus (github.com/ag14774/ade-zjstatus, needs Zellij 0.46): zjstatus
+        // with agent statuses, see its FORK.md.
+        plugin location="https://github.com/ag14774/ade-zjstatus/releases/download/v0.25.0-ade.1/zjstatus.wasm" {
             format_left   "{mode}{tabs}#[fg=#585b70]  +⌥t "
             format_center ""
             // No session name (it is always main) and no clock: zjstatus redraws
             // only on Zellij events, so a clock went stale while the session idled.
-            // Right: how many tabs' agents are waiting, failed, done or working,
-            // pushed by the ADE status plugin (packages/opencode-ade-status)
-            // whenever a tab's mark changes.
-            format_right  "{pipe_agents}"
-            pipe_agents_format     "{output} "
-            pipe_agents_rendermode "dynamic"
+            // Right: how many agents are waiting, failed, done or working.
+            format_right  "{attention}"
             format_space  ""
 
             border_enabled             "false"
@@ -29,10 +27,23 @@ layout {
             mode_session "#[fg=#f9e2af,bold]  "
             mode_tmux    "#[fg=#f9e2af,bold]  "
 
-            tab_normal    "#[fg=#6C7086] {name} "
-            tab_active    "#[fg=#89b4fa,bold] {name} "
+            // {attention}: the icon of the most urgent status in the tab.
+            tab_normal    "#[fg=#6C7086] {attention}{name} "
+            tab_active    "#[fg=#89b4fa,bold] {attention}{name} "
             tab_separator "#[fg=#94e2d5,bold]⋮"
 
+            // What agents report to Zellij themselves (OSC 7501; the ADE status
+            // plugin, packages/opencode-ade-status, adds done and failed for
+            // OpenCode), not Zellij's own guesses about other programs. Nerd
+            // Font icons in Catppuccin Mocha: bell, times-circle, check,
+            // timer-sand. "done" and "failed" last until you have seen the pane.
+            attention_source          "program_status"
+            attention_needs_you       "#[fg=#fab387]\u{f0f3} "
+            attention_failed          "#[fg=#f38ba8]\u{f057} "
+            attention_done            "#[fg=#a6e3a1]\u{f00c} "
+            attention_working         "#[fg=#f9e2af]\u{f051f} "
+            attention_count_separator "  "
+            attention_format          "{counts} "
         }
     }
     // BOTTOM BAR: zellij keybinding hints.
