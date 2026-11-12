@@ -125,12 +125,14 @@ mode, the tabs (each with the icon of its most urgent agent status, see
 "OpenCode agents and Zellij") and an `Alt-t` hint on the left, and on the right
 how many agents are waiting, failed, done or working. It has no clock: zjstatus
 redraws only on Zellij events, so a clock went stale while the session was
-idle. It is loaded by `dev.kdl` straight from its release URL, so the first
-time you must grant its plugin permission once (the installer prints this):
-inside a zellij session run `zellij plugin -f -c tab_groups=true --
-"<bar-url>"`, press `y`, then close that pane (`tab_groups=true` makes it ask
-for everything the bar uses, including "Execute actions as the user" for tab
-groups).
+idle. It is loaded by `dev.kdl` straight from its release URL, and Zellij
+keeps plugin permissions per URL, so the first time, and again after the URL
+changes to a new release, grant its permission once (the installer prints
+this): inside a zellij session run `zellij plugin -f -c tab_groups=true --
+"<bar-url>"`, press `y`, then close that pane. The bar itself can't ask (its
+prompt would sit in the one-row bar, where it can't be answered). Since
+ade-zjstatus v0.25.0-ade.2 every bar asks for the same permissions, including
+"Execute actions as the user" for tab groups, whatever its options.
 
 The bar groups tabs: a tab named `prefix: name` belongs to the group `prefix`,
 shown once two tabs share it (see ade-zjstatus's FORK.md), so each project's
@@ -149,32 +151,26 @@ worktree tabs sit together:
   to locked mode, which is also what makes the bar redraw.
 
 The bar of the tab you are on draws all the tabs, and a tab keeps the bar it
-was opened or resurrected with, so tabs from before groups were turned on
-show none. Keep every bar's options alike: Zellij stores one permission set
-per plugin URL, and a bar without `tab_groups` loading replaces it with its
-smaller set; new tabs' bars then show the permission prompt (grant it again
-as above). So when Zellij is restarted (see "Upgrading Zellij"), after
-`kill-session main` give the saved bars `tab_groups "true"` (on Linux the
-folder is `~/.cache/zellij`):
-
-```sh
-perl -pi.before-groups -e '$_ = "" if /^\s*tab_groups\s/; s/^(\s*)(attention_format\s.*)$/$1$2\n$1tab_groups "true"/' \
-  ~/Library/Caches/org.Zellij-Contributors.Zellij/contract_version_1/session_info/main/session-layout.kdl
-```
+was opened or resurrected with (its URL and options are part of the saved
+session). So after the bar in `dev.kdl` changes, only new tabs have it until
+the saved tabs get it too, with `zellij-sync-bars` (see "Upgrading Zellij").
 
 ### Upgrading Zellij
 
 A running Zellij keeps its version, and a newer `zellij` still attaches to it,
-so restart Zellij after an upgrade (`install.sh` upgrades it); `main` comes
-back by resurrection:
+so restart Zellij after an upgrade (`install.sh` upgrades it), and also after
+the bar in `dev.kdl` changes; `main` comes back by resurrection:
 
-1. `zellij action save-session` (Zellij saves only every 60 seconds, and not
-   when it is stopped), then `zellij kill-session main`.
+1. Inside Zellij, run `zellij-sync-bars --restart`. It saves the session
+   (Zellij saves only every 60 seconds, and not when it is stopped), quits it,
+   which closes every pane and the terminal windows attached to it, and gives
+   the saved tabs the bar from `dev.kdl` (log in `$TMPDIR/zellij-sync-bars.log`).
 2. Open a terminal.
 
-A resurrected tab keeps the top bar it was saved with (its URL and options
-are part of the saved session): after a change to the bar in `dev.kdl`, only
-new tabs have it.
+`zellij-sync-bars` alone updates saved sessions that are not running (the
+installer runs it), `zellij-sync-bars --check` lists those whose bars differ
+from `dev.kdl`, and `python3 tests/zellij_sync_bars.py` tests it. Each changed
+saved session keeps its previous layout as `session-layout.kdl.before-bar`.
 
 Zellij 0.46's own status features keep their defaults (`config.kdl` has no
 `attention` section). The bar shows only what agents report themselves
@@ -193,6 +189,8 @@ Zellij.app and copy Zellij into a folder of its own.
     (`wt-core help`); the shell functions are thin wrappers that `cd` for you.
     For scripts and agents, stdout carries only the result (such as the
     worktree path) and progress goes to stderr
+  - `zellij-sync-bars [--check | --restart | SESSION...]` — give saved Zellij
+    sessions the top bar from `dev.kdl` (see "Upgrading Zellij")
   - `ade` — the ADE command, a link to `packages/ade-kit/src/cli.ts` (run by
     Node 23.6 or newer; `ade help`). Its choices and options are optional, in
     `~/.config/ade/config.json` (defaults in `packages/ade-kit/src/config.ts`:

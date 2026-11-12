@@ -1,0 +1,249 @@
+#!/usr/bin/env python3
+"""Give the tabs of saved Zellij sessions the top bar from dev.kdl.
+
+A resurrected tab keeps the bar it was saved with: each tab's zjstatus (its
+plugin URL and options) is part of the saved session, so after the bar in
+dev.kdl changes, only new tabs have it. This rewrites the saved bars to
+dev.kdl's. A running session saves its own bars again, so it only touches
+sessions that are not running:
+
+    zellij-sync-bars [SESSION...]   update saved sessions that are not running
+                                    (without names: all of them)
+    zellij-sync-bars --check        list saved sessions whose bars differ from
+                                    dev.kdl; exit status 1 if there are any
+    zellij-sync-bars --restart      from inside Zellij: save and quit this
+                                    session, update its bars, then open a
+                                    terminal to get it back
+
+It also takes out of saved tab names the agent status icons that the ADE
+plugin put in front of them before Zellij 0.46 drew statuses itself. Each
+changed layout keeps a copy next to it (session-layout.kdl.before-bar).
+"""
+
+import os
+import re
+import shutil
+import sqlite3
+import subprocess
+import sys
+import tempfile
+import time
+from contextlib import closing
+from pathlib import Path
+
+DEV_KDL = Path(__file__).resolve().parents[2] / ".config/zellij/layouts/dev.kdl"
+BAR = re.compile(r'plugin location="([^"]*/zjstatus\.wasm)" \{')
+# A tab name starting with a status icon (bell, times-circle, check,
+# timer-sand) and a space.
+MARKED_TAB = re.compile('(tab name=")[\uf0f3\uf057\uf00c\U000f051f] ')
+UTF8 = "utf-8"
+
+
+def caches():
+    """Where Zellij keeps saved sessions on macOS and on Linux."""
+    xdg = os.environ.get("XDG_CACHE_HOME") or str(Path.home() / ".cache")
+    return [
+        Path.home() / "Library/Caches/org.Zellij-Contributors.Zellij",
+        Path(xdg) / "zellij",
+    ]
+
+
+def block_end(text, start):
+    """The index just past the `}` closing the block whose `{` is at start."""
+    depth, i = 0, start
+    while i < len(text):
+        c = text[i]
+        if c == '"':
+            i += 1
+            while text[i] != '"':
+                i += 2 if text[i] == "\\" else 1
+        elif text.startswith("//", i):
+            i = text.index("\n", i)
+        elif c == "{":
+            depth += 1
+        elif c == "}":
+            depth -= 1
+            if depth == 0:
+                return i + 1
+        i += 1
+    raise ValueError("unbalanced braces")
+
+
+def dev_bar(text):
+    """The bar's URL and its option lines (without indentation or comments)."""
+    match = BAR.search(text, text.index('pane_template name="zjbar"'))
+    body = text[match.end() : block_end(text, match.end() - 1) - 1]
+    lines = [line.strip() for line in body.splitlines()]
+    return match.group(1), [line for line in lines if line and not line.startswith("//")]
+
+
+def with_bar(layout, url, options):
+    """The layout with every zjstatus bar replaced by dev.kdl's. Bars saved
+    without options (in the templates) keep none."""
+    out, pos = [], 0
+    for match in BAR.finditer(layout):
+        if match.start() < pos:
+            continue
+        end = block_end(layout, match.end() - 1)
+        indent = layout[layout.rindex("\n", 0, match.start()) + 1 : match.start()]
+        saved = layout[match.end() : end - 1].strip()
+        inner = "".join(f"{indent}    {line}\n" for line in options) if saved else ""
+        out += [layout[pos : match.start()], f'plugin location="{url}" {{\n{inner}{indent}}}']
+        pos = end
+    return MARKED_TAB.sub(r"\1", "".join(out) + layout[pos:])
+
+
+def indexed_names(folder):
+    """Session ID -> name, from Zellij's session indexes (0.46), read from a
+    copy so that the cache is never written."""
+    names = {}
+    for index in folder.glob("session_index*.sqlite"):
+        with tempfile.TemporaryDirectory() as tmp:
+            for part in folder.glob(index.name + "*"):
+                shutil.copy(part, tmp)
+            try:
+                with closing(sqlite3.connect(Path(tmp) / index.name)) as db:
+                    query = "SELECT id, name FROM sessions WHERE id IS NOT NULL"
+                    names.update(db.execute(query).fetchall())
+            except sqlite3.Error:
+                pass
+    return names
+
+
+def saved_sessions():
+    """Saved session name -> layout file. Since Zellij 0.46 the folder is
+    named by an ID, and a session that has ended keeps no metadata, so its
+    name comes from the session index."""
+    found = {}
+    for cache in caches():
+        for folder in sorted(cache.glob("contract_version_*")):
+            names = indexed_names(folder)
+            for layout in sorted(folder.glob("session_info/*/session-layout.kdl")):
+                metadata = layout.with_name("session-metadata.kdl")
+                first = metadata.read_text(UTF8).split("\n", 1)[0] if metadata.exists() else ""
+                match = re.fullmatch(r'name "(.*)"', first)
+                name = match.group(1) if match else names.get(layout.parent.name)
+                found[name or layout.parent.name] = layout
+    return found
+
+
+def running_sessions(zellij="zellij"):
+    # Inside a session, list-sessions marks it "(current)" even once it has
+    # quit, instead of EXITED; so ask from outside.
+    env = {key: value for key, value in os.environ.items() if not key.startswith("ZELLIJ")}
+    env.update({key: os.environ[key] for key in ["ZELLIJ_SOCKET_DIR"] if key in os.environ})
+    try:
+        out = subprocess.run(
+            [zellij, "list-sessions", "--no-formatting"], capture_output=True, text=True, env=env
+        ).stdout
+    except FileNotFoundError:
+        return set()
+    return {line.split(" ")[0] for line in out.splitlines() if line and "EXITED" not in line}
+
+
+def outdated(layout, bar):
+    before = layout.read_text(UTF8)
+    return before, with_bar(before, *bar)
+
+
+def check(bar):
+    stale = [name for name, layout in sorted(saved_sessions().items()) if len(set(outdated(layout, bar))) == 2]
+    for name in stale:
+        print(f"{name}: its saved tabs have an older bar than dev.kdl.")
+    return 1 if stale else 0
+
+
+def sync(names, bar, zellij="zellij"):
+    saved, running = saved_sessions(), running_sessions(zellij)
+    for name in names:
+        if name not in saved:
+            print(f"No saved Zellij session named {name}.", file=sys.stderr)
+            return 1
+    failed = False
+    for name in names or sorted(saved):
+        if name in running:
+            print(f"{name}: running, so left alone (quit it first, or use --restart from inside it).")
+            failed = failed or bool(names)
+            continue
+        layout = saved[name]
+        before, after = outdated(layout, bar)
+        if after == before:
+            print(f"{name}: already has the bar from dev.kdl.")
+            continue
+        layout.with_name(layout.name + ".before-bar").write_text(before, UTF8)
+        layout.write_text(after, UTF8)
+        print(f"{name}: bar updated ({layout}).")
+    return 1 if failed else 0
+
+
+def restart(bar):
+    """Save and quit this session from a process outside it (quitting the
+    session ends the shell this runs in), update its bars, and log to a file."""
+    name = os.environ.get("ZELLIJ_SESSION_NAME")
+    if not os.environ.get("ZELLIJ") or not name:
+        print("zellij-sync-bars --restart runs inside the Zellij session to restart.", file=sys.stderr)
+        return 1
+    # Only from a terminal: a script, test or agent inheriting a pane's
+    # environment must not quit the session by accident.
+    if not sys.stdin.isatty():
+        print("zellij-sync-bars --restart runs only from a terminal.", file=sys.stderr)
+        return 1
+    # The same zellij for every step, even if the PATH entry it came from goes.
+    zellij = shutil.which("zellij")
+    if not zellij:
+        print("zellij-sync-bars: zellij is not on PATH.", file=sys.stderr)
+        return 1
+    log = Path(tempfile.gettempdir()) / "zellij-sync-bars.log"
+    print(f"Saving and quitting {name}; its bars are updated next (log: {log}).")
+    print("Open a terminal in a few seconds to get it back.")
+    sys.stdout.flush()
+    if os.fork():
+        return 0
+    os.setsid()  # a session of its own, so quitting Zellij doesn't end it
+    if os.fork():
+        os._exit(0)
+    # Let go of the pane's terminal: Zellij keeps the session until every
+    # process holding it has closed it.
+    os.closerange(3, os.sysconf("SC_OPEN_MAX"))
+    with open(log, "w", encoding=UTF8) as out:
+        os.dup2(out.fileno(), 1)
+        os.dup2(out.fileno(), 2)
+        os.dup2(os.open(os.devnull, os.O_RDONLY), 0)
+    sys.stdout = sys.stderr = open(1, "w", encoding=UTF8, buffering=1, closefd=False)
+
+    def note(text):
+        print(time.strftime("%H:%M:%S"), text)
+
+    status = 1
+    try:
+        note(f"saving {name}")
+        subprocess.run([zellij, "--session", name, "action", "save-session"])
+        time.sleep(1)
+        note(f"quitting {name}")
+        subprocess.run([zellij, "kill-session", name])
+        for _ in range(60):
+            if name not in running_sessions(zellij):
+                break
+            time.sleep(0.5)
+        note("updating the saved bars")
+        status = sync([name], bar, zellij)
+        note("done" if status == 0 else "failed")
+    finally:
+        sys.stdout.flush()
+        os._exit(status)
+
+
+def main(args):
+    bar = dev_bar(DEV_KDL.read_text(UTF8))
+    if args[:1] == ["--check"] and len(args) == 1:
+        return check(bar)
+    if args[:1] == ["--restart"] and len(args) == 1:
+        return restart(bar)
+    if any(arg.startswith("-") for arg in args):
+        print(__doc__.split("\n\n")[2], file=sys.stderr)
+        return 2
+    return sync(args, bar)
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

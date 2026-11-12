@@ -251,10 +251,19 @@ if [[ $zellij_major =~ ^[0-9]+$ && $zellij_minor =~ ^[0-9]+$ ]] && ((zellij_majo
   echo "  Upgrade Zellij, then restart it (see \"Upgrading Zellij\" in README.md)." >&2
 fi
 
+# A resurrected tab keeps the top bar it was saved with: give saved sessions
+# that are not running the bar from dev.kdl (a running one is named, with how
+# to restart it).
+if command -v zellij >/dev/null 2>&1 && command -v python3 >/dev/null 2>&1; then
+  echo "==> Saved Zellij sessions: the top bar from dev.kdl"
+  "$DOTFILES/config/.local/bin/zellij-sync-bars" || true
+fi
+
 echo "==> Done. Run: exec zsh"
 echo
 BAR_URL="$(grep -o 'https://[^"]*/zjstatus\.wasm' "$DOTFILES/config/.config/zellij/layouts/dev.kdl" | head -n 1)"
-echo "One-time: enable the top bar (ade-zjstatus; grant its plugin permission)."
-echo "  Inside a zellij session, run this once, press 'y' to grant, then close the pane:"
+echo "Once per top-bar release (ade-zjstatus; Zellij keeps plugin permissions per URL):"
+echo "  inside a zellij session, run this, press 'y' to grant, then close the pane:"
 echo "      zellij plugin -f -c tab_groups=true -- \"$BAR_URL\""
-echo "  (tab_groups=true makes it ask for everything the bar uses, tab groups included)"
+echo "  Then, when convenient, run zellij-sync-bars --restart there and open a"
+echo "  terminal, so the tabs that come back have this bar too."

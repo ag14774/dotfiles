@@ -50,7 +50,7 @@ Default mode = **locked**, so keys pass through to Helix/Yazi. Unlock with `Ctrl
 
 **Enter a mode after `Ctrl-g`:** `p` pane · `t` tab · `r` resize · `s` scroll · `m` move · `o` session.
 
-★ Tabs, panes, Helix and OpenCode (its folder's latest conversation) come back after a restart; programs started in shells don't rerun. `zreset` starts clean.
+★ Tabs, panes, Helix and OpenCode (its folder's latest conversation) come back after a restart; programs started in shells don't rerun. `zreset` starts clean. ★ `zellij-sync-bars --restart` restarts Zellij and gives the tabs that come back the current top bar (after a bar update), then open a terminal.
 
 ★ In front of each tab's name, what its agents are doing: 󰔟 working ·  waiting for you ·  done ·  failed; the top bar's right side counts them. Done and failed clear once you have seen that pane. Zellij's inbox: `Ctrl-g` → `o` → `w`.
 
