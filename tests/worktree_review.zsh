@@ -320,6 +320,15 @@ tab=$(tab_in "$project/tabbed")
 [[ -n $tab && $tab != 99 ]] || fail "wt -t should open a new tab once its tab was closed"
 assert_eq "$(tab_count)" 2
 
+# A tab with a live pane that reports no directory may be the worktree's:
+# focusing it is harmless, so -t goes there rather than opening a duplicate.
+printf '61\t%s\tstarting\t\t-\n' "$tab" >> "$ZJ_STATE/panes"
+zellij action go-to-tab-by-id 1
+wt -t tabbed >/dev/null 2>&1
+assert_eq "$(focused_tab)" "$tab"
+assert_eq "$(tab_count)" 2
+awk -F'\t' '$1 != 61' "$ZJ_STATE/panes" > "$ZJ_STATE/new" && mv "$ZJ_STATE/new" "$ZJ_STATE/panes"
+
 # -p opens a background tab whose OpenCode starts on the prompt, once.
 zellij action go-to-tab-by-id 1
 wt -p 'fix the flaky test' prompted >/dev/null 2>&1
@@ -406,7 +415,19 @@ json=$("$ROOT/config/.local/bin/wt-core" ls --json)
 entry() { jq -c --arg p "$project/$1" '.[] | select(.path == $p) | {branch, changed, ahead, behind, tab}' <<< "$json"; }
 assert_eq "$(entry listed)" '{"branch":"listed","changed":1,"ahead":0,"behind":0,"tab":"sure"}'
 assert_eq "$(entry main)" '{"branch":"main","changed":0,"ahead":0,"behind":0,"tab":null}'
+# Without the caller's pane the tabs are found all the same; outside Zellij
+# there are none. A live pane that reports no directory makes a tab "unsure".
+json=$(env -u ZELLIJ_PANE_ID "$ROOT/config/.local/bin/wt-core" ls --json)
+assert_eq "$(entry listed | jq -r .tab)" sure
+json=$(env -u ZELLIJ "$ROOT/config/.local/bin/wt-core" ls --json)
+assert_eq "$(entry listed | jq -r .tab)" null
+listed_tab=$(tab_in "$project/listed")
+printf '62\t%s\tstarting\t\t-\n' "$listed_tab" >> "$ZJ_STATE/panes"
+json=$("$ROOT/config/.local/bin/wt-core" ls --json)
+assert_eq "$(entry listed | jq -r .tab)" unsure
+assert_eq "$(entry main | jq -r .tab)" null
 wtrm -f listed >/dev/null 2>&1
+zellij action close-tab-by-id "$listed_tab"
 
 # Outside Zellij, -p fails before creating anything and -t changes directory.
 unset ZELLIJ ZELLIJ_SESSION_NAME ZELLIJ_PANE_ID
