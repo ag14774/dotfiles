@@ -1,5 +1,6 @@
 import assert from "node:assert/strict"
-import { mkdtempSync } from "node:fs"
+import { execFileSync } from "node:child_process"
+import { mkdtempSync, symlinkSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { test } from "node:test"
@@ -42,6 +43,14 @@ test("the instructions name the configured multiplexer and editor; without a mul
   assert.equal(await environmentFor(kitWith({ multiplexer: "none" })), undefined)
 })
 
-test("the server's fingerprint covers its files", () => {
-  assert.match(serverDigest() ?? "", /^[0-9a-f]{16}$/)
+test("the server's fingerprint covers its files, also when loaded through a link", () => {
+  const digest = serverDigest() ?? ""
+  assert.match(digest, /^[0-9a-f]{16}$/)
+  // As a running OpenCode service loads a package it picks up: through the
+  // link in plugins/, without resolving it.
+  const plugins = mkdtempSync(join(tmpdir(), "ade-plugins-"))
+  symlinkSync(join(import.meta.dirname, ".."), join(plugins, "ade"))
+  const script = `const m = await import(${JSON.stringify(join(plugins, "ade/src/digest.ts"))}); console.log(m.serverDigest())`
+  const linked = execFileSync(process.execPath, ["--preserve-symlinks", "--input-type=module", "-e", script], { encoding: "utf8" })
+  assert.equal(linked.trim(), digest)
 })
