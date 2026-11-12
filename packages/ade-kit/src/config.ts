@@ -23,7 +23,10 @@ export const DEFAULTS: Config = {
   },
 }
 
+// ADE_CONFIG names another file (tests use it: moving XDG_CONFIG_HOME would
+// move every program's config).
 export const configPath = (env: Env = process.env) => {
+  if (env.ADE_CONFIG?.startsWith("/")) return env.ADE_CONFIG
   const base = env.XDG_CONFIG_HOME?.startsWith("/") ? env.XDG_CONFIG_HOME : join(env.HOME || homedir(), ".config")
   return join(base, "ade", "config.json")
 }

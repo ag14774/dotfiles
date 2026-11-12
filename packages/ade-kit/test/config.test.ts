@@ -41,6 +41,8 @@ test("the config file is found through XDG_CONFIG_HOME, else ~/.config", () => {
   assert.equal(configPath({ XDG_CONFIG_HOME: "/x/config", HOME: "/home/me" }), "/x/config/ade/config.json")
   assert.equal(configPath({ HOME: "/home/me" }), "/home/me/.config/ade/config.json")
   assert.equal(configPath({ XDG_CONFIG_HOME: "relative", HOME: "/home/me" }), "/home/me/.config/ade/config.json")
+  assert.equal(configPath({ ADE_CONFIG: "/t/ade.json", XDG_CONFIG_HOME: "/x/config" }), "/t/ade.json")
+  assert.equal(configPath({ ADE_CONFIG: "relative.json", HOME: "/home/me" }), "/home/me/.config/ade/config.json")
 })
 
 test("settings merge into the defaults key by key, and other sections are kept", () => {

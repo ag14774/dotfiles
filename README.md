@@ -189,6 +189,7 @@ Zellij.app and copy Zellij into a folder of its own.
     `~/.config/ade/config.json` (defaults in `packages/ade-kit/src/config.ts`:
     Zellij, Helix, plain `opencode`); this repository's
     `config/.config/ade/config.json` starts OpenCode through `opencode-pane`.
+    `ADE_CONFIG=/abs/file.json` reads another config (the tests use it);
     `ADE_LOG=FILE` appends each command it runs.
     - `ade open FILE[:LINE[:COLUMN]]...` — open files in the current tab's
       editor pane (Helix: the pane named `editor`), starting it if needed, above

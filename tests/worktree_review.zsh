@@ -287,12 +287,11 @@ git -C "$project" show-ref -q --verify refs/wt-review/pr-8/head \
 # --- Zellij tabs, against the fake zellij: the caller is pane 1 in tab 1. ---
 export ZJ_STATE=$TMP/zj ZELLIJ=0 ZELLIJ_SESSION_NAME=test ZELLIJ_PANE_ID=1
 mkdir -p "$ZJ_STATE"
-# As installed: this checkout's ADE config (OpenCode through opencode-pane)
-# and opencode-pane on PATH.
-mkdir -p "$TMP/xdg/ade"
-cp "$ROOT/config/.config/ade/config.json" "$TMP/xdg/ade/"
+# This checkout's ADE config (OpenCode through opencode-pane) with the default
+# tab names, and opencode-pane on PATH, as installed.
+jq 'del(.zellij.tabName)' "$ROOT/config/.config/ade/config.json" > "$TMP/ade.json"
 ln -s "$ROOT/config/.local/bin/opencode-pane" "$TMP/bin/"
-export XDG_CONFIG_HOME=$TMP/xdg
+export ADE_CONFIG=$TMP/ade.json
 print 1000 > "$ZJ_STATE/next" # generated IDs never meet the hand-made ones below
 printf '1\thome\n' > "$ZJ_STATE/tabs"
 printf '1\t1\tmain\t%s\t-\n' "$TMP" > "$ZJ_STATE/panes"
@@ -460,15 +459,14 @@ wtrm -f review-pr-7 >/dev/null 2>&1
 # With zellij.tabName "{project}: {worktree}" (ade-zjstatus can group such
 # tabs), a new tab's name has the project's too; it is still found by its
 # panes, and the messages name the worktree.
-jq '.zellij.tabName = "{project}: {worktree}"' "$ROOT/config/.config/ade/config.json" > "$TMP/xdg/ade/config.json"
-engine -b grouped || fail "wt -b failed: $(<"$TMP/err")"
+jq '.zellij.tabName = "{project}: {worktree}"' "$TMP/ade.json" > "$TMP/grouped.json"
+ADE_CONFIG=$TMP/grouped.json engine -b grouped || fail "wt -b failed: $(<"$TMP/err")"
 said "wt: opened tab grouped in the background"
 tab=$(tab_in "$project/grouped")
 assert_eq "$(tab_name "$tab")" "project: grouped"
-engine -t grouped || fail "wt -t failed: $(<"$TMP/err")"
+ADE_CONFIG=$TMP/grouped.json engine -t grouped || fail "wt -t failed: $(<"$TMP/err")"
 assert_eq "$(focused_tab)" "$tab"
 zellij action go-to-tab-by-id 1
-cp "$ROOT/config/.config/ade/config.json" "$TMP/xdg/ade/"
 wtrm grouped >/dev/null 2>&1
 [[ -z $(tab_in "$project/grouped") ]] || fail "wtrm should close the grouped tab"
 

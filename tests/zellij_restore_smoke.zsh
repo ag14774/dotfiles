@@ -53,6 +53,9 @@ sed "s|\$HOME/.config/zellij/resurrect-command.sh|$ROOT/config/.config/zellij/re
 grep -q "$ROOT/config/.config/zellij/resurrect-command.sh" "$cfg/config.kdl" \
   || fail "could not point the test config at this checkout's hook"
 print 'serialization_interval 1' >> "$cfg/config.kdl"
+# This checkout's ADE config with the default tab names (checked below).
+jq 'del(.zellij.tabName)' "$ROOT/config/.config/ade/config.json" > "$TMP/ade.json"
+export ADE_CONFIG=$TMP/ade.json
 
 # A repository in the worktree layout.
 git init -q --bare "$TMP/origin.git"
