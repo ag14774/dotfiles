@@ -141,6 +141,8 @@ step "open a worktree tab, a file in Helix, and a long command in a shell"
 out=$(cd "$main" && in_session "$ROOT/config/.local/bin/wt-core" open -b feat 2>&1) || fail "wt -b failed: $out"
 feat_tab=$(value_of 30 tab_in "$TMP/proj/feat") \
   || fail "wt -b did not open a tab in the worktree ($out): $(panes | jq -c '[.[] | {tab_id, title, pane_cwd}]')"
+tab_info() { zj list-tabs --json 2>/dev/null | jq -r --argjson t "$feat_tab" '.[] | select(.tab_id == $t) | [.name, .active] | join(" ")'; }
+[[ $(tab_info) == "feat false" ]] || fail "wt -b should open a background tab named feat: $(tab_info)"
 main_pane=$(value_of 30 pane_field 0 main '.id') || fail "no main pane in tab 0"
 (cd "$main" && in_session env ZELLIJ_PANE_ID="$main_pane" "$ROOT/config/.local/bin/hx-open" notes.md) \
   || fail "hx-open could not open a file"

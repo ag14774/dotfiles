@@ -47,6 +47,8 @@ chmod +x "$TMP/bin/gh"
 # Stand-in for the `zellij action` calls wt-core makes. State lives in $ZJ_STATE:
 # tabs (id, name), panes (id, tab, title, cwd, command[, "exited"]) and the
 # focused tab. An empty cwd is a pane for which Zellij reports no directory.
+# Each call is appended to $ZJ_STATE/log; ZJ_FAIL names a command that fails,
+# and with ZJ_NO_AGENT set, new tabs have no opencode pane.
 cat > "$TMP/bin/zellij" <<'EOF'
 #!/usr/bin/env zsh
 st=$ZJ_STATE
@@ -58,18 +60,21 @@ fi
 [[ $1 == action ]] || exit 1
 cmd=$2
 shift 2
+print -r -- "$cmd $*" >> $st/log
+[[ $cmd == ${ZJ_FAIL:-} ]] && { print -u2 "$cmd failed"; exit 1; }
 next_id() { local n=$(<$st/next); print $(( n + 1 )) > $st/next; print $n; }
 case $cmd in
   new-tab)
     name= cwd=$PWD focus=1
     while (( $# )); do
-      case $1 in --name) name=$2; shift ;; --cwd) cwd=$2; shift ;; --no-focus) focus=0 ;; esac
+      case $1 in -n | --name) name=$2; shift ;; --cwd) cwd=$2; shift ;; --no-focus) focus=0 ;; esac
       shift
     done
     tab=$(next_id)
     printf '%s\t%s\n' $tab $name >> $st/tabs
     printf '%s\t%s\tmain\t%s\t-\n' $(next_id) $tab $cwd >> $st/panes
-    printf '%s\t%s\topencode\t%s\tzsh -i -c opencode\n' $(next_id) $tab $cwd >> $st/panes
+    [[ -n ${ZJ_NO_AGENT:-} ]] \
+      || printf '%s\t%s\topencode\t%s\tzsh -i -c opencode\n' $(next_id) $tab $cwd >> $st/panes
     (( focus )) && print $tab > $st/focus
     print $tab
     ;;
@@ -93,7 +98,7 @@ case $cmd in
     while (( $# )); do
       case $1 in
         --pane-id) pane=${2#terminal_}; shift ;;
-        --name) name=$2; shift ;;
+        -n | --name) name=$2; shift ;;
         --cwd) cwd=$2; shift ;;
         --) shift; break ;;
       esac
@@ -277,6 +282,12 @@ git -C "$project" show-ref -q --verify refs/wt-review/pr-8/head \
 # --- Zellij tabs, against the fake zellij: the caller is pane 1 in tab 1. ---
 export ZJ_STATE=$TMP/zj ZELLIJ=0 ZELLIJ_SESSION_NAME=test ZELLIJ_PANE_ID=1
 mkdir -p "$ZJ_STATE"
+# As installed: this checkout's ADE config (OpenCode through opencode-pane)
+# and opencode-pane on PATH.
+mkdir -p "$TMP/xdg/ade"
+cp "$ROOT/config/.config/ade/config.json" "$TMP/xdg/ade/"
+ln -s "$ROOT/config/.local/bin/opencode-pane" "$TMP/bin/"
+export XDG_CONFIG_HOME=$TMP/xdg
 print 2 > "$ZJ_STATE/next"
 printf '1\thome\n' > "$ZJ_STATE/tabs"
 printf '1\t1\tmain\t%s\t-\n' "$TMP" > "$ZJ_STATE/panes"
@@ -354,6 +365,92 @@ if wt -s --session ses_3 sessioned-stay >/dev/null 2>&1; then fail "--session sh
 [[ ! -d $project/sessioned-stay ]] || fail "--session with -s should create nothing"
 wtrm sessioned >/dev/null 2>&1
 wtrm sessioned-quiet >/dev/null 2>&1
+
+# What wt says, on stderr (stdout carries only the path), and the tab it opens:
+# the dev layout in the worktree, named after it.
+engine() { # wt-core open with these arguments; stdout in $out, stderr in $TMP/err
+  : > "$ZJ_STATE/log"
+  out=$("$ROOT/config/.local/bin/wt-core" open "$@" 2>"$TMP/err")
+}
+said() { grep -qxF -- "$1" "$TMP/err" || fail "expected the message '$1', got: $(<"$TMP/err")"; }
+called_with() { # $1=zellij command, then words one call of it must include
+  local cmd=$1 line word found
+  shift
+  while IFS= read -r line; do
+    [[ $line == "$cmd "* ]] || continue
+    found=1
+    for word in "$@"; do [[ " $line " == *" $word "* ]] || found=0; done
+    (( found )) && return 0
+  done < "$ZJ_STATE/log"
+  return 1
+}
+tab_name() { awk -F'\t' -v t="$1" '$1 == t { print $2 }' "$ZJ_STATE/tabs"; }
+opencode_pane() { # $1=tab: the opencode pane's cwd and command
+  awk -F'\t' -v t="$1" '$2 == t && $3 == "opencode" { print $4 "|" $5 }' "$ZJ_STATE/panes"
+}
+zellij action go-to-tab-by-id 1
+engine -b said || fail "wt -b failed: $(<"$TMP/err")"
+assert_eq "$out" "$project/said"
+said "wt: opened tab said in the background"
+tab=$(tab_in "$project/said")
+assert_eq "$(tab_name "$tab")" said
+assert_eq "$(focused_tab)" 1
+called_with new-tab "--layout dev" "--name said" "--cwd $project/said" --no-focus \
+  || fail "expected a background dev tab in the worktree, got: $(<"$ZJ_STATE/log")"
+engine -b said || fail "wt -b failed: $(<"$TMP/err")"
+assert_eq "$out" "$project/said"
+said "wt: said already has a tab"
+! called_with new-tab || fail "wt -b should not open a second tab"
+engine -t said || fail "wt -t failed: $(<"$TMP/err")"
+assert_eq "$out" "$project/said"
+assert_eq "$(<"$TMP/err")" ""
+assert_eq "$(focused_tab)" "$tab"
+zellij action go-to-tab-by-id 1
+if engine -p 'go on' said; then fail "wt -p should refuse a worktree with a tab"; fi
+assert_eq "$out" ""
+assert_eq "$(<"$TMP/err")" "wt: said already has a tab; send the prompt to its OpenCode instead"
+
+# -p: the layout's OpenCode pane is replaced in place, in the background, by
+# opencode-pane on the prompt, in the worktree; the pane closes with it.
+engine -p '-x "quoted" prompt' spoken || fail "wt -p failed: $(<"$TMP/err")"
+assert_eq "$out" "$project/spoken"
+assert_eq "$(grep '^wt: ' "$TMP/err" | grep -v '^wt: seeded ')" $'wt: opened tab spoken in the background\nwt: OpenCode in tab spoken is working on the prompt'
+tab=$(tab_in "$project/spoken")
+assert_eq "$(focused_tab)" 1
+called_with new-pane --in-place --close-replaced-pane --no-focus --close-on-exit \
+  || fail "expected the opencode pane to be replaced in place, got: $(<"$ZJ_STATE/log")"
+pane=$(opencode_pane "$tab")
+assert_eq "${pane%%|*}" "$project/spoken"
+assert_eq "${${pane#*|}#* }" '--prompt -x "quoted" prompt'
+assert_eq "${${${pane#*|}%% *}:A}" "$ROOT/config/.local/bin/opencode-pane"
+
+# Without the caller's pane ID (a script naming only the session), the same.
+env -u ZELLIJ_PANE_ID "$ROOT/config/.local/bin/wt-core" open -b nopane >/dev/null 2>&1 \
+  || fail "wt -b without ZELLIJ_PANE_ID failed"
+[[ -n $(tab_in "$project/nopane") ]] || fail "wt -b without ZELLIJ_PANE_ID should open a tab"
+
+# When Zellij fails: no tab; no opencode pane in the new tab; OpenCode not
+# started. Each fails, saying so; the worktree is there all the same.
+if ZJ_FAIL=new-tab engine -b broken; then fail "wt -b should fail when Zellij can't open a tab"; fi
+assert_eq "$out" ""
+said "wt: could not open a Zellij tab for broken"
+[[ -d $project/broken && -z $(tab_in "$project/broken") ]] || fail "a failed new-tab should leave the worktree, without a tab"
+if ZJ_NO_AGENT=1 engine -p x agentless; then fail "wt -p should fail without an opencode pane"; fi
+assert_eq "$out" ""
+assert_eq "$(grep '^wt: ' "$TMP/err" | grep -v '^wt: seeded ')" $'wt: opened tab agentless in the background\nwt: no opencode pane in tab agentless; prompt not sent (the tab stays open)'
+[[ -n $(tab_in "$project/agentless") ]] || fail "the tab without an opencode pane should stay open"
+if ZJ_FAIL=new-pane engine -p x unstarted; then fail "wt -p should fail when OpenCode can't start"; fi
+assert_eq "$out" ""
+assert_eq "$(grep '^wt: ' "$TMP/err" | grep -v '^wt: seeded ')" $'wt: opened tab unstarted in the background\nwt: could not start OpenCode with the prompt in tab unstarted'
+for name in said spoken nopane broken agentless unstarted; do wtrm -f "$name" >/dev/null 2>&1; done
+[[ -z $(tab_in "$project/said")$(tab_in "$project/spoken") ]] || fail "wtrm should close the tabs opened above"
+
+# Messages carry the command's name.
+export GH_HEAD_REPO=acme/demo GH_HEAD_OWNER=contributor GH_CROSS_REPO=false GH_MAINTAIN=true
+export GH_PR_NUMBER=7 GH_PR_STATE=OPEN
+"$ROOT/config/.local/bin/wt-core" review -b 7 >/dev/null 2>"$TMP/err" || fail "wtreview -b failed: $(<"$TMP/err")"
+said "wtreview: opened tab review-pr-7 in the background"
+wtrm -f review-pr-7 >/dev/null 2>&1
 
 # wtrm closes the worktree's tab.
 wtrm -f prompted >/dev/null 2>&1

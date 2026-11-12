@@ -125,6 +125,11 @@ ln -s "$TMP/src/packages/opencode-ade-status" "$config/plugins/ade-status"
 jq '.plugins = ((.plugins // []) - ["./tui-plugins/ade"])' "$config/cli.json" \
   > "$config/cli.json.new" && mv "$config/cli.json.new" "$config/cli.json"
 ln -s "$ROOT/config/.local/bin/wt-core" "$TMP/bin/"
+# This checkout's ADE config (OpenCode through opencode-pane) and
+# opencode-pane, as installed.
+mkdir -p "$TMP/oc/config/ade"
+cp "$ROOT/config/.config/ade/config.json" "$TMP/oc/config/ade/"
+ln -s "$ROOT/config/.local/bin/opencode-pane" "$TMP/bin/"
 export XDG_DATA_HOME=$TMP/oc/data XDG_STATE_HOME=$TMP/oc/state XDG_CACHE_HOME=$TMP/oc/cache \
   XDG_CONFIG_HOME=$TMP/oc/config PATH="$TMP/bin:$PATH"
 unset OPENCODE_PASSWORD OPENCODE_SERVER_PASSWORD
@@ -199,6 +204,12 @@ wait_for 120 gives tab_in "$TMP/proj/feat-x" \
 [[ $(active_tab) == "$tab_p" ]] || fail "delegate moved you to the new tab"
 (( $(zj list-tabs --json | jq length) == tabs_before + 1 )) || fail "delegate should open exactly one tab"
 wait_for 120 gives newest "$TMP/proj/feat-x" || fail "the delegated tab's OpenCode did not start on the brief"
+command_of() { # $1 = tab: what its opencode pane runs
+  zj list-panes --json 2>/dev/null | jq -r --argjson t "$1" \
+    '[.[] | select(.is_plugin == false and .tab_id == $t and .title == "opencode")][0].terminal_command // empty'
+}
+[[ $(command_of "$(tab_in "$TMP/proj/feat-x")") == *opencode-pane* ]] \
+  || fail "the delegated tab's OpenCode should run through opencode-pane: $(command_of "$(tab_in "$TMP/proj/feat-x")")"
 
 step "the /delegate command is available"
 oc_cli api GET "/api/command?location%5Bdirectory%5D=$(uri "$TMP/proj/main")" 2>/dev/null \
