@@ -5,8 +5,8 @@
 #
 # It installs platform packages + developer tools/language servers and the Yazi flavor,
 # symlinks config/ into ~/.config and ~/.local/bin via stow, sets up zoxide (replacing autojump),
-# maintains small idempotent blocks at the start and end of ~/.zshrc. (zjstatus
-# is loaded by dev.kdl directly from its release URL.)
+# maintains small idempotent blocks at the start and end of ~/.zshrc. (The top
+# bar, ade-zjstatus, is loaded by dev.kdl directly from its release URL.)
 # Shell expressions written into ~/.zshrc must remain literal until zsh loads it.
 # shellcheck disable=SC2016
 set -euo pipefail
@@ -236,8 +236,18 @@ fi
 } >"$ZSHRC.new"
 mv "$ZSHRC.new" "$ZSHRC"
 
+# The agent statuses in the top bar (ade-zjstatus) need Zellij 0.46; with an
+# older Zellij the bar shows none, and everything else still works.
+zellij_version="$(zellij --version 2>/dev/null | awk '{print $2}' || true)"
+IFS=. read -r zellij_major zellij_minor _ <<<"$zellij_version"
+if [[ $zellij_major =~ ^[0-9]+$ && $zellij_minor =~ ^[0-9]+$ ]] && ((zellij_major == 0 && zellij_minor < 46)); then
+  echo "WARNING: Zellij $zellij_version is older than 0.46, so the top bar shows no agent statuses." >&2
+  echo "  Upgrade Zellij, then restart it (see \"Upgrading Zellij\" in README.md)." >&2
+fi
+
 echo "==> Done. Run: exec zsh"
 echo
-echo "One-time: enable the zjstatus top bar (grant its plugin permission)."
+BAR_URL="$(grep -o 'https://[^"]*/zjstatus\.wasm' "$DOTFILES/config/.config/zellij/layouts/dev.kdl" | head -n 1)"
+echo "One-time: enable the top bar (ade-zjstatus; grant its plugin permission)."
 echo "  Inside a zellij session, run this once, press 'y' to grant, then close the pane:"
-echo "      zellij plugin -f -- \"https://github.com/dj95/zjstatus/releases/download/v0.23.0/zjstatus.wasm\""
+echo "      zellij plugin -f -- \"$BAR_URL\""
