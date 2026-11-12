@@ -112,10 +112,11 @@ value_of() { # $1=seconds, then a command; print its first non-empty, non-null o
     sleep 0.3
   done
 }
-saved_layout() {
-  local f
-  for f in {${XDG_CACHE_HOME:-$HOME/.cache}/zellij,$HOME/Library/Caches/org.Zellij-Contributors.Zellij}/*/session_info/$session/session-layout.kdl(N); do
-    print -r -- "$f"
+saved_layout() { # the saved session's folder is named by an ID (by its name before 0.46)
+  local d
+  for d in {${XDG_CACHE_HOME:-$HOME/.cache}/zellij,$HOME/Library/Caches/org.Zellij-Contributors.Zellij}/*/session_info/*(N/); do
+    [[ -f $d/session-layout.kdl && $(head -n 1 "$d/session-metadata.kdl" 2>/dev/null) == "name \"$session\"" ]] || continue
+    print -r -- "$d/session-layout.kdl"
     return 0
   done
   return 1
