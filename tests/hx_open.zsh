@@ -1,7 +1,7 @@
 #!/usr/bin/env zsh
-# hx-open opens files in the Helix of the caller's tab, found from
-# $ZELLIJ_PANE_ID. It refuses to guess when that pane is gone, and never
-# switches you to a tab you are not on.
+# `ade open` (behind hx-open) opens files in the Helix of the caller's tab,
+# found from $ZELLIJ_PANE_ID. It refuses to guess when that pane is gone, and
+# never switches you to a tab you are not on.
 
 set -eu
 
@@ -30,7 +30,7 @@ EOF
 print '#!/bin/sh' > "$TMP/bin/hx"
 chmod +x "$TMP/bin/zellij" "$TMP/bin/hx"
 export PATH="$TMP/bin:$PATH" HOME="$TMP/home" FAKE_LOG="$TMP/log" ZELLIJ=0 ZELLIJ_SESSION_NAME=test
-unset HX_OPEN_LOG
+unset HX_OPEN_LOG ADE_LOG
 # You are on tab 1 (repo). Tab 2 (other) has a Helix, tab 3 none, tab 4 a
 # stopped one. Pane 5 (OpenCode starting) reports no directory.
 export FAKE_TABS='[{"tab_id":1,"active":true},{"tab_id":2,"active":false},{"tab_id":3,"active":false},{"tab_id":4,"active":false}]'
@@ -47,7 +47,7 @@ export FAKE_PANES=$(jq -cn --arg repo "$TMP/repo" --arg other "$TMP/other" '[
 
 hx_open() { # $1 = caller pane, $2 = directory; output in $FAKE_LOG and $TMP/err
   : > "$FAKE_LOG"
-  (cd "$2" && ZELLIJ_PANE_ID=$1 "$ROOT/config/.local/bin/hx-open" notes.md) 2>"$TMP/err"
+  (cd "$2" && ZELLIJ_PANE_ID=$1 "$ROOT/config/.local/bin/ade" open notes.md) 2>"$TMP/err"
 }
 called() { grep -q -- "$1" "$FAKE_LOG"; }
 

@@ -5,7 +5,7 @@ import { statSync } from "node:fs"
 import type { LoadOptions } from "./load.ts"
 import { loadMultiplexer } from "./load.ts"
 import { callerDir } from "./multiplexer.ts"
-import type { Kit, Multiplexer, MultiplexerAdapter, Where, Workspace } from "./types.ts"
+import type { Kit, Multiplexer, MultiplexerAdapter, Pane, Where, Workspace } from "./types.ts"
 
 type Env = Record<string, string | undefined>
 
@@ -29,12 +29,18 @@ export async function located(kit: Kit, env: Env = process.env, o: LoadOptions =
   return adapter && where ? { adapter, where, mux: adapter.connect(where) } : undefined
 }
 
-const isDirectory = (path: string) => statSync(path, { throwIfNoEntry: false })?.isDirectory() ?? false
+export const isDirectory = (path: string) => statSync(path, { throwIfNoEntry: false })?.isDirectory() ?? false
+
+// The folder the caller works in: that of the pane you were in (see
+// callerDir), when it is known and still exists, else `cwd`.
+export function callerFolder(panes: readonly Pane[] | undefined, where: Where | undefined, cwd: string) {
+  const dir = panes && where ? callerDir(panes, where) : undefined
+  return dir && isDirectory(dir) ? dir : cwd
+}
 
 // The caller's workspace: that of the pane you were in (see callerDir) when
 // inside a multiplexer, else that of `cwd`.
 export async function callerWorkspace(kit: Kit, cwd: string, env: Env = process.env, o: LoadOptions = {}) {
   const at = await located(kit, env, o)
-  const dir = at ? callerDir(await at.mux.panes(), at.where) : undefined
-  return workspaceOf(kit, dir && isDirectory(dir) ? dir : cwd)
+  return workspaceOf(kit, callerFolder(at && (await at.mux.panes()), at?.where, cwd))
 }

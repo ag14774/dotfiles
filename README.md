@@ -109,7 +109,8 @@ It saves, kills and restores a throwaway session (never `main`) and checks that
 all of the above still holds. After upgrading OpenCode or changing the ADE
 plugin, also run `zsh tests/ade_plugin_smoke.zsh` (see "OpenCode agents and Zellij").
 After changing `packages/`, run `node --test` in `packages/ade-kit` and in
-`packages/opencode-ade-status` (Node's own test runner, no dependencies).
+`packages/opencode-ade-status` (Node's own test runner, no dependencies), and
+`zsh tests/hx_open.zsh`, which checks `ade open` against a stand-in for Zellij.
 After upgrading Zellij, Helix, Yazi or tuicr, or changing the scripts behind
 the keys, run `zsh tests/keys_smoke.zsh`: it checks `Alt-y`, Helix's `+ a` and
 the `Alt-v` review end to end in a throwaway session, with a stand-in for
@@ -157,11 +158,19 @@ Zellij.app and copy Zellij into a folder of its own.
     (`wt-core help`); the shell functions are thin wrappers that `cd` for you.
     For scripts and agents, stdout carries only the result (such as the
     worktree path) and progress goes to stderr
-  - `hx-open FILE...` — open files in the current Zellij tab's Helix `editor`
-    pane, spawning it if needed (used by the `Alt-y` picker and the ADE
-    plugin). The tab is the one of `$ZELLIJ_PANE_ID`; it refuses to guess when
-    that pane is gone, and never switches you to another tab: in a tab you are
-    not on, it only uses an existing editor, without focusing it
+  - `ade` — the ADE command, a link to `packages/ade-kit/src/cli.ts` (run by
+    Node 23.6 or newer; `ade help`). Its choices and options are optional, in
+    `~/.config/ade/config.json` (defaults in `packages/ade-kit/src/config.ts`:
+    Zellij, Helix). `ADE_LOG=FILE` appends each command it runs.
+    - `ade open FILE[:LINE[:COLUMN]]...` — open files in the current tab's
+      editor pane (Helix: the pane named `editor`), starting it if needed, above
+      the `main` pane (used by the `Alt-y` picker and the ADE plugin). The tab
+      is the one of `$ZELLIJ_PANE_ID`; it refuses to guess when that pane is
+      gone, and never switches you to another tab: in a tab you are not on, it
+      only uses an existing editor, without focusing it. Lines are dropped for
+      editors that can't open a file at a line (Helix)
+  - `hx-open FILE...` — runs `ade open` (kept for its callers until they call
+    `ade`; `HX_OPEN_LOG=FILE` traces it)
   - `opencode-send FILE [START [END [LANGUAGE]]] [< SELECTION]` — paste a
     reference (`FILE:START-END`) and the selection, as a fenced block, into the
     current tab's OpenCode prompt and focus it; nothing is submitted. Not tied to
