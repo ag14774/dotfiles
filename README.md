@@ -134,11 +134,11 @@ back by resurrection:
 
 1. `zellij action save-session` (Zellij saves only every 60 seconds, and not
    when it is stopped), then `zellij kill-session main`.
-2. If the bar in `dev.kdl` changed (as from upstream zjstatus to ade-zjstatus),
-   run `python3 install/zellij-session-bar.py`: a resurrected tab keeps the bar
-   it was saved with, so this gives the saved tabs the new one (it keeps a copy
-   of the file it changes).
-3. Open a terminal.
+2. Open a terminal.
+
+A resurrected tab keeps the top bar it was saved with (its URL and options
+are part of the saved session): after a change to the bar in `dev.kdl`, only
+new tabs have it.
 
 Zellij 0.46's own status features keep their defaults (`config.kdl` has no
 `attention` section). The bar shows only what agents report themselves
