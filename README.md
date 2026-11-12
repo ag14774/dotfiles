@@ -110,7 +110,8 @@ all of the above still holds. After upgrading OpenCode or changing the ADE
 plugin, also run `zsh tests/ade_plugin_smoke.zsh` (see "OpenCode agents and Zellij").
 After changing `packages/`, run `node --test` in `packages/ade-kit` and in
 `packages/opencode-ade-status` (Node's own test runner, no dependencies), and
-`zsh tests/hx_open.zsh`, which checks `ade open` against a stand-in for Zellij.
+`zsh tests/hx_open.zsh` and `zsh tests/opencode_send.zsh`, which check `ade open`
+and `ade send` against a stand-in for Zellij.
 After upgrading Zellij, Helix, Yazi or tuicr, or changing the scripts behind
 the keys, run `zsh tests/keys_smoke.zsh`: it checks `Alt-y`, Helix's `+ a` and
 the `Alt-v` review end to end in a throwaway session, with a stand-in for
@@ -169,13 +170,15 @@ Zellij.app and copy Zellij into a folder of its own.
       gone, and never switches you to another tab: in a tab you are not on, it
       only uses an existing editor, without focusing it. Lines are dropped for
       editors that can't open a file at a line (Helix)
-  - `hx-open FILE...` — runs `ade open` (kept for its callers until they call
-    `ade`; `HX_OPEN_LOG=FILE` traces it)
-  - `opencode-send FILE [START [END [LANGUAGE]]] [< SELECTION]` — paste a
-    reference (`FILE:START-END`) and the selection, as a fenced block, into the
-    current tab's OpenCode prompt and focus it; nothing is submitted. Not tied to
-    an editor; Helix calls it from `+ a` (see "OpenCode agents and Zellij").
-    `opencode-send --text < TEXT` pastes text as it is (the `Alt-v` review)
+    - `ade send FILE [START [END [LANGUAGE]]] [< SELECTION]` — paste a
+      reference (`FILE:START-END`) and the selection, as a fenced block, into
+      the current tab's agent prompt (OpenCode: the pane named `opencode`) and
+      focus it; nothing is submitted. Not tied to an editor; Helix calls it from
+      `+ a` (see "OpenCode agents and Zellij"). `ade send --text < TEXT` pastes
+      text as it is (the `Alt-v` review); with `--submit` it also presses Enter
+  - `hx-open FILE...` and `opencode-send ...` — run `ade open` and `ade send`
+    (kept for their callers until they call `ade`; `HX_OPEN_LOG=FILE` traces
+    `hx-open`)
   - `opencode-pane [--session ID] [--prompt PROMPT] | --resume` — run OpenCode
     in a pane with your shell environment, optionally on a given conversation,
     in a way Zellij restores as `--resume`, which continues the directory's

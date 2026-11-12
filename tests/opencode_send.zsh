@@ -1,6 +1,6 @@
 #!/usr/bin/env zsh
-# opencode-send pastes a code reference, and the selection as a fenced block,
-# into the OpenCode pane of the caller's tab, then focuses it.
+# `ade send` (behind opencode-send) pastes a code reference, and the selection
+# as a fenced block, into the OpenCode pane of the caller's tab, then focuses it.
 
 set -eu
 
@@ -34,11 +34,11 @@ export FAKE_PANES=$(jq -cn --arg repo "$TMP/repo" '[
 ] | map(. + {is_plugin: false})')
 
 P=$'\e[200~' E=$'\e[201~'
-send() { # $1 = caller pane, $2 = directory, $3 = selection, then opencode-send's arguments
+send() { # $1 = caller pane, $2 = directory, $3 = selection, then ade send's arguments
   local pane=$1 dir=$2 selection=$3
   shift 3
   : > "$FAKE_LOG"
-  (cd "$dir" && print -rn -- "$selection" | ZELLIJ_PANE_ID=$pane "$ROOT/config/.local/bin/opencode-send" "$@") 2>"$TMP/err"
+  (cd "$dir" && print -rn -- "$selection" | ZELLIJ_PANE_ID=$pane "$ROOT/config/.local/bin/ade" send "$@") 2>"$TMP/err"
 }
 expect() { # the zellij calls, one per line
   [[ $(<"$FAKE_LOG") == "$1" ]] || fail "expected:"$'\n'"$1"$'\n'"got:"$'\n'"$(<"$FAKE_LOG")"

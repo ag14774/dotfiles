@@ -3,7 +3,7 @@ import { chmodSync, mkdirSync, mkdtempSync, realpathSync, writeFileSync } from "
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { test } from "node:test"
-import { fileRef, open } from "../src/actions.ts"
+import { fileRef, open, pastes, send } from "../src/actions.ts"
 import { DEFAULTS } from "../src/config.ts"
 import { makeKit } from "../src/kit.ts"
 import type { Config, Key, Multiplexer, Pane, Role, Tab } from "../src/types.ts"
@@ -148,4 +148,58 @@ test("open passes lines on to an editor that supports them, and drops them for o
   const dropped = record()
   await open(kitWith(), ["a.md:3"], from("1"))
   assert.deepEqual(dropped[0], ["type", "2", typedOpen(join(dir, "a.md"))])
+})
+
+const at = (file: string, more: Partial<{ start: string; end: string; language: string; selection: string }> = {}) => ({
+  file,
+  selection: "x",
+  ...more,
+})
+
+test("pastes: the reference, relative to the agent's folder when inside it, with the line range", () => {
+  assert.deepEqual(pastes(at("src/a.py", { start: "12", end: "12" }), "/w", "/w"), ["src/a.py:12 "])
+  assert.deepEqual(pastes(at("a.py", { start: "3", end: "4" }), "/w", "/w/src"), ["src/a.py:3-4 "])
+  assert.deepEqual(pastes(at("a.py", { start: "3" }), "/w", "/elsewhere"), ["/elsewhere/a.py:3 "])
+  assert.deepEqual(pastes(at("/w2/a.py"), "/w", "/w"), ["/w2/a.py "]) // a sibling with the same prefix
+  assert.deepEqual(pastes(at("a.py"), undefined, "/w"), ["/w/a.py "])
+})
+
+test("pastes: a selection of more than one character as a fenced block, then a space", () => {
+  assert.deepEqual(pastes(at("a.py", { start: "1", end: "2", language: "python", selection: "def f():\n    pass" }), "/w", "/w"), [
+    "a.py:1-2 ",
+    "```python\ndef f():\n    pass\n```",
+    " ",
+  ])
+  assert.deepEqual(pastes(at("a.md", { selection: "a\n```\nb" }), "/w", "/w").slice(1), ["````\na\n```\nb\n````", " "])
+  assert.deepEqual(pastes(at("a.md", { selection: "\u{1F600}" }), "/w", "/w"), ["a.md "]) // one character
+  assert.deepEqual(pastes(at("[scratch]", { selection: "some text", language: "text" }), "/w", "/w"), ["```text\nsome text\n```", " "])
+})
+
+test("send: pasted into the agent of the caller's tab, which then gets focus", async () => {
+  const calls = record()
+  await send(kitWith(), at("notes.md", { start: "2", end: "3", selection: "ab" }), from("2"))
+  assert.deepEqual(calls, [
+    ["paste", "5", `${join(dir, "notes.md")}:2-3 `], // the agent's folder isn't known
+    ["paste", "5", "```\nab\n```"],
+    ["paste", "5", " "],
+    ["focus", "5"],
+  ])
+})
+
+test("send --text: inserted as it is, or with submit, pasted then Enter", async () => {
+  const inserted = record()
+  await send(kitWith(), { text: "1. `a.txt:2` - Why?" }, from("1"))
+  assert.deepEqual(inserted, [["paste", "5", "1. `a.txt:2` - Why?"], ["focus", "5"]])
+  const submitted = record()
+  await send(kitWith(), { text: "comments", submit: true }, from("1"))
+  assert.deepEqual(submitted, [["paste", "5", "comments"], ["type", "5", [{ key: "enter" }]], ["focus", "5"]])
+})
+
+test("send refuses, touching nothing, without text, an agent pane in the tab, or the caller's pane", async () => {
+  const calls = record()
+  await assert.rejects(send(kitWith(), { text: "" }, from("1")), /^Error: no text to send$/)
+  await assert.rejects(send(kitWith(), at("a.md"), from("3")), /^Error: this tab has no OpenCode pane$/)
+  await assert.rejects(send(kitWith(), at("a.md"), from("42")), /^Error: pane 42 does not exist/)
+  await assert.rejects(send(kitWith({ multiplexer: "none" }), at("a.md"), from("1")), /^Error: OpenCode is reached through its pane, and no multiplexer is configured$/)
+  assert.deepEqual(calls, [])
 })

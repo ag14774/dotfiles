@@ -5,7 +5,7 @@
 // is gone.
 import { existsSync } from "node:fs"
 import { resolve } from "node:path"
-import { labelOf, loadEditor, loadMultiplexer } from "./load.ts"
+import { labelOf, loadAgent, loadEditor, loadMultiplexer } from "./load.ts"
 import { isActive, paneWith, tabOf } from "./multiplexer.ts"
 import type { FileRef, Kit, Workspace } from "./types.ts"
 import { callerFolder, sessionOf, workspaceOf } from "./workspace.ts"
@@ -70,4 +70,47 @@ export async function open(kit: Kit, paths: string[], caller: Caller) {
   } else {
     await mux.start({ tab, role: "editor", argv: editor.start(files, workspace), focus: true })
   }
+}
+
+// What `ade send` passes on to the agent: a place in a file with the text
+// selected there, or text as it is.
+export type Sending =
+  | { file: string; start?: string; end?: string; language?: string; selection: string }
+  | { text: string; submit?: boolean }
+
+// What is pasted for a place in a file, one paste each: "FILE:START-END "
+// (FILE relative to the agent's folder when it is inside it), and when the
+// selection is more than one character, the selection as a fenced block and
+// a space. Separate pastes keep the reference readable when the agent shows
+// a long paste as a placeholder ("[Pasted ~N lines]"). "[scratch]", Helix's
+// name for a buffer without a file, has no reference.
+export function pastes(o: Extract<Sending, { file: string }>, agentDir: string | undefined, cwd: string) {
+  const pieces: string[] = []
+  if (o.file !== "[scratch]") {
+    const path = resolve(cwd, o.file)
+    let reference = agentDir && path.startsWith(`${agentDir}/`) ? path.slice(agentDir.length + 1) : path
+    if (o.start) reference += o.end && o.end !== o.start ? `:${o.start}-${o.end}` : `:${o.start}`
+    pieces.push(`${reference} `)
+  }
+  if ([...o.selection].length > 1) {
+    const fence = o.selection.includes("```") ? "````" : "```"
+    pieces.push(`${fence}${o.language ?? ""}\n${o.selection}\n${fence}`, " ")
+  }
+  return pieces
+}
+
+// Give the agent of the caller's tab a place in a file (or text), for you to
+// ask about, then focus it. Nothing is sent unless `submit` asks for it.
+export async function send(kit: Kit, what: Sending, caller: Caller) {
+  if ("text" in what && !what.text) throw new Error("no text to send")
+  const agent = await loadAgent(kit)
+  const label = labelOf(agent)
+  const { where, mux, panes, tab } = await callerTab(kit, caller, `${label} is reached through its pane`)
+  const pane = paneWith(panes, tab, "agent")
+  if (!pane) throw new Error(`this tab has no ${label} pane`)
+  const reach = { workspace: await workspaceAt(kit, callerFolder(panes, where, caller.cwd)), mux, pane: pane.id }
+  if (!("text" in what)) for (const piece of pastes(what, pane.cwd, caller.cwd)) await agent.insert(piece, reach)
+  else if (what.submit) await agent.submit(what.text, reach)
+  else await agent.insert(what.text, reach)
+  await mux.focus(pane.id)
 }
