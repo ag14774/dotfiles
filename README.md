@@ -183,6 +183,12 @@ Zellij.app and copy Zellij into a folder of its own.
     - `ade review` — the `Alt-v` review (see "Reviewing changes"); `ade review
       --scope` prints what a review here covers (`-r BASE..HEAD` for the
       commits, `-w` for uncommitted changes)
+    - `ade workspace DIR [--background] [--session ID] [--prompt TEXT]` — go
+      to the tab of the worktree `DIR`, or open one there with the `dev` layout
+      (`--background`: without going to it). With a conversation or a prompt,
+      the new tab's agent starts on them (`opencode.command`, found on `PATH`:
+      here `opencode-pane`); a worktree that has a tab is refused. Behind
+      `wt -t/-b/-p` and `delegate`
     - `ade tabs DIR` — the tabs working in the worktree `DIR`: those whose
       running panes are all inside it (`ID:sure`), or with a pane that didn't
       say where it is (`ID:unsure`). Found by directories, never by tab names;

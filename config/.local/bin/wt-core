@@ -17,9 +17,8 @@
 # result (a worktree path, or `ls`/`help` output), so callers can capture it.
 
 typeset -g _WT_CWD_FILE= _WT_RESULT= _WT_MODE=cd _WT_PROMPT= _WT_SESSION=
-typeset -g _WT_OPENCODE_PANE=${0:A:h}/opencode-pane
-# The ade command (packages/ade-kit), next to this script: its tabs, before
-# it is stowed too.
+# The ade command (packages/ade-kit), next to this script, for the tabs: it
+# works before it is stowed too.
 typeset -g _WT_ADE=${0:A:h}/ade
 
 _wt_in_zellij() { [[ -n ${ZELLIJ:-} && -n ${ZELLIJ_SESSION_NAME:-} ]]; }
@@ -118,55 +117,23 @@ _wt_tabs_in() { # $1=worktree
   (( $#reply ))
 }
 
-# Focus or open the tab for worktree $1: the dev layout, like Alt-t, in the
-# worktree. Naming the layout matters in a resurrected session, whose saved
-# new-tab template starts commands suspended. With a prompt and/or a
-# conversation (_WT_SESSION), the new tab's OpenCode starts on them.
+# Focus or open the tab for worktree $1 (`ade workspace`): the dev layout, like
+# Alt-t, in the worktree, focused or in the background. With a prompt and/or a
+# conversation (_WT_SESSION), the new tab's OpenCode starts on them (the ADE
+# config's opencode.command: opencode-pane). ade's messages are this command's.
 _wt_tab_open() { # $1=worktree $2=command name $3=focus(1|0) $4=prompt
   emulate -L zsh
-  local wt=${1:A} name=$2 focus=$3 prompt=$4 tab=${1:t} id pane i
-  local -a start=()
-  [[ -n $_WT_SESSION ]] && start+=(--session "$_WT_SESSION")
-  [[ -n $prompt ]] && start+=(--prompt "$prompt")
-  # Focusing an unsure tab is harmless; opening a duplicate is not.
-  if _wt_tabs_in "$wt"; then
-    id=${reply[1]%%:*}
-    if (( $#start )); then
-      print -u2 "$name: $tab already has a tab; send the prompt to its OpenCode instead"
-      return 1
-    fi
-    if (( focus )); then
-      _wt_zellij go-to-tab-by-id "$id" || return
-    else
-      print "$name: $tab already has a tab"
-    fi
-    return 0
-  fi
-
-  local -a opts=(--layout dev --name "$tab" --cwd "$wt")
-  (( focus )) || opts+=(--no-focus)
-  id=$(_wt_zellij new-tab "${opts[@]}") && [[ $id == <-> ]] \
-    || { print -u2 "$name: could not open a Zellij tab for $tab"; return 1; }
-  (( focus )) || print "$name: opened tab $tab in the background"
-  (( $#start )) || return 0
-
-  # Replace the layout's plain OpenCode pane with one started on the prompt.
-  for (( i = 0; i < 40; i++ )); do
-    pane=$(_wt_zellij list-panes --json 2>/dev/null | jq -r --argjson tab "$id" \
-      '.[] | select(.is_plugin == false and .tab_id == $tab and .title == "opencode") | "terminal_\(.id)"' \
-      | head -n1)
-    [[ -n $pane ]] && break
-    sleep 0.05
+  local name=$2 out line rc
+  local -a args=(workspace "$1")
+  (( $3 )) || args+=(--background)
+  [[ -n $_WT_SESSION ]] && args+=(--session "$_WT_SESSION")
+  [[ -n $4 ]] && args+=(--prompt "$4")
+  out=$("$_WT_ADE" "${args[@]}" 2>&1 >/dev/null)
+  rc=$?
+  for line in "${(@f)out}"; do
+    [[ -n $line ]] && print -r -- "$name: ${line#ade workspace: }"
   done
-  [[ -n $pane ]] || {
-    print -u2 "$name: no opencode pane in tab $tab; prompt not sent (the tab stays open)"
-    return 1
-  }
-  _wt_zellij new-pane --in-place --pane-id "$pane" --close-replaced-pane --no-focus \
-    --close-on-exit --name opencode --cwd "$wt" \
-    -- "$_WT_OPENCODE_PANE" "${start[@]}" >/dev/null \
-    || { print -u2 "$name: could not start OpenCode with the prompt in tab $tab"; return 1; }
-  print "$name: OpenCode in tab $tab is working on the prompt"
+  return rc
 }
 
 # Set $REPLY to the caller's tab: that of $ZELLIJ_PANE_ID, which must exist.
