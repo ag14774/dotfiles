@@ -132,6 +132,9 @@ export default (kit: Kit): MultiplexerAdapter => ({
         return pane
       },
       type,
+      paste: async (pane, text) => {
+        await action("write-chars", "--pane-id", id(pane), `\x1b[200~${text}\x1b[201~`)
+      },
       focus: focusPane,
     }
   },

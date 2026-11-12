@@ -73,6 +73,7 @@ const record = (panes: Pane[] = session) => {
     tabs: async () => tabs,
     start: async (o) => (calls.push(["start", o]), "9"),
     type: async (pane: string, keys: Key[]) => void calls.push(["type", pane, keys]),
+    paste: async (pane: string, text: string) => void calls.push(["paste", pane, text]),
     focus: async (pane: string) => void calls.push(["focus", pane]),
   }
   ;(globalThis as { recorder?: Multiplexer }).recorder = recorder

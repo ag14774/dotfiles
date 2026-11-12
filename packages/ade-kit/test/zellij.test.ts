@@ -92,6 +92,12 @@ test("type: text as characters, Escape and Enter as bytes, into the pane", async
   assert.deepEqual(actions(calls).at(-1), "focus-pane-id terminal_7")
 })
 
+test("paste: bracketed, as a terminal pastes, so nothing is submitted", async () => {
+  const { mux, calls } = recording({})
+  await mux.paste("3", "line 1\nline 2")
+  assert.deepEqual(calls.map((argv) => argv.slice(4)), [["write-chars", "--pane-id", "terminal_3", "\x1b[200~line 1\nline 2\x1b[201~"]])
+})
+
 test("start in place of a stopped pane: the pane closes with its program, focus as asked", async () => {
   const { mux, calls } = recording({ "action new-pane --in-place --pane-id terminal_8 --close-replaced-pane --close-on-exit --no-focus -n editor -- hx a.md": "terminal_12\n" })
   assert.equal(await mux.start({ tab: "4", role: "editor", argv: ["hx", "a.md"], focus: false, replace: "8" }), "12")

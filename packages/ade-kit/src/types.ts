@@ -50,6 +50,8 @@ export interface Multiplexer {
   // you are on), or in place of the stopped pane `replace`. Returns its ID.
   start(o: { tab: string; role: Role; argv: string[]; focus: boolean; replace?: string }): Promise<string>
   type(pane: string, keys: Key[]): Promise<void>
+  // Paste as a terminal does (bracketed), so nothing is submitted.
+  paste(pane: string, text: string): Promise<void>
   focus(pane: string): Promise<void>
 }
 
@@ -87,6 +89,25 @@ export type TypedEditorOptions = {
   supports: Omit<EditorSupports, "remote">
 }
 
+export interface Agent {
+  api: 1
+  name: string
+  label?: string
+  start(o: { session?: string; prompt?: string }): string[] // the command for its pane
+  // Put text in the agent's input, for you to finish and send (a selection,
+  // with your question to come).
+  insert(text: string, reach: Reach): Promise<void>
+  // Send text as a message (review comments).
+  submit(text: string, reach: Reach): Promise<void>
+}
+
+// pasteAgent (agent.ts): an agent reached by pasting into its pane.
+export type PasteAgentOptions = {
+  name: string
+  label?: string
+  start(o: { session?: string; prompt?: string }): string[]
+}
+
 // The ADE config (config.ts): choices, and options sections for adapters.
 export type ZellijOptions = {
   layout: string
@@ -96,6 +117,7 @@ export type Config = {
   // Each choice: a built-in name, or a path to a module of your own.
   multiplexer: string // or "none"
   editor: string
+  agent: string
   zellij: ZellijOptions
   [section: string]: unknown
 }
@@ -115,6 +137,7 @@ export type Kit = {
   }
   keys: { escape: Key; enter: Key; text(text: string): Key }
   typedEditor(o: TypedEditorOptions): Editor
+  pasteAgent(o: PasteAgentOptions): Agent
   // The built-in adapters, to start from.
-  builtin: { editor(name: string): Editor }
+  builtin: { editor(name: string): Editor; agent(name: string): Agent }
 }

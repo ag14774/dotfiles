@@ -50,6 +50,7 @@ writeFileSync(
       tabs: async () => [],
       start: async () => "",
       type: async () => {},
+      paste: async () => {},
       focus: async () => {},
     }),
   })`,

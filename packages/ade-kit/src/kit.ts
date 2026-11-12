@@ -1,10 +1,12 @@
 // What adapters get (see types.ts), so they don't reimplement anything.
 import { execFile } from "node:child_process"
+import { pasteAgent } from "./agent.ts"
+import opencode from "./agents/opencode.ts"
 import { readConfig } from "./config.ts"
 import { typedEditor } from "./editor.ts"
 import helix from "./editors/helix.ts"
 import mitos from "./editors/mitos.ts"
-import type { Config, Editor, Key, Kit, RunOptions, RunResult } from "./types.ts"
+import type { Agent, Config, Editor, Key, Kit, RunOptions, RunResult } from "./types.ts"
 
 const TIMEOUT_MS = 10_000
 
@@ -40,6 +42,7 @@ export const keys = {
 }
 
 const EDITORS: Record<string, (kit: Kit) => Editor> = { helix, mitos }
+const AGENTS: Record<string, (kit: Kit) => Agent> = { opencode }
 
 const builtin = <T>(adapters: Record<string, (kit: Kit) => T>, kind: string, name: string, kit: Kit) => {
   const make = Object.hasOwn(adapters, name) ? adapters[name] : undefined
@@ -56,7 +59,11 @@ export function makeKit(
     quote,
     keys,
     typedEditor,
-    builtin: { editor: (name) => builtin(EDITORS, "editor", name, kit) },
+    pasteAgent,
+    builtin: {
+      editor: (name) => builtin(EDITORS, "editor", name, kit),
+      agent: (name) => builtin(AGENTS, "agent", name, kit),
+    },
   }
   return kit
 }

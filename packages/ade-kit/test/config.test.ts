@@ -19,6 +19,7 @@ test("the defaults are today's setup", () => {
   assert.deepEqual(DEFAULTS, {
     multiplexer: "zellij",
     editor: "helix",
+    agent: "opencode",
     zellij: {
       layout: "dev",
       panes: { agent: "opencode", shell: "main", editor: "editor", review: "review" },
@@ -56,8 +57,8 @@ test("a broken config file is refused, naming the file and the problem", () => {
     error.message.includes(join(broken, "ade", "config.json")) && error.message.includes("not valid JSON"))
   assert.throws(() => readConfig({ XDG_CONFIG_HOME: configHome("[1, 2]") }), /must hold a JSON object/)
   assert.throws(
-    () => readConfig({ XDG_CONFIG_HOME: configHome('{"multiplexer": 1, "editor": [], "zellij": {"panes": {"agent": null}}}') }),
-    /these must be strings: multiplexer, editor, zellij\.panes\.agent$/,
+    () => readConfig({ XDG_CONFIG_HOME: configHome('{"multiplexer": 1, "editor": [], "agent": {}, "zellij": {"panes": {"agent": null}}}') }),
+    /these must be strings: multiplexer, editor, agent, zellij\.panes\.agent$/,
   )
   assert.throws(() => readConfig({ XDG_CONFIG_HOME: configHome('{"zellij": {"panes": []}}') }), /strings: zellij\.panes$/)
 })

@@ -51,4 +51,6 @@ test("the built-in adapters, by name, to start from", () => {
   assert.equal(kit.builtin.editor("helix").name, "helix")
   assert.deepEqual(kit.builtin.editor("mitos").programs, ["ms"])
   assert.throws(() => kit.builtin.editor("toString"), /there is no built-in editor named "toString"/)
+  assert.equal(kit.builtin.agent("opencode").name, "opencode")
+  assert.throws(() => kit.builtin.agent("helix"), /there is no built-in agent named "helix"/)
 })
