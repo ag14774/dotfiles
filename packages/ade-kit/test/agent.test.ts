@@ -28,7 +28,7 @@ test("pasteAgent: insert pastes into the agent's pane; submit pastes, then press
   await assert.rejects(agent.insert("x", { workspace }), /^Error: Claude Code is reached through its pane, which needs a multiplexer$/)
 })
 
-test("OpenCode: pasted into; started with the configured command, on a conversation or a prompt", () => {
+test("OpenCode: pasted into; started with the configured command, on a conversation or a prompt; marks its agents' commands", () => {
   const plain = opencode(makeKit({ config: DEFAULTS }))
   assert.deepEqual([plain.name, plain.label], ["opencode", "OpenCode"])
   assert.deepEqual(plain.start({}), ["opencode"])
@@ -36,6 +36,9 @@ test("OpenCode: pasted into; started with the configured command, on a conversat
   assert.deepEqual(opencode(makeKit({ config })).start({ session: "ses_1", prompt: "go" }), [
     "opencode-pane", "--session", "ses_1", "--prompt", "go",
   ])
+  assert.equal(plain.ranByAgent?.({ OPENCODE_TERMINAL: "1" }), true)
+  assert.equal(plain.ranByAgent?.({ OPENCODE_TERMINAL: "" }), false)
+  assert.equal(plain.ranByAgent?.({}), false)
   for (const command of ["opencode", [], [1]])
     assert.throws(() => opencode(makeKit({ config: { ...DEFAULTS, opencode: { command } } as Config })), /opencode\.command must be a list of strings/)
 })

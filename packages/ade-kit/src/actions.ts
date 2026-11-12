@@ -52,7 +52,7 @@ async function callerSession(kit: Kit, caller: Caller) {
 }
 
 // An optional operation of the multiplexer, which an action needs.
-function needs<K extends "openTab" | "showTab">(mux: Multiplexer, operation: K, adapter: MultiplexerAdapter) {
+function needs<K extends "openTab" | "showTab" | "closeTab">(mux: Multiplexer, operation: K, adapter: MultiplexerAdapter) {
   const call = mux[operation]
   if (typeof call !== "function") throw new Error(`the multiplexer "${adapter.name}" lacks: ${operation}`)
   return call.bind(mux) as NonNullable<Multiplexer[K]>
@@ -142,6 +142,39 @@ export async function workspace(kit: Kit, o: WorkspaceOptions, caller: Caller, t
   }
   tell(`${labelOf(agent)} in tab ${name} is working on the prompt`)
   return { tab, opened: true }
+}
+
+// Close the tabs of the removed worktree `dir`: `found`, what tabs() found
+// before it was removed (its panes' folders are gone now), else the tabs
+// working in it now. Your own tab stays, and so does one with a pane that
+// didn't say where it is. Nothing closes for a command the agent's tools ran
+// (outside its pane, with a pane ID passed along that may not be theirs), nor
+// when your tab is unknown. `tell` gets what happened to each tab.
+export async function closeTabs(
+  kit: Kit,
+  dir: string,
+  found: TabIn[] | undefined,
+  caller: Caller,
+  tell: (message: string) => void = () => {},
+) {
+  const { adapter, where, mux } = await callerSession(kit, caller)
+  const name = basename(resolve(caller.cwd, dir))
+  const closing = found ?? (await tabs(kit, [dir], caller))[dir]
+  if (!closing.length) return
+  const agent = await loadAgent(kit)
+  if (agent.ranByAgent?.(caller.env)) return tell(`left the tabs of ${name} open (${labelOf(agent)} agents don't close tabs)`)
+  const own = where.pane === undefined ? undefined : tabOf(await mux.panes().catch(() => []), where.pane)
+  if (own === undefined) return tell(`left the tabs of ${name} open (could not tell which tab you are in)`)
+  const closeTab = needs(mux, "closeTab", adapter)
+  for (const { tab, sure } of closing) {
+    if (!sure) tell(`left a tab of ${name} open (${labelOf(adapter)} did not report where all its panes are)`)
+    else if (tab === own) tell(`left the tab of ${name} open (you are in it)`)
+    else
+      await closeTab(tab).then(
+        () => tell(`closed the tab of ${name}`),
+        () => tell(`warning: could not close the tab of ${name}`),
+      )
+  }
 }
 
 // The workspace of `dir`; outside a repository, `dir` itself (programs reached

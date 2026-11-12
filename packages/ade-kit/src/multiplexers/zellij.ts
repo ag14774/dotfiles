@@ -152,6 +152,9 @@ export default (kit: Kit): MultiplexerAdapter => ({
       showTab: async (tab) => {
         await action("go-to-tab-by-id", tab)
       },
+      closeTab: async (tab) => {
+        await action("close-tab-by-id", tab)
+      },
     }
   },
 })

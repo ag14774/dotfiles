@@ -4,20 +4,24 @@
 // or more, or 150 characters or more, as "[Pasted ~N lines]" and sends its
 // text. Options: "opencode": { "command": [...] } starts it (default:
 // opencode; the dotfiles use opencode-pane).
-import type { Kit } from "../types.ts"
+import type { Agent, Kit } from "../types.ts"
 
 export default (kit: Kit) => {
   const options = kit.config.opencode as { command?: unknown } | undefined
   const command = options?.command ?? ["opencode"]
   if (!Array.isArray(command) || !command.length || command.some((word) => typeof word !== "string"))
     throw new Error("ade: opencode.command must be a list of strings")
-  return kit.pasteAgent({
-    name: "opencode",
-    label: "OpenCode",
-    start: (o) => [
-      ...(command as string[]),
-      ...(o.session ? ["--session", o.session] : []),
-      ...(o.prompt ? ["--prompt", o.prompt] : []),
-    ],
-  })
+  return {
+    ...kit.pasteAgent({
+      name: "opencode",
+      label: "OpenCode",
+      start: (o) => [
+        ...(command as string[]),
+        ...(o.session ? ["--session", o.session] : []),
+        ...(o.prompt ? ["--prompt", o.prompt] : []),
+      ],
+    }),
+    // OpenCode marks the commands its agents run.
+    ranByAgent: (env) => Boolean(env.OPENCODE_TERMINAL),
+  } satisfies Agent
 }

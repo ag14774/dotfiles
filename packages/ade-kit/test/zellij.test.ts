@@ -187,12 +187,14 @@ test("openTab: the layout's tab in the folder, named after it, in front or in th
   await assert.rejects(recording({}, ["action new-tab --layout dev --name feat --cwd /p/feat"]).mux.openTab!({ dir: "/p/feat", focus: true }), /zellij action new-tab: boom$/)
 })
 
-test("showTab goes to the tab; start in place takes a folder", async () => {
+test("showTab goes to the tab, closeTab closes it; start in place takes a folder", async () => {
   const { mux, calls } = recording({ "action new-pane --in-place --pane-id terminal_4 --close-replaced-pane --close-on-exit --no-focus -n opencode --cwd /p/feat -- oc --prompt go": "terminal_9\n" })
   await mux.showTab?.("3")
+  await mux.closeTab?.("5")
   assert.equal(await mux.start({ tab: "3", role: "agent", argv: ["oc", "--prompt", "go"], focus: false, replace: "4", cwd: "/p/feat" }), "9")
   assert.deepEqual(actions(calls), [
     "go-to-tab-by-id 3",
+    "close-tab-by-id 5",
     "new-pane --in-place --pane-id terminal_4 --close-replaced-pane --close-on-exit --no-focus -n opencode --cwd /p/feat -- oc --prompt go",
   ])
 })

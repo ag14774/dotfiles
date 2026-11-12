@@ -7,8 +7,9 @@
 import { spawn } from "node:child_process"
 import { once } from "node:events"
 import { appendFileSync } from "node:fs"
+import { homedir } from "node:os"
 import type { Terminal, WorkspaceOptions } from "./actions.ts"
-import { open, review, send, tabs, workspace } from "./actions.ts"
+import { closeTabs, open, review, send, tabs, workspace } from "./actions.ts"
 import { makeKit, run } from "./kit.ts"
 import { scopeOf, scopeWords } from "./review.ts"
 import type { RunOptions } from "./types.ts"
@@ -31,7 +32,10 @@ const USAGE = `usage: ade open FILE[:LINE[:COLUMN]]...
          the tabs working in the worktree DIR (all their running panes are inside it), one per
          line: ID:sure, or ID:unsure when one of its panes didn't say where it is
        ade tabs --json DIR...
-         the same for each DIR, as JSON: {"DIR": [{"tab": "ID", "sure": true}, ...], ...}`
+         the same for each DIR, as JSON: {"DIR": [{"tab": "ID", "sure": true}, ...], ...}
+       ade close-tabs DIR [ID:sure|ID:unsure...]
+         close the tabs of the removed worktree DIR (those ade tabs found before it was
+         removed, else its tabs now), except yours and the unsure ones; none when an agent runs it`
 
 class UsageError extends Error {}
 
@@ -75,10 +79,22 @@ const traced = (log: string) => async (argv: string[], o?: RunOptions) => {
   return result
 }
 
+// The caller's folder. When it is gone (wtrm run from inside the worktree it
+// removes), its path still resolves the arguments, and the commands ade runs
+// start in the home folder.
+const callerFolder = () => {
+  try {
+    return process.cwd()
+  } catch {
+    process.chdir(homedir())
+    return process.env.PWD?.startsWith("/") ? process.env.PWD : homedir()
+  }
+}
+
 async function main(command: string | undefined, args: string[]) {
   const env = process.env
   const kit = () => makeKit({ env, ...(env.ADE_LOG ? { run: traced(env.ADE_LOG) } : {}) })
-  const caller = { env, cwd: process.cwd() }
+  const caller = { env, cwd: callerFolder() }
   switch (command) {
     case "open":
       if (!args.length) throw new UsageError()
@@ -130,6 +146,16 @@ async function main(command: string | undefined, args: string[]) {
       if (json) process.stdout.write(`${JSON.stringify(found)}\n`)
       else for (const { tab, sure } of found[dirs[0]]) process.stdout.write(`${tab}:${sure ? "sure" : "unsure"}\n`)
       return
+    }
+    case "close-tabs": {
+      const [dir, ...listed] = args
+      if (dir === undefined || dir.startsWith("-")) throw new UsageError()
+      const found = listed.map((entry) => {
+        const [, tab, state] = /^(\w+):(sure|unsure)$/.exec(entry) ?? []
+        if (!tab) throw new UsageError()
+        return { tab, sure: state === "sure" }
+      })
+      return closeTabs(kit(), dir, listed.length ? found : undefined, caller, say)
     }
     case "help":
     case "--help":

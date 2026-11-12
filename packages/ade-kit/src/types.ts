@@ -60,6 +60,7 @@ export interface Multiplexer {
   // named after it, in front or in the background. Returns its ID.
   openTab?(o: { dir: string; focus: boolean }): Promise<string>
   showTab?(tab: string): Promise<void> // bring it to the front
+  closeTab?(tab: string): Promise<void>
 }
 
 // A file to open, with the place to show when the editor supports it.
@@ -106,6 +107,9 @@ export interface Agent {
   insert(text: string, reach: Reach): Promise<void>
   // Send text as a message (review comments).
   submit(text: string, reach: Reach): Promise<void>
+  // Whether a command was run by the agent's own tools, which run outside its
+  // pane (with a pane ID passed along that may not be theirs).
+  ranByAgent?(env: Record<string, string | undefined>): boolean
 }
 
 // pasteAgent (agent.ts): an agent reached by pasting into its pane.

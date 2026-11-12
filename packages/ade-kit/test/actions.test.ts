@@ -5,7 +5,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { test } from "node:test"
 import type { Terminal } from "../src/actions.ts"
-import { ADE, fileRef, open, pastes, review, send, tabs as tabsOf, workspace } from "../src/actions.ts"
+import { ADE, fileRef, open, pastes, review, send, tabs as tabsOf, workspace, closeTabs } from "../src/actions.ts"
 import { DEFAULTS } from "../src/config.ts"
 import { makeKit, run } from "../src/kit.ts"
 import type { Config, Key, Multiplexer, Pane, Role, Tab } from "../src/types.ts"
@@ -349,7 +349,7 @@ test("tabs works with the multiplexer's session alone, and not outside one", asy
 
 // A multiplexer with tabs for worktrees: openTab adds a tab with a shell and
 // (unless `agent` is false) an agent pane in the folder, as the layout does.
-const withTabs = (panes: Pane[], o: { agent?: boolean; fail?: "openTab" | "start" } = {}) => {
+const withTabs = (panes: Pane[], o: { agent?: boolean; fail?: "openTab" | "start" | "closeTab" } = {}) => {
   const calls: Call[] = []
   const state = [...panes]
   const recorder: Multiplexer = {
@@ -370,6 +370,10 @@ const withTabs = (panes: Pane[], o: { agent?: boolean; fail?: "openTab" | "start
       return "9"
     },
     showTab: async (tab) => void calls.push(["showTab", tab]),
+    closeTab: async (tab) => {
+      calls.push(["closeTab", tab])
+      if (o.fail === "closeTab") throw new Error("boom")
+    },
   }
   ;(globalThis as { recorder?: Multiplexer }).recorder = recorder
   return calls
@@ -450,4 +454,46 @@ test("workspace needs a multiplexer that opens tabs, and a session", async () =>
   record(nested.filter((p) => p.tab === "2"))
   await assert.rejects(workspace(kitWith(), { dir: outer, focus: true }, scripted), /^Error: the multiplexer "fake" lacks: openTab$/)
   await assert.rejects(workspace(kitWith(), { dir: outer, focus: true }, from(undefined)), /^Error: not inside Fake$/)
+})
+
+// Tabs found before the worktree went: 1 and 4 sure, 3 unsure.
+const before = [{ tab: "1", sure: true }, { tab: "3", sure: false }, { tab: "4", sure: true }]
+
+test("closeTabs: the tabs found before, except yours and the unsure ones, each told", async () => {
+  const calls = withTabs(nested)
+  const { messages, tell } = told()
+  await closeTabs(kitWith(), "/p/gone", before, from("7"), tell) // you are in tab 4
+  assert.deepEqual(calls, [["closeTab", "1"]])
+  assert.deepEqual(messages, [
+    "closed the tab of gone",
+    "left a tab of gone open (Fake did not report where all its panes are)",
+    "left the tab of gone open (you are in it)",
+  ])
+  // Without a list, the tabs working in the folder now.
+  const now = withTabs(nested)
+  await closeTabs(kitWith(), inner, undefined, from("1"), tell)
+  assert.deepEqual(now, [["closeTab", "2"]])
+  const none = withTabs([])
+  await closeTabs(kitWith(), inner, undefined, from("1"), tell)
+  assert.deepEqual(none, [])
+})
+
+test("closeTabs closes nothing for the agent's commands or when your tab is unknown; a tab that won't close is a warning", async () => {
+  const cases: [Record<string, string>, string][] = [
+    [{ FAKE_PANE: "7", OPENCODE_TERMINAL: "1" }, "left the tabs of gone open (OpenCode agents don't close tabs)"],
+    [{ FAKE_PANE: "42" }, "left the tabs of gone open (could not tell which tab you are in)"],
+    [{ FAKE_SESSION: "1" }, "left the tabs of gone open (could not tell which tab you are in)"],
+  ]
+  for (const [env, message] of cases) {
+    const calls = withTabs(nested)
+    const { messages, tell } = told()
+    await closeTabs(kitWith(), "/p/gone", before, { env, cwd: temp }, tell)
+    assert.deepEqual([calls, messages], [[], [message]])
+  }
+  const calls = withTabs(nested, { fail: "closeTab" })
+  const { messages, tell } = told()
+  await closeTabs(kitWith(), "/p/gone", before.slice(0, 1), from("7"), tell)
+  assert.deepEqual([calls, messages], [[["closeTab", "1"]], ["warning: could not close the tab of gone"]])
+  record(nested)
+  await assert.rejects(closeTabs(kitWith(), "/p/gone", before, from("7")), /^Error: the multiplexer "fake" lacks: closeTab$/)
 })
