@@ -5,7 +5,8 @@
 #   - Helix `+ a`: the selection goes to the tab's OpenCode pane;
 #   - Alt-v: a tuicr review of the branch (commits and uncommitted changes);
 #     `e` opens a file in the editor pane, a second Alt-v brings the same
-#     review back, `y` pastes the comments into the OpenCode pane.
+#     review back, `y` pastes the comments into the OpenCode pane; with
+#     nothing to review, it says so until a key closes it.
 #
 #   zsh tests/keys_smoke.zsh
 #
@@ -186,5 +187,19 @@ wait_for 15 no_pane review || fail "the review did not close"
 wait_for 15 screen_has opencode "Use a constant here" || fail "OpenCode did not get the comment"
 screen_has opencode "a.txt:2" || fail "the comment lost its place (a.txt:2)"
 focused opencode || fail "the OpenCode pane is not focused"
+
+step "Alt-v with nothing to review says so, until a key closes it"
+rm "$R/b.txt"
+git -C "$R" switch -q main
+zj focus-pane-id "terminal_$(pane main)"
+sleep 1
+press $'\ev'
+wait_for 30 has_pane review || fail "Alt-v opened no pane"
+wait_for 15 screen_has review "Nothing to review in $R: no commits since origin/HEAD" \
+  || fail "the review pane does not say there is nothing to review"
+sleep 2
+has_pane review || fail "the message closed before a key was pressed"
+keys_to review x 2
+wait_for 15 no_pane review || fail "a key did not close the message"
 
 print "keys smoke test: ok"
