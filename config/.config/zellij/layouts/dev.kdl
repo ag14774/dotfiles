@@ -44,6 +44,13 @@ layout {
             attention_working         "#[fg=#f9e2af]\u{f051f} "
             attention_count_separator "  "
             attention_format          "{counts} "
+
+            // Tab groups: a tab named "prefix: name" belongs to the group
+            // "prefix", shown once two tabs share it (ade names worktree tabs
+            // "project: worktree", see ~/.config/ade/config.json). The bar
+            // keeps a group's tabs together, which needs the permission
+            // "Execute actions as the user". Tab mode g/G collapse or expand.
+            tab_groups                "true"
         }
     }
     // BOTTOM BAR: zellij keybinding hints.

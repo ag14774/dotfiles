@@ -256,4 +256,5 @@ echo
 BAR_URL="$(grep -o 'https://[^"]*/zjstatus\.wasm' "$DOTFILES/config/.config/zellij/layouts/dev.kdl" | head -n 1)"
 echo "One-time: enable the top bar (ade-zjstatus; grant its plugin permission)."
 echo "  Inside a zellij session, run this once, press 'y' to grant, then close the pane:"
-echo "      zellij plugin -f -- \"$BAR_URL\""
+echo "      zellij plugin -f -c tab_groups=true -- \"$BAR_URL\""
+echo "  (tab_groups=true makes it ask for everything the bar uses, tab groups included)"

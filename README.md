@@ -127,31 +127,31 @@ how many agents are waiting, failed, done or working. It has no clock: zjstatus
 redraws only on Zellij events, so a clock went stale while the session was
 idle. It is loaded by `dev.kdl` straight from its release URL, so the first
 time you must grant its plugin permission once (the installer prints this):
-inside a zellij session run `zellij plugin -f -- "<bar-url>"`, press `y`, then
-close that pane.
+inside a zellij session run `zellij plugin -f -c tab_groups=true --
+"<bar-url>"`, press `y`, then close that pane (`tab_groups=true` makes it ask
+for everything the bar uses, including "Execute actions as the user" for tab
+groups).
 
-The bar can also group tabs (off here): a tab named `prefix: name` belongs to
-the group `prefix`, shown once two tabs share it (see ade-zjstatus's FORK.md).
-To group each project's worktree tabs:
+The bar groups tabs: a tab named `prefix: name` belongs to the group `prefix`,
+shown once two tabs share it (see ade-zjstatus's FORK.md), so each project's
+worktree tabs sit together:
 
-1. In `config/.config/ade/config.json`, set `"zellij": { "tabName": "{project}:
-   {worktree}" }` (default `"{worktree}"`): tabs that `wt -t/-b/-p` and
-   `delegate` open are then named like `dotfiles: ade-phase3` (`{project}` is
-   the folder holding the repository's `.bare` or `.git`). Tabs are still found
-   by their panes' folders, never by name.
-2. In `dev.kdl`'s bar, add `tab_groups "true"`. The bar moves a group's tabs
-   next to each other, which needs one more permission, "Execute actions as
-   the user": grant it with `zellij plugin -f -c tab_groups=true -- "<bar-url>"`
-   and `y`.
-3. Optionally, keys in `config.kdl`'s tab mode to collapse or expand the
-   active tab's group, or all groups: `bind "g" { MessagePlugin { name
-   "zjstatus"; payload "zjstatus::groups::toggle"; }; SwitchToMode "locked"; }`,
-   and `"G"` with `zjstatus::groups::toggle_all` (the bar redraws at the next
-   Zellij event, hence the switch back to locked mode).
+- `config/.config/ade/config.json` sets `"zellij": { "tabName": "{project}:
+  {worktree}" }` (ade's default is `"{worktree}"`): tabs that `wt -t/-b/-p`
+  and `delegate` open are named like `dotfiles: ade-phase3` (`{project}` is the
+  folder holding the repository's `.bare` or `.git`). Tabs are still found by
+  their panes' folders, never by name. Names already of the form `prefix:name`
+  (no space needed) are grouped too.
+- `dev.kdl`'s bar has `tab_groups "true"`. It moves a group's tabs next to each
+  other (hence the extra permission), once the moved tab's bar runs.
+- In tab mode (`Ctrl-g`, `t`), `g` collapses or expands the current tab's
+  group and `G` all groups (clicking a group's name does too); both go back
+  to locked mode, which is also what makes the bar redraw.
 
 The bar of the tab you are on draws all the tabs, and a tab keeps the bar it
-was opened or resurrected with: tabs from before the change show no groups.
-Names already of the form `prefix:name` (no space needed) are grouped too.
+was opened or resurrected with: tabs from before groups were turned on show
+none until their saved bars get `tab_groups "true"` (with Zellij stopped, as
+in "Upgrading Zellij").
 
 ### Upgrading Zellij
 

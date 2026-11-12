@@ -49,6 +49,10 @@ keybinds clear-defaults=true {
         bind "k" { GoToPreviousTab; }
         bind "l" { GoToNextTab; }
         bind "n" { NewTab { layout "dev"; }; SwitchToMode "locked"; }
+        // ade-zjstatus tab groups: collapse or expand the current tab's group,
+        // or all groups. Back to locked mode, which also redraws the bar.
+        bind "g" { MessagePlugin { name "zjstatus"; payload "zjstatus::groups::toggle"; }; SwitchToMode "locked"; }
+        bind "G" { MessagePlugin { name "zjstatus"; payload "zjstatus::groups::toggle_all"; }; SwitchToMode "locked"; }
         bind "r" { SwitchToMode "renametab"; TabNameInput 0; }
         bind "s" { ToggleActiveSyncTab; SwitchToMode "locked"; }
         bind "t" { SwitchToMode "normal"; }

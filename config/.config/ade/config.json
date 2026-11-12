@@ -1,3 +1,4 @@
 {
-  "opencode": { "command": ["opencode-pane"] }
+  "opencode": { "command": ["opencode-pane"] },
+  "zellij": { "tabName": "{project}: {worktree}" }
 }

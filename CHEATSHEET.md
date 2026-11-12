@@ -54,9 +54,11 @@ Default mode = **locked**, so keys pass through to Helix/Yazi. Unlock with `Ctrl
 
 ★ In front of each tab's name, what its agents are doing: 󰔟 working ·  waiting for you ·  done ·  failed; the top bar's right side counts them. Done and failed clear once you have seen that pane. Zellij's inbox: `Ctrl-g` → `o` → `w`.
 
+★ Worktree tabs are named `project: worktree`, and the bar groups each project's tabs (`dotfiles: main ⋮ feat`); click a group's name, or `Ctrl-g` → `t` → `g`, to collapse it.
+
 | Mode | Keys |
 |---|---|
-| Tab | `n` new · `x` close · `r` rename · ★ `<` `>` move tab · `1`–`9` jump |
+| Tab | `n` new · `x` close · `r` rename · ★ `<` `>` move tab · `1`–`9` jump · ★ `g` collapse/expand this tab's group · `G` all groups |
 | Pane | `n` new · `x` close · `d`/`r` split down/right · `f` fullscreen · `w` floating · `c` rename |
 
 ---
