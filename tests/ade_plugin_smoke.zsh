@@ -9,10 +9,10 @@
 # OpenCode runs a private background service with temporary data and config
 # (your auth, model preferences and ~/.config/zsh/secrets.zsh are reused), in a
 # throwaway Zellij session, so it never touches `main` or your OpenCode service.
-# Most steps call the plugin's RPC methods directly; two have an agent use the
-# tools (show_file after /cd, delegate from plain English). Delegated tabs
-# answer their briefs, and one copy is compacted: six short model calls with
-# your most recent model (or ADE_TEST_MODEL).
+# Most steps call the plugin's RPC methods directly; three have an agent use the
+# tools (show_file after /cd, delegate from plain English, also into another
+# repository). Delegated tabs answer their briefs, and one copy is compacted:
+# nine short model calls with your most recent model (or ADE_TEST_MODEL).
 
 set -u
 
@@ -136,13 +136,15 @@ oc_cli service set port "$(python3 -c 'import socket; s = socket.socket(); s.bin
 oc_cli service start >"$TMP/service.log" 2>&1
 wait_for 30 test -f "$TMP/oc/state/opencode/service.json" || fail "the private OpenCode service did not start"
 
-# A project in wt's layout, for delegate.
-git init -q --bare "$TMP/remote.git"
-git init -q "$TMP/seed" && print seed > "$TMP/seed/README"
-git -C "$TMP/seed" add README && git -C "$TMP/seed" -c user.name=t -c user.email=t@example.com commit -qm init
-git -C "$TMP/seed" push -q "$TMP/remote.git" HEAD:main && git --git-dir="$TMP/remote.git" symbolic-ref HEAD refs/heads/main
-(cd "$TMP" && wt-core clone "$TMP/remote.git" proj && cd proj && wt-core open --stay main) >/dev/null 2>&1
-[[ -d $TMP/proj/main ]] || fail "could not set up a wt project"
+# Two projects in wt's layout, for delegate: proj, and proj2 to reach from it.
+for p in proj proj2; do
+  git init -q --bare "$TMP/$p.git"
+  git init -q "$TMP/seed-$p" && print seed > "$TMP/seed-$p/README"
+  git -C "$TMP/seed-$p" add README && git -C "$TMP/seed-$p" -c user.name=t -c user.email=t@example.com commit -qm init
+  git -C "$TMP/seed-$p" push -q "$TMP/$p.git" HEAD:main && git --git-dir="$TMP/$p.git" symbolic-ref HEAD refs/heads/main
+  (cd "$TMP" && wt-core clone "$TMP/$p.git" "$p" && cd "$p" && wt-core open --stay main) >/dev/null 2>&1
+  [[ -d $TMP/$p/main ]] || fail "could not set up the wt project $p"
+done
 
 # Zellij passes this environment (private OpenCode, this checkout's wt-core) on
 # to its panes.
@@ -158,7 +160,7 @@ sid=$(start_conversation "$oc" "$TMP/A")
 
 step "a conversation a pane shows gets the environment instructions; one no pane shows doesn't"
 wait_for 15 has_environment "$sid" || fail "no environment instructions on the conversation"
-[[ $(environment_of "$sid") == *"inside a Zellij terminal tab"*"a Helix editor pane"*"with git, wt, zellij"* ]] \
+[[ $(environment_of "$sid") == *"inside a Zellij terminal tab"*"a Helix editor pane"*"with git, wt, zellij"*'`directory`'* ]] \
   || fail "unexpected environment instructions: $(environment_of "$sid")"
 loose=$(oc_cli api POST /api/session -d "{\"location\":{\"directory\":\"$TMP/C\"}}" 2>/dev/null | jq -r '.data.id // empty')
 [[ -n $loose ]] || fail "could not create a conversation without a pane"
@@ -248,6 +250,30 @@ report=$(status_of)
   || fail "unexpected quiet worktree: $(worktree quiet "$report")"
 jq -r '.output.message' <<< "$report" | grep -q "proj/main (this conversation): branch main" \
   || fail "unexpected status text: $(jq -r '.output.message' <<< "$report")"
+
+step "delegate and status work on another repository, given a folder in it"
+msg=$(rpc delegate "$TMP/proj/main" "$(jq -cn --arg s "$sid_p" \
+  '{sessionID: $s, branch: "feat-y", brief: "Reply with exactly the word elsewhere.", directory: "../../proj2/main"}')")
+[[ $msg == "Opened a background tab for feat-y (worktree $TMP/proj2/feat-y)"* ]] || fail "unexpected answer: $msg"
+wait_for 60 gives tab_in "$TMP/proj2/feat-y" || fail "no tab for the other repository's worktree"
+[[ ! -e $TMP/proj/feat-y ]] || fail "the worktree went into the conversation's own repository"
+other() { # status for the other repository's project folder: its worktrees and their tabs
+  rpc_raw status "$TMP/proj/main" "$(jq -cn --arg s "$sid_p" --arg d "$TMP/proj2" '{sessionID: $s, directory: $d}')" \
+    | jq -r '[.output.worktrees[] | "\(.path) \(.tab)"] | sort | join(", ")'
+}
+other_is() { [[ $(other) == "$1" ]]; }
+wait_for 30 other_is "$TMP/proj2/feat-y sure, $TMP/proj2/main null" || fail "unexpected status of the other repository: $(other)"
+[[ $(rpc_raw status "$TMP/proj/main" "{\"sessionID\":\"$sid_p\"}" | jq -r '[.output.worktrees[].path | select(startswith($p))] | length' --arg p "$TMP/proj2") == 0 ]] \
+  || fail "without directory, status should list the conversation's own repository"
+msg=$(rpc delegate "$TMP/proj/main" "$(jq -cn --arg s "$sid_p" --arg d "$TMP/nowhere" '{sessionID: $s, branch: "x", brief: "x", directory: $d}')")
+[[ $msg == "Nothing was delegated: $TMP/nowhere is not a folder." ]] || fail "unexpected answer for a missing folder: $msg"
+
+step "an agent delegates into another repository from plain English"
+type_in "$oc_p" "Delegate this to a new worktree named feat-z of the repository at $TMP/proj2: reply with exactly the word delegated."
+wait_for 120 gives tab_in "$TMP/proj2/feat-z" \
+  || fail "no tab opened in the other repository; the agent's pane shows:"$'\n'"$(last_lines "$oc_p")"
+[[ ! -e $TMP/proj/feat-z ]] || fail "the agent delegated into its own repository"
+[[ $(active_tab) == "$tab_p" ]] || fail "delegate moved you to the new tab"
 
 step "agent status: a tab that finished in the background shows done until you see its pane"
 # What Zellij tracks for a pane (OpenCode reports working and waiting, the

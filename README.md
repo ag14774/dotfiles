@@ -274,7 +274,10 @@ including "no OpenCode pane in Zellij is showing this conversation".
   BRIEF BRANCH` from the pane, so a background tab opens for the worktree and its
   OpenCode starts on a brief the agent writes. The calling conversation stays
   where it is and isn't told when the new one finishes. (In a plain clone, as
-  with `wt`, the worktree goes inside the repository folder.)
+  with `wt`, the worktree goes inside the repository folder.) It works in the
+  repository of the conversation's folder; name another one ("delegate this to
+  a worktree of ~/projects/x") and the agent passes a folder in it as
+  `directory`, without moving the conversation.
   - Say "with the context" (or "with a summary") to carry this conversation
     over: the pane first creates the worktree (`wt-core open --stay`), copies
     the conversation up to your request into it (compacting the copy for a
@@ -288,6 +291,7 @@ including "no OpenCode pane in Zellij is showing this conversation".
   and its latest conversation: working, waiting for you (a permission request
   or question), idle, failed or interrupted, with the start of its last answer.
   Read-only; a tab you only use to delegate and ask this acts as a coordinator.
+  Like `delegate`, it takes `directory` for another repository.
 - Each tab shows what its agents are doing, with a Nerd Font icon in front of
   its name: 󰔟 working,  waiting for you (a permission request or question),
    done and  failed or interrupted; with several agent panes in a tab,
@@ -331,7 +335,7 @@ server part: restart the OpenCode panes (`ocreload`) after it changes.
 `tests/ade_plugin_smoke.zsh`
 tests this checkout's plugin with a private OpenCode service and a throwaway
 Zellij session, so it needs no restart and never touches your session or
-service. It makes six short model calls.
+service. It makes nine short model calls.
 
 ### OpenCode BTW
 

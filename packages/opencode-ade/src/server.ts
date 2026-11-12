@@ -8,6 +8,8 @@
 // conversation (tui.ts), which knows its own pane for certain. (The agent
 // statuses on the tabs come from the status plugin, packages/opencode-ade-status.)
 import { randomUUID } from "node:crypto"
+import { statSync } from "node:fs"
+import { homedir } from "node:os"
 import { isAbsolute, resolve } from "node:path"
 import { Plugin } from "@opencode/plugin"
 import { serverDigest } from "./digest.ts"
@@ -17,7 +19,7 @@ type Action = "show_file" | "delegate" | "status"
 // Copy conversation sessionID (up to message `before`) into the worktree that
 // `prepare` creates, and run the request's command on the copy (delegate).
 type Copy = { sessionID: string; before?: string; compact: boolean; prepare: string[] }
-type Task = { branch: string; brief: string; base?: string; context?: "none" | "full" | "compact" }
+type Task = { branch: string; brief: string; base?: string; context?: "none" | "full" | "compact"; directory?: string }
 // From `wt-core ls --json`, plus the worktree's latest conversation.
 type Worktree = {
   path: string
@@ -53,6 +55,9 @@ const COMPACT_TIMEOUT_MS = 300_000
 // The environment instructions, which the app part builds from the ADE config.
 const ENVIRONMENT_KEY = "ade.environment"
 
+// delegate's and status's `directory`.
+const DIRECTORY = "A folder in the repository to work in; default: this conversation's folder."
+
 export default Plugin.define({
   id: "local.ade",
   async setup(ctx) {
@@ -84,7 +89,10 @@ export default Plugin.define({
         const { sessionID, ...task } = input as { sessionID: string } & Task
         return delegate(sessionID, task, context.signal)
       },
-      status: async (input, context) => status((input as { sessionID: string }).sessionID, context.signal),
+      status: async (input, context) => {
+        const { sessionID, directory } = input as { sessionID: string; directory?: string }
+        return status(sessionID, context.signal, directory)
+      },
       attach: async (input) => {
         const { sessionID, instructions } = input as { sessionID: string; instructions: string }
         const entries = await ctx.session.instructions.entry.list({ sessionID })
@@ -107,7 +115,7 @@ export default Plugin.define({
 
     // Ask the pane showing the conversation to run `action` with `args` in `cwd`,
     // and wait for its answer.
-    const ask = (sessionID: string, action: Action, args: string[], signal: AbortSignal, copy?: Copy) =>
+    const ask = (sessionID: string, action: Action, args: string[], cwd: string, signal: AbortSignal, copy?: Copy) =>
       new Promise<Result>((resolveResult) => {
         const id = randomUUID()
         const request: Pending = { claimed: false, finish: () => {} }
@@ -132,7 +140,7 @@ export default Plugin.define({
           timeout + CLAIM_TIMEOUT_MS,
         )
         signal.addEventListener("abort", cancel)
-        const data = { id, sessionID, action, args, cwd: ctx.location.directory, timeout, ...(copy ? { copy } : {}) }
+        const data = { id, sessionID, action, args, cwd, timeout, ...(copy ? { copy } : {}) }
         void Promise.resolve(rpc.events.emit("request", data)).catch((error) =>
           refuse(`Could not reach the OpenCode panes: ${error}`),
         )
@@ -141,9 +149,19 @@ export default Plugin.define({
     // Paths are relative to the conversation's directory, which is this copy's.
     const showFile = async (sessionID: string, paths: string[], signal: AbortSignal) => {
       const absolute = paths.map((path) => (isAbsolute(path) ? path : resolve(ctx.location.directory, path)))
-      const result = await ask(sessionID, "show_file", absolute, signal)
+      const result = await ask(sessionID, "show_file", absolute, ctx.location.directory, signal)
       if (result.ok) return { ok: true, message: `Opened ${absolute.join(", ")} in the user's editor.` }
       return { ok: false, message: result.message || "The editor could not open the files." }
+    }
+
+    // The folder delegate and status work in: `directory` (relative to the
+    // conversation's folder, or to your home with ~/), else the conversation's
+    // folder.
+    const folderFor = (directory?: string) => {
+      const folder = directory
+        ? resolve(ctx.location.directory, directory.replace(/^~(?=\/|$)/, homedir()))
+        : ctx.location.directory
+      return statSync(folder, { throwIfNoEntry: false })?.isDirectory() ? folder : undefined
     }
 
     // `before`: copy the conversation up to this message (the request to delegate).
@@ -151,6 +169,8 @@ export default Plugin.define({
       const names = [task.branch, task.base ?? ""]
       if (!task.branch.trim() || names.some((name) => name.startsWith("-") || /\s/.test(name)))
         return { ok: false, message: "Nothing was delegated: branch and base must be names without spaces." }
+      const cwd = folderFor(task.directory)
+      if (!cwd) return { ok: false, message: `Nothing was delegated: ${task.directory} is not a folder.` }
       const base = task.base ? [task.base] : []
       const mode = task.context ?? "none"
       const copy =
@@ -167,7 +187,7 @@ export default Plugin.define({
           "folder, to work on the task below. The original conversation goes on in its own tab; work only " +
           `here, and don't delegate this again.\n\n${task.brief}`
         : task.brief
-      const result = await ask(sessionID, "delegate", ["open", "--prompt", brief, task.branch, ...base], signal, copy)
+      const result = await ask(sessionID, "delegate", ["open", "--prompt", brief, task.branch, ...base], cwd, signal, copy)
       if (result.ok)
         return {
           ok: true,
@@ -229,8 +249,10 @@ export default Plugin.define({
       return `- ${worktree.path}${here ? " (this conversation)" : ""}: ${parts.join(", ")}; ${talk}`
     }
 
-    const status = async (sessionID: string, signal: AbortSignal) => {
-      const result = await ask(sessionID, "status", ["ls", "--json"], signal)
+    const status = async (sessionID: string, signal: AbortSignal, directory?: string) => {
+      const cwd = folderFor(directory)
+      if (!cwd) return { ok: false, message: `${directory} is not a folder.`, worktrees: [] }
+      const result = await ask(sessionID, "status", ["ls", "--json"], cwd, signal)
       if (!result.ran) return { ok: false, message: result.message, worktrees: [] }
       if (!result.ok) return { ok: false, message: `Could not list the worktrees: ${result.message}`, worktrees: [] }
       const worktrees = await Promise.all(
@@ -282,7 +304,8 @@ export default Plugin.define({
           "complete brief: the goal, what you already know (files, findings, decisions), constraints, and how " +
           "to check the result. Set `context` when the user wants the new conversation to keep this one's " +
           "history (\"with the context\": full; \"with a summary\": compact). It returns once the tab is open " +
-          "and does not wait for the work.",
+          "and does not wait for the work. It works in the repository of this conversation's folder; for " +
+          "another repository, set `directory` to a folder in it.",
         input: {
           type: "object",
           properties: {
@@ -302,6 +325,7 @@ export default Plugin.define({
                 "none (default): a new conversation starts on the brief. full: a copy of this conversation " +
                 "continues there. compact: like full, but the copy is compacted (summarized) first.",
             },
+            directory: { type: "string", description: DIRECTORY },
           },
           required: ["branch", "brief"],
           additionalProperties: false,
@@ -324,10 +348,18 @@ export default Plugin.define({
           "Show how this project's worktrees are doing: for each, its branch, uncommitted changes, commits " +
           "ahead of the default branch, whether it has a Zellij tab, and its latest OpenCode conversation " +
           "(working, waiting for the user, idle, failed) with the start of its last answer. Read-only. Use it " +
-          "when the user asks about other worktrees, tabs or delegated tasks.",
-        input: { type: "object", properties: {}, additionalProperties: false },
+          "when the user asks about other worktrees, tabs or delegated tasks. For another repository's " +
+          "worktrees, set `directory` to a folder in it.",
+        input: {
+          type: "object",
+          properties: { directory: { type: "string", description: DIRECTORY } },
+          additionalProperties: false,
+        },
         options: { codemode: false },
-        execute: async (_input, context) => ({ content: (await status(context.sessionID, context.signal)).message }),
+        execute: async (input, context) => {
+          const { directory } = input as { directory?: string }
+          return { content: (await status(context.sessionID, context.signal, directory)).message }
+        },
       })
     })
 

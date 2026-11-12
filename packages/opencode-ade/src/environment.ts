@@ -16,6 +16,8 @@ export const environment = (o: { multiplexer: string; command: string; editor: s
     '- Work in another worktree only when the user asks (for example "delegate this" or "do this in a new',
     `  worktree"), with the delegate tool. Don't create worktrees, tabs or panes yourself (with git, wt, ${o.command}`,
     "  or OpenCode's worktree tools).",
+    "- delegate and status work on the repository of this conversation's folder. For another repository, give",
+    "  them a folder in it as `directory`; there is no need to move this conversation first.",
   ].join("\n")
 
 // The instructions for the configured multiplexer and editor.

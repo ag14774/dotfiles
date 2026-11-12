@@ -23,9 +23,16 @@ const BEFORE = [
 
 const kitWith = (more: Partial<Config> = {}) => makeKit({ config: { ...structuredClone(DEFAULTS), ...more } as Config })
 
-test("with the default config, the instructions are the ones attached before", async () => {
-  assert.equal(await environmentFor(kitWith()), BEFORE)
-  assert.equal(await environmentFor(makeKit({ env: { XDG_CONFIG_HOME: mkdtempSync(join(tmpdir(), "ade-env-")) } })), BEFORE)
+// Since then: delegate and status take `directory`.
+const NOW = [
+  BEFORE,
+  "- delegate and status work on the repository of this conversation's folder. For another repository, give",
+  "  them a folder in it as `directory`; there is no need to move this conversation first.",
+].join("\n")
+
+test("with the default config, the instructions are the ones attached before, and say how to reach another repository", async () => {
+  assert.equal(await environmentFor(kitWith()), NOW)
+  assert.equal(await environmentFor(makeKit({ env: { XDG_CONFIG_HOME: mkdtempSync(join(tmpdir(), "ade-env-")) } })), NOW)
 })
 
 test("the instructions name the configured multiplexer and editor; without a multiplexer there are none", async () => {

@@ -31,13 +31,14 @@ export const Ade = {
           brief: text,
           base: text,
           context: { type: "string", enum: ["none", "full", "compact"] },
+          directory: text,
         },
         ["sessionID", "branch", "brief"],
       ),
       output: result,
     },
     status: {
-      input: object({ sessionID: text }),
+      input: object({ sessionID: text, directory: text }, ["sessionID"]),
       output: object(
         { ok: { type: "boolean" }, message: text, worktrees: { type: "array", items: { type: "object" } } },
         ["ok", "message", "worktrees"],
