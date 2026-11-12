@@ -181,6 +181,11 @@ Zellij.app and copy Zellij into a folder of its own.
     - `ade review` — the `Alt-v` review (see "Reviewing changes"); `ade review
       --scope` prints what a review here covers (`-r BASE..HEAD` for the
       commits, `-w` for uncommitted changes)
+    - `ade tabs DIR` — the tabs working in the worktree `DIR`: those whose
+      running panes are all inside it (`ID:sure`), or with a pane that didn't
+      say where it is (`ID:unsure`). Found by directories, never by tab names;
+      a tab in a nested worktree doesn't count for the outer one. `--json` takes
+      several folders (`wt-core` uses it for `wtrm` and `ls --json`)
   - `hx-open FILE...` and `opencode-send ...` — run `ade open` and `ade send`
     (kept for their callers until they call `ade`; `HX_OPEN_LOG=FILE` traces
     `hx-open`); `config/.config/zellij/review.sh`, which `Alt-v` runs, runs

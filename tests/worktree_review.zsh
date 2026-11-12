@@ -429,6 +429,23 @@ assert_eq "$(entry main | jq -r .tab)" null
 wtrm -f listed >/dev/null 2>&1
 zellij action close-tab-by-id "$listed_tab"
 
+# A worktree nested inside another (in a plain clone, wt puts them inside the
+# repository) has its own tabs, which don't count for the outer one.
+git clone -q "$remote" "$TMP/plain"
+cd "$TMP/plain"
+wt -b inner >/dev/null 2>&1
+inner_tab=$(tab_in "$TMP/plain/inner")
+[[ -n $inner_tab ]] || fail "wt -b should open a tab for the nested worktree"
+json=$("$ROOT/config/.local/bin/wt-core" ls --json)
+assert_eq "$(jq -c '[.[] | {path, tab}]' <<< "$json")" \
+  "$(jq -cn --arg p "$TMP/plain" '[{path: $p, tab: null}, {path: ($p + "/inner"), tab: "sure"}]')"
+zellij action go-to-tab-by-id 1
+wt -t main >/dev/null 2>&1
+outer_tab=$(tab_in "$TMP/plain")
+[[ -n $outer_tab && $outer_tab != "$inner_tab" ]] || fail "wt -t should open the outer worktree's own tab"
+assert_eq "$(focused_tab)" "$outer_tab"
+cd "$project/main"
+
 # Outside Zellij, -p fails before creating anything and -t changes directory.
 unset ZELLIJ ZELLIJ_SESSION_NAME ZELLIJ_PANE_ID
 if wt -p 'x' outside >/dev/null 2>&1; then fail "wt -p outside Zellij should fail"; fi
