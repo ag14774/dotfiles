@@ -92,6 +92,9 @@ pane_field() { # $1=tab ID $2=pane title $3=jq expression on that pane (null if 
     "[.[] | select(.is_plugin == false and .tab_id == \$tab and .title == \$title)] | first | if . == null then null else $3 end"
 }
 running() { [[ $(pane_field "$1" "$2" '(.exited or .is_held) | not') == true ]]; }
+# $1=tab ID: the editor pane is above the main pane (dev.kdl's with-editor
+# swap layout; since Zellij 0.46 the editor first lands below and is moved up).
+editor_on_top() { (( $(pane_field "$1" editor '.pane_y') < $(pane_field "$1" main '.pane_y') )); }
 tab_in() { panes | jq -r --arg d "$1" '[.[] | select(.pane_cwd == $d)] | first | .tab_id'; }
 tab_count() { zj list-tabs --json 2>/dev/null | jq length; }
 wait_for() { # $1=seconds, then a command to retry until it succeeds
@@ -142,6 +145,8 @@ main_pane=$(value_of 30 pane_field 0 main '.id') || fail "no main pane in tab 0"
 (cd "$main" && in_session env ZELLIJ_PANE_ID="$main_pane" "$ROOT/config/.local/bin/hx-open" notes.md) \
   || fail "hx-open could not open a file"
 wait_for 30 running 0 editor || fail "hx-open did not start Helix"
+wait_for 10 editor_on_top 0 \
+  || fail "the new editor pane is not above main: $(panes | jq -c '[.[] | select(.is_plugin == false and .tab_id == 0) | {title, pane_y}]')"
 zj write-chars --pane-id "terminal_$main_pane" 'sleep 9131'
 zj write --pane-id "terminal_$main_pane" 13
 
@@ -205,5 +210,6 @@ wait_for 30 running 0 editor \
 [[ $(panes | jq '[.[] | select(.is_plugin == false and .tab_id == 0 and .title == "editor")] | length') == 1 ]] \
   || fail "hx-open left more than one editor pane"
 pgrep -f "$main/other.md" >/dev/null || fail "the restarted Helix did not open the file"
+wait_for 10 editor_on_top 0 || fail "the restarted editor pane is not above main"
 
 print "zellij restore smoke test: ok"
