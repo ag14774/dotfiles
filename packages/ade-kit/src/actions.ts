@@ -10,8 +10,8 @@ import { onPath } from "./editor.ts"
 import { labelOf, loadAgent, loadEditor, loadMultiplexer, loadReviewer } from "./load.ts"
 import { isActive, paneWith, tabOf, tabsIn } from "./multiplexer.ts"
 import { reviewerEnv, scopeOf } from "./review.ts"
-import type { Agent, FileRef, Kit, Multiplexer, MultiplexerAdapter, Workspace } from "./types.ts"
-import { callerFolder, located, realPath, sessionOf, workspaceOf, worktreesOf } from "./workspace.ts"
+import type { Agent, FileRef, Kit, Multiplexer, MultiplexerAdapter, OpenedTab, Workspace } from "./types.ts"
+import { callerFolder, isDirectory, located, realPath, sessionOf, workspaceOf, worktreesOf } from "./workspace.ts"
 
 type Env = Record<string, string | undefined>
 export type Caller = { env: Env; cwd: string }
@@ -84,10 +84,6 @@ export type WorkspaceOptions = {
   prompt?: string // what a new tab's agent starts on
 }
 
-// How long a new tab's agent pane may take to be listed: looks, 50 ms apart.
-const AGENT_PANE_LOOKS = 40
-const sleep = (ms: number) => new Promise((done) => setTimeout(done, ms))
-
 // The agent's command for a pane, its program found on the caller's PATH (the
 // multiplexer may start it with another).
 function agentCommand(agent: Agent, o: { session?: string; prompt?: string }, env: Env) {
@@ -107,6 +103,7 @@ function agentCommand(agent: Agent, o: { session?: string; prompt?: string }, en
 export async function workspace(kit: Kit, o: WorkspaceOptions, caller: Caller, tell: (message: string) => void = () => {}) {
   const { adapter, mux } = await callerSession(kit, caller)
   const given = resolve(caller.cwd, o.dir)
+  if (!isDirectory(given)) throw new Error(`${given} is not a folder`)
   const dir = realPath(given)
   const name = basename(given)
   const starting = { ...(o.session ? { session: o.session } : {}), ...(o.prompt ? { prompt: o.prompt } : {}) }
@@ -120,28 +117,18 @@ export async function workspace(kit: Kit, o: WorkspaceOptions, caller: Caller, t
     return { tab: found.tab, opened: false }
   }
   const openTab = needs(mux, "openTab", adapter)
-  let tab: string
+  let opened: OpenedTab
   try {
-    tab = await openTab({ dir, focus: o.focus })
+    opened = await openTab({ dir, focus: o.focus, ...(argv ? { agent: argv } : {}) })
   } catch {
     throw new Error(`could not open a ${labelOf(adapter)} tab for ${name}`)
   }
   if (!o.focus) tell(`opened tab ${name} in the background`)
-  if (!agent || !argv) return { tab, opened: true }
-  // The layout's agent pane, replaced by one on the conversation or prompt.
-  let pane: string | undefined
-  for (let look = 1; look <= AGENT_PANE_LOOKS && !pane; look++) {
-    pane = paneWith(await mux.panes().catch(() => []), tab, "agent")?.id
-    if (!pane) await sleep(50)
-  }
-  if (!pane) throw new Error(`no ${agent.name} pane in tab ${name}; prompt not sent (the tab stays open)`)
-  try {
-    await mux.start({ tab, role: "agent", argv, focus: false, replace: pane, cwd: dir })
-  } catch {
-    throw new Error(`could not start ${labelOf(agent)} with the prompt in tab ${name}`)
-  }
-  tell(`${labelOf(agent)} in tab ${name} is working on the prompt`)
-  return { tab, opened: true }
+  if (agent && opened.agent === "no pane")
+    throw new Error(`no ${agent.name} pane in tab ${name}; prompt not sent (the tab stays open)`)
+  if (agent && opened.agent !== "started") throw new Error(`could not start ${labelOf(agent)} with the prompt in tab ${name}`)
+  if (agent) tell(`${labelOf(agent)} in tab ${name} is working on the prompt`)
+  return { tab: opened.tab, opened: true }
 }
 
 // Close the tabs of the removed worktree `dir`: `found`, what tabs() found

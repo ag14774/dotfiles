@@ -177,8 +177,8 @@ test("openTab: the layout's tab in the folder, named after it, in front or in th
     "action new-tab --layout dev --name feat --cwd /p/feat --no-focus": "7\n",
     "action new-tab --layout dev --name feat --cwd /p/feat": "8\n",
   })
-  assert.equal(await mux.openTab?.({ dir: "/p/feat", focus: false }), "7")
-  assert.equal(await mux.openTab?.({ dir: "/p/feat", focus: true }), "8")
+  assert.deepEqual(await mux.openTab?.({ dir: "/p/feat", focus: false }), { tab: "7" })
+  assert.deepEqual(await mux.openTab?.({ dir: "/p/feat", focus: true }), { tab: "8" })
   assert.deepEqual(actions(calls), [
     "new-tab --layout dev --name feat --cwd /p/feat --no-focus",
     "new-tab --layout dev --name feat --cwd /p/feat",
@@ -187,16 +187,39 @@ test("openTab: the layout's tab in the folder, named after it, in front or in th
   await assert.rejects(recording({}, ["action new-tab --layout dev --name feat --cwd /p/feat"]).mux.openTab!({ dir: "/p/feat", focus: true }), /zellij action new-tab: boom$/)
 })
 
-test("showTab goes to the tab, closeTab closes it; start in place takes a folder", async () => {
-  const { mux, calls } = recording({ "action new-pane --in-place --pane-id terminal_4 --close-replaced-pane --close-on-exit --no-focus -n opencode --cwd /p/feat -- oc --prompt go": "terminal_9\n" })
+test("showTab goes to the tab, closeTab closes it", async () => {
+  const { mux, calls } = recording({})
   await mux.showTab?.("3")
   await mux.closeTab?.("5")
-  assert.equal(await mux.start({ tab: "3", role: "agent", argv: ["oc", "--prompt", "go"], focus: false, replace: "4", cwd: "/p/feat" }), "9")
+  assert.deepEqual(actions(calls), ["go-to-tab-by-id 3", "close-tab-by-id 5"])
+})
+
+// A new tab 4 for /p/feat in the background, its layout's agent pane 12.
+const newTab = "action new-tab --layout dev --name feat --cwd /p/feat --no-focus"
+const layoutPanes = JSON.stringify([
+  { id: 11, is_plugin: false, tab_id: 4, title: "main" },
+  { id: 12, is_plugin: false, tab_id: 4, title: "opencode" },
+])
+const replaced = "action new-pane --in-place --pane-id terminal_12 --close-replaced-pane --close-on-exit --no-focus -n opencode --cwd /p/feat -- oc --prompt go"
+
+test("openTab with an agent: the layout's agent pane is replaced in place, in the background, in the worktree", async () => {
+  const { mux, calls } = recording({ [newTab]: "4\n", "action list-panes --json": ["[]", layoutPanes], [replaced]: "terminal_13\n" })
+  assert.deepEqual(await mux.openTab?.({ dir: "/p/feat", focus: false, agent: ["oc", "--prompt", "go"] }), { tab: "4", agent: "started" })
   assert.deepEqual(actions(calls), [
-    "go-to-tab-by-id 3",
-    "close-tab-by-id 5",
-    "new-pane --in-place --pane-id terminal_4 --close-replaced-pane --close-on-exit --no-focus -n opencode --cwd /p/feat -- oc --prompt go",
+    "new-tab --layout dev --name feat --cwd /p/feat --no-focus",
+    "list-panes --json",
+    "list-panes --json",
+    replaced.slice("action ".length),
   ])
+})
+
+test("openTab with an agent: no agent pane in the new tab (after a while), or the agent not started", async () => {
+  const lone = JSON.stringify([{ id: 11, is_plugin: false, tab_id: 4, title: "main" }])
+  const none = recording({ [newTab]: "4\n", "action list-panes --json": lone })
+  assert.deepEqual(await none.mux.openTab?.({ dir: "/p/feat", focus: false, agent: ["oc"] }), { tab: "4", agent: "no pane" })
+  assert.equal(actions(none.calls).filter((call) => call.startsWith("new-pane")).length, 0)
+  const failing = recording({ [newTab]: "4\n", "action list-panes --json": layoutPanes }, [replaced])
+  assert.deepEqual(await failing.mux.openTab?.({ dir: "/p/feat", focus: false, agent: ["oc", "--prompt", "go"] }), { tab: "4", agent: "failed" })
 })
 
 test("openTab names the tab from the tabName option", async () => {
@@ -210,7 +233,7 @@ test("openTab names the tab from the tabName option", async () => {
       return { ok: true, stdout: "4\n", stderr: "" }
     },
   })
-  assert.equal(await zellij(kit).connect({ session: "test" }).openTab?.({ dir: "/home/me/dotfiles/feat", focus: false }), "4")
+  assert.deepEqual(await zellij(kit).connect({ session: "test" }).openTab?.({ dir: "/home/me/dotfiles/feat", focus: false }), { tab: "4" })
   assert.deepEqual(calls, [
     ["git", "-C", "/home/me/dotfiles/feat", "rev-parse", "--path-format=absolute", "--git-common-dir"],
     ["zellij", "--session", "test", "action", "new-tab", "--layout", "dev", "--name", "dotfiles: feat", "--cwd", "/home/me/dotfiles/feat", "--no-focus"],

@@ -57,11 +57,16 @@ export interface Multiplexer {
   focus(pane: string): Promise<void>
   // Optional, for a tab per worktree (ade workspace): a new tab in the
   // worktree `dir` with the layout's panes (the agent's and the shell's),
-  // named after it, in front or in the background. Returns its ID.
-  openTab?(o: { dir: string; focus: boolean }): Promise<string>
+  // named after it, in front or in the background; with `agent`, the agent
+  // pane runs that command instead of its own. Fails only if no tab opened.
+  openTab?(o: { dir: string; focus: boolean; agent?: string[] }): Promise<OpenedTab>
   showTab?(tab: string): Promise<void> // bring it to the front
   closeTab?(tab: string): Promise<void>
 }
+
+// The tab openTab opened and, when it was given an agent command, whether
+// the agent pane runs it: "no pane" when the new tab has no agent pane.
+export type OpenedTab = { tab: string; agent?: "started" | "no pane" | "failed" }
 
 // A file to open, with the place to show when the editor supports it.
 export type FileRef = { path: string; line?: number; column?: number }

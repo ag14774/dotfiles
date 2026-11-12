@@ -2,7 +2,7 @@
 // --json`, roles from pane names (the `zellij.panes` options). Every call
 // names its session: given a session name that no longer exists, plain
 // `zellij action` acts on whichever session is running.
-import type { Key, Kit, MultiplexerAdapter, Pane, Role, Tab } from "../types.ts"
+import type { Key, Kit, Multiplexer, MultiplexerAdapter, OpenedTab, Pane, Role, Tab } from "../types.ts"
 
 type RawPane = {
   id: number
@@ -43,6 +43,7 @@ export const parseTabs = (json: string): Tab[] =>
 
 const SETTLE_MS = 150 // for a swap layout to apply
 const APPEAR_MS = 10_000 // for a new pane to be listed
+const LAYOUT_LOOKS = 40 // for a new tab's agent pane to be listed: looks, 50 ms apart
 const sleep = (ms: number) => new Promise((done) => setTimeout(done, ms))
 
 export default (kit: Kit): MultiplexerAdapter => ({
@@ -108,31 +109,50 @@ export default (kit: Kit): MultiplexerAdapter => ({
         else await action("write", "--pane-id", id(pane), key.key === "escape" ? "27" : "13")
     }
 
+    // The pane closes when its program ends, instead of waiting for Enter.
+    const start: Multiplexer["start"] = async ({ tab, role, argv, focus, replace, cwd }) => {
+      const name = options.panes[role]
+      const folder = cwd === undefined ? [] : ["--cwd", cwd]
+      if (replace !== undefined) {
+        const unfocused = focus ? [] : ["--no-focus"]
+        const output = await action(
+          "new-pane", "--in-place", "--pane-id", id(replace), "--close-replaced-pane", "--close-on-exit",
+          ...unfocused, "-n", name, ...folder, "--", ...argv,
+        )
+        return paneStarted(output, tab, name)
+      }
+      if (!focus) throw new Error(`a new ${name} pane can only open in the tab you are on`)
+      // New panes and swap layouts apply to the tab in front: show this one
+      // first (it usually is in front already).
+      await action("go-to-tab-by-id", tab)
+      const started = await action("new-pane", "--close-on-exit", "-n", name, ...folder, "--", ...argv)
+      const pane = await paneStarted(started, tab, name)
+      if (role === "editor") await placeEditor(tab, pane).catch(() => {})
+      await focusPane(pane)
+      return pane
+    }
+
+    // The layout starts the agent its own way: with another command, that
+    // pane is replaced in place once it is listed (in the background, in the
+    // worktree).
+    const startAgent = async (tab: string, dir: string, agent: string[]): Promise<OpenedTab["agent"]> => {
+      let pane: string | undefined
+      for (let look = 1; look <= LAYOUT_LOOKS && pane === undefined; look++) {
+        const found = (await listed().catch(() => [])).find((p) => String(p.tab_id) === tab && p.title === options.panes.agent)
+        pane = found && String(found.id)
+        if (pane === undefined) await sleep(50)
+      }
+      if (pane === undefined) return "no pane"
+      return start({ tab, role: "agent", argv: agent, focus: false, replace: pane, cwd: dir }).then(
+        () => "started",
+        () => "failed",
+      )
+    }
+
     return {
       panes: async () => parsePanes(await action("list-panes", "--json"), options.panes),
       tabs: async () => parseTabs(await action("list-tabs", "--json")),
-      // The pane closes when its program ends, instead of waiting for Enter.
-      start: async ({ tab, role, argv, focus, replace, cwd }) => {
-        const name = options.panes[role]
-        const folder = cwd === undefined ? [] : ["--cwd", cwd]
-        if (replace !== undefined) {
-          const unfocused = focus ? [] : ["--no-focus"]
-          const output = await action(
-            "new-pane", "--in-place", "--pane-id", id(replace), "--close-replaced-pane", "--close-on-exit",
-            ...unfocused, "-n", name, ...folder, "--", ...argv,
-          )
-          return paneStarted(output, tab, name)
-        }
-        if (!focus) throw new Error(`a new ${name} pane can only open in the tab you are on`)
-        // New panes and swap layouts apply to the tab in front: show this one
-        // first (it usually is in front already).
-        await action("go-to-tab-by-id", tab)
-        const started = await action("new-pane", "--close-on-exit", "-n", name, ...folder, "--", ...argv)
-        const pane = await paneStarted(started, tab, name)
-        if (role === "editor") await placeEditor(tab, pane).catch(() => {})
-        await focusPane(pane)
-        return pane
-      },
+      start,
       type,
       paste: async (pane, text) => {
         await action("write-chars", "--pane-id", id(pane), `\x1b[200~${text}\x1b[201~`)
@@ -141,13 +161,13 @@ export default (kit: Kit): MultiplexerAdapter => ({
       // The layout named, as Alt-t does: a resurrected session's own copy of
       // its new-tab template starts commands suspended. Named from the
       // tabName option. 0.46 prints the new tab's ID.
-      openTab: async ({ dir, focus }) => {
+      openTab: async ({ dir, focus, agent }) => {
         const unfocused = focus ? [] : ["--no-focus"]
         const name = await kit.tabName(options.tabName, dir)
         const output = await action("new-tab", "--layout", options.layout, "--name", name, "--cwd", dir, ...unfocused)
         const tab = output.trim()
         if (!/^\d+$/.test(tab)) throw new Error(`zellij action new-tab printed no tab ID${tab ? `: ${tab}` : ""}`)
-        return tab
+        return agent ? { tab, agent: await startAgent(tab, dir, agent) } : { tab }
       },
       showTab: async (tab) => {
         await action("go-to-tab-by-id", tab)

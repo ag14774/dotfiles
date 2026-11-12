@@ -348,7 +348,8 @@ test("tabs works with the multiplexer's session alone, and not outside one", asy
 })
 
 // A multiplexer with tabs for worktrees: openTab adds a tab with a shell and
-// (unless `agent` is false) an agent pane in the folder, as the layout does.
+// (unless `agent` is false) an agent pane in the folder, as the layout does,
+// and says whether the agent command it was given started.
 const withTabs = (panes: Pane[], o: { agent?: boolean; fail?: "openTab" | "start" | "closeTab" } = {}) => {
   const calls: Call[] = []
   const state = [...panes]
@@ -367,7 +368,8 @@ const withTabs = (panes: Pane[], o: { agent?: boolean; fail?: "openTab" | "start
       calls.push(["openTab", t])
       if (o.fail === "openTab") throw new Error("boom")
       state.push(pane("20", "9", "shell", { cwd: t.dir }), ...(o.agent === false ? [] : [pane("21", "9", "agent", { cwd: t.dir })]))
-      return "9"
+      if (!t.agent) return { tab: "9" }
+      return { tab: "9", agent: o.agent === false ? "no pane" : o.fail === "start" ? "failed" : "started" }
     },
     showTab: async (tab) => void calls.push(["showTab", tab]),
     closeTab: async (tab) => {
@@ -412,15 +414,12 @@ test("workspace: a new tab, in front or in the background, also for a worktree w
   assert.deepEqual(messages, ["opened tab inner in the background"])
 })
 
-test("workspace: with a conversation or prompt, the new tab's agent pane is replaced by the agent on them", async () => {
+test("workspace: with a conversation or prompt, the new tab's agent starts on them, its program found on PATH", async () => {
   const calls = withTabs([])
   const { messages, tell } = told()
   await workspace(kitWith(viaPane), { dir: inner, focus: false, session: "ses_1", prompt: "-go on" }, scripted, tell)
   const argv = [join(temp, "bin", "opencode-pane"), "--session", "ses_1", "--prompt", "-go on"]
-  assert.deepEqual(calls, [
-    ["openTab", { dir: inner, focus: false }],
-    ["start", { tab: "9", role: "agent", argv, focus: false, replace: "21", cwd: inner }],
-  ])
+  assert.deepEqual(calls, [["openTab", { dir: inner, focus: false, agent: argv }]])
   assert.deepEqual(messages, ["opened tab inner in the background", "OpenCode in tab inner is working on the prompt"])
 })
 
@@ -434,10 +433,10 @@ test("workspace refuses a conversation or prompt for a worktree with a tab, and 
   // A program given with its path is used as it is.
   const given = withTabs([])
   await workspace(kitWith({ opencode: { command: ["/opt/oc"] } } as Partial<Config>), { dir: inner, focus: true, prompt: "go" }, scripted)
-  assert.deepEqual((given[1][1] as { argv: string[] }).argv, ["/opt/oc", "--prompt", "go"])
+  assert.deepEqual((given[0][1] as { agent: string[] }).agent, ["/opt/oc", "--prompt", "go"])
 })
 
-test("workspace says what failed: no tab, no agent pane in it (after a while), the agent not started", async () => {
+test("workspace says what failed: no tab, no agent pane in it, the agent not started", async () => {
   withTabs([], { fail: "openTab" })
   await assert.rejects(workspace(kitWith(), { dir: inner, focus: false }, scripted), /^Error: could not open a Fake tab for inner$/)
   withTabs([], { agent: false })
@@ -450,7 +449,10 @@ test("workspace says what failed: no tab, no agent pane in it (after a while), t
     /^Error: could not start OpenCode with the prompt in tab inner$/)
 })
 
-test("workspace needs a multiplexer that opens tabs, and a session", async () => {
+test("workspace needs a folder, a multiplexer that opens tabs, and a session", async () => {
+  const calls = withTabs([])
+  await assert.rejects(workspace(kitWith(), { dir: "nowhere", focus: true }, scripted), new RegExp(`^Error: ${join(temp, "nowhere")} is not a folder$`))
+  assert.deepEqual(calls, [])
   record(nested.filter((p) => p.tab === "2"))
   await assert.rejects(workspace(kitWith(), { dir: outer, focus: true }, scripted), /^Error: the multiplexer "fake" lacks: openTab$/)
   await assert.rejects(workspace(kitWith(), { dir: outer, focus: true }, from(undefined)), /^Error: not inside Fake$/)
