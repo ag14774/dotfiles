@@ -198,3 +198,21 @@ test("showTab goes to the tab, closeTab closes it; start in place takes a folder
     "new-pane --in-place --pane-id terminal_4 --close-replaced-pane --close-on-exit --no-focus -n opencode --cwd /p/feat -- oc --prompt go",
   ])
 })
+
+test("openTab names the tab from the tabName option", async () => {
+  const calls: string[][] = []
+  const config = { ...DEFAULTS, zellij: { ...DEFAULTS.zellij, tabName: "{project}: {worktree}" } }
+  const kit = makeKit({
+    config,
+    run: async (argv) => {
+      calls.push(argv)
+      if (argv[0] === "git") return { ok: true, stdout: "/home/me/dotfiles/.bare\n", stderr: "" }
+      return { ok: true, stdout: "4\n", stderr: "" }
+    },
+  })
+  assert.equal(await zellij(kit).connect({ session: "test" }).openTab?.({ dir: "/home/me/dotfiles/feat", focus: false }), "4")
+  assert.deepEqual(calls, [
+    ["git", "-C", "/home/me/dotfiles/feat", "rev-parse", "--path-format=absolute", "--git-common-dir"],
+    ["zellij", "--session", "test", "action", "new-tab", "--layout", "dev", "--name", "dotfiles: feat", "--cwd", "/home/me/dotfiles/feat", "--no-focus"],
+  ])
+})

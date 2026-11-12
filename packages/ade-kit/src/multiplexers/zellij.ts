@@ -2,7 +2,6 @@
 // --json`, roles from pane names (the `zellij.panes` options). Every call
 // names its session: given a session name that no longer exists, plain
 // `zellij action` acts on whichever session is running.
-import { basename } from "node:path"
 import type { Key, Kit, MultiplexerAdapter, Pane, Role, Tab } from "../types.ts"
 
 type RawPane = {
@@ -140,11 +139,12 @@ export default (kit: Kit): MultiplexerAdapter => ({
       },
       focus: focusPane,
       // The layout named, as Alt-t does: a resurrected session's own copy of
-      // its new-tab template starts commands suspended. 0.46 prints the new
-      // tab's ID.
+      // its new-tab template starts commands suspended. Named from the
+      // tabName option. 0.46 prints the new tab's ID.
       openTab: async ({ dir, focus }) => {
         const unfocused = focus ? [] : ["--no-focus"]
-        const output = await action("new-tab", "--layout", options.layout, "--name", basename(dir), "--cwd", dir, ...unfocused)
+        const name = await kit.tabName(options.tabName, dir)
+        const output = await action("new-tab", "--layout", options.layout, "--name", name, "--cwd", dir, ...unfocused)
         const tab = output.trim()
         if (!/^\d+$/.test(tab)) throw new Error(`zellij action new-tab printed no tab ID${tab ? `: ${tab}` : ""}`)
         return tab

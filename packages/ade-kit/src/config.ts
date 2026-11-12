@@ -19,6 +19,7 @@ export const DEFAULTS: Config = {
   zellij: {
     layout: "dev",
     panes: { agent: "opencode", shell: "main", editor: "editor", review: "review" },
+    tabName: "{worktree}",
   },
 }
 
@@ -48,6 +49,7 @@ const check = (config: Config, path: string) => {
     agent: config.agent,
     reviewer: config.reviewer,
     "zellij.layout": zellij.layout,
+    "zellij.tabName": zellij.tabName,
     ...Object.fromEntries(panes.map(([role, name]) => [`zellij.panes${role ? `.${role}` : ""}`, name])),
   }
   const wrong = Object.keys(values).filter((key) => typeof values[key] !== "string")

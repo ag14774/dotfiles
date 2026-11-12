@@ -1,5 +1,6 @@
 // What adapters get (see types.ts), so they don't reimplement anything.
 import { execFile } from "node:child_process"
+import { basename, dirname } from "node:path"
 import { pasteAgent } from "./agent.ts"
 import opencode from "./agents/opencode.ts"
 import { readConfig } from "./config.ts"
@@ -42,6 +43,26 @@ export const keys = {
   text: (text: string): Key => ({ text }),
 }
 
+// The name of the repository `dir` is in: that of the folder holding its .git
+// (or .bare, in the worktree layout: the project folder), else that of a bare
+// repository without ".git". Nothing outside a repository.
+export async function projectOf(run: Kit["run"], dir: string) {
+  const result = await run(["git", "-C", dir, "rev-parse", "--path-format=absolute", "--git-common-dir"])
+  const common = result.stdout.trim()
+  if (!result.ok || !common) return undefined
+  const name = basename(common)
+  return name === ".git" || name === ".bare" ? basename(dirname(common)) : name.replace(/\.git$/, "")
+}
+
+// See Kit's tabName. Outside a repository, {project} has no value: the name
+// is then the worktree's alone.
+export async function tabName(run: Kit["run"], template: string, dir: string) {
+  const worktree = basename(dir)
+  const project = template.includes("{project}") ? await projectOf(run, dir) : ""
+  if (project === undefined) return worktree
+  return template.replace(/\{(worktree|project)\}/g, (_, key: string) => (key === "worktree" ? worktree : project))
+}
+
 const EDITORS: Record<string, (kit: Kit) => Editor> = { helix, mitos }
 const AGENTS: Record<string, (kit: Kit) => Agent> = { opencode }
 const REVIEWERS: Record<string, (kit: Kit) => Reviewer> = { tuicr }
@@ -60,6 +81,7 @@ export function makeKit(
     run: o.run ?? run,
     quote,
     keys,
+    tabName: (template, dir) => tabName(kit.run, template, dir),
     typedEditor,
     pasteAgent,
     builtin: {

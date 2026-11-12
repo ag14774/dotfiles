@@ -142,6 +142,10 @@ export interface Reviewer {
 export type ZellijOptions = {
   layout: string
   panes: Record<Role, string> // pane names, by role
+  // The name of a worktree's tab (see Kit's tabName): "{project}: {worktree}"
+  // groups each project's tabs in ade-zjstatus. Names are only shown: tabs
+  // are found by their panes' folders.
+  tabName: string
 }
 export type Config = {
   // Each choice: a built-in name, or a path to a module of your own.
@@ -170,6 +174,9 @@ export type Kit = {
     single(text: string): string // '...', with '' for a ' inside
   }
   keys: { escape: Key; enter: Key; text(text: string): Key }
+  // A tab's name for the worktree `dir`, from a template: {worktree} is the
+  // worktree folder's name, {project} its repository's root folder's.
+  tabName(template: string, dir: string): Promise<string>
   typedEditor(o: TypedEditorOptions): Editor
   pasteAgent(o: PasteAgentOptions): Agent
   // The built-in adapters, to start from.

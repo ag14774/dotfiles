@@ -25,6 +25,7 @@ test("the defaults are today's setup", () => {
     zellij: {
       layout: "dev",
       panes: { agent: "opencode", shell: "main", editor: "editor", review: "review" },
+      tabName: "{worktree}",
     },
   })
 })
@@ -48,6 +49,7 @@ test("settings merge into the defaults key by key, and other sections are kept",
   assert.deepEqual(config.zellij, {
     layout: "dev",
     panes: { agent: "claude", shell: "main", editor: "editor", review: "review" },
+    tabName: "{worktree}",
   })
   assert.equal(config.multiplexer, "zellij")
   assert.deepEqual(config.opencode, { command: ["opencode-pane"] })
@@ -63,6 +65,7 @@ test("a broken config file is refused, naming the file and the problem", () => {
     /these must be strings: multiplexer, editor, agent, reviewer, zellij\.panes\.agent$/,
   )
   assert.throws(() => readConfig({ XDG_CONFIG_HOME: configHome('{"zellij": {"panes": []}}') }), /strings: zellij\.panes$/)
+  assert.throws(() => readConfig({ XDG_CONFIG_HOME: configHome('{"zellij": {"tabName": null}}') }), /strings: zellij\.tabName$/)
   assert.throws(() => readConfig({ XDG_CONFIG_HOME: configHome('{"review": {"deliver": "send"}}') }), /review\.deliver must be "insert" or "submit"$/)
   assert.equal(readConfig({ XDG_CONFIG_HOME: configHome('{"review": {"deliver": "submit"}}') }).review.deliver, "submit")
 })

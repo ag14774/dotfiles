@@ -457,6 +457,21 @@ export GH_PR_NUMBER=7 GH_PR_STATE=OPEN
 said "wtreview: opened tab review-pr-7 in the background"
 wtrm -f review-pr-7 >/dev/null 2>&1
 
+# With zellij.tabName "{project}: {worktree}" (ade-zjstatus can group such
+# tabs), a new tab's name has the project's too; it is still found by its
+# panes, and the messages name the worktree.
+jq '.zellij.tabName = "{project}: {worktree}"' "$ROOT/config/.config/ade/config.json" > "$TMP/xdg/ade/config.json"
+engine -b grouped || fail "wt -b failed: $(<"$TMP/err")"
+said "wt: opened tab grouped in the background"
+tab=$(tab_in "$project/grouped")
+assert_eq "$(tab_name "$tab")" "project: grouped"
+engine -t grouped || fail "wt -t failed: $(<"$TMP/err")"
+assert_eq "$(focused_tab)" "$tab"
+zellij action go-to-tab-by-id 1
+cp "$ROOT/config/.config/ade/config.json" "$TMP/xdg/ade/"
+wtrm grouped >/dev/null 2>&1
+[[ -z $(tab_in "$project/grouped") ]] || fail "wtrm should close the grouped tab"
+
 # wtrm closes the worktree's tab.
 wtrm -f prompted >/dev/null 2>&1
 [[ -z $(tab_in "$project/prompted") ]] || fail "wtrm should close the worktree's tab"
