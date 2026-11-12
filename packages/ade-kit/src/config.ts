@@ -8,14 +8,12 @@ import type { Config } from "./types.ts"
 
 type Env = Record<string, string | undefined>
 
-// Today's setup: Zellij with the dev layout and its pane names, and the
-// zjstatus widget that shows the agent totals.
+// Today's setup: Zellij with the dev layout and its pane names.
 export const DEFAULTS: Config = {
   multiplexer: "zellij",
   zellij: {
     layout: "dev",
     panes: { agent: "opencode", shell: "main", editor: "editor", review: "review" },
-    totals: "zjstatus::pipe::pipe_agents",
   },
 }
 
@@ -42,7 +40,6 @@ const check = (config: Config, path: string) => {
   const values: Record<string, unknown> = {
     multiplexer: config.multiplexer,
     "zellij.layout": zellij.layout,
-    "zellij.totals": zellij.totals,
     ...Object.fromEntries(panes.map(([role, name]) => [`zellij.panes${role ? `.${role}` : ""}`, name])),
   }
   const wrong = Object.keys(values).filter((key) => typeof values[key] !== "string")

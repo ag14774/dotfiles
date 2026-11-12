@@ -2,7 +2,7 @@ import assert from "node:assert/strict"
 import { readFileSync } from "node:fs"
 import { test } from "node:test"
 import { DEFAULTS } from "../src/config.ts"
-import { callerDir, isActive, paneWith, tabOf, tabsIn, topMark, URGENCY } from "../src/multiplexer.ts"
+import { callerDir, isActive, paneWith, tabOf, tabsIn } from "../src/multiplexer.ts"
 import { parsePanes, parseTabs } from "../src/multiplexers/zellij.ts"
 import type { Pane } from "../src/types.ts"
 
@@ -32,15 +32,6 @@ test("tabOf, paneWith and isActive", () => {
   assert.equal(isActive(tabs, "1"), true)
   assert.equal(isActive(tabs, "0"), false)
   assert.equal(isActive(tabs, "7"), false)
-})
-
-test("the most urgent mark wins: waiting, failed, done, working", () => {
-  assert.deepEqual(URGENCY, ["waiting", "failed", "done", "working"])
-  assert.equal(topMark(["working", "done", undefined]), "done")
-  assert.equal(topMark(["working", "failed", "done"]), "failed")
-  assert.equal(topMark(["none", "waiting", "failed"]), "waiting")
-  assert.equal(topMark([undefined, "none"]), "none")
-  assert.equal(topMark([]), "none")
 })
 
 test("callerDir: the tab's focused tiled pane, else its agent pane, else its shell pane", () => {

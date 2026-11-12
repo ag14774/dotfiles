@@ -1,12 +1,5 @@
 // Pane logic for every multiplexer, on what its panes() and tabs() return.
-import type { Mark, Pane, Role, ShownMark, Tab, Where } from "./types.ts"
-
-// Most urgent first: a tab shows the most urgent mark of its panes.
-export const URGENCY: readonly ShownMark[] = ["waiting", "failed", "done", "working"]
-export const topMark = (marks: Iterable<Mark | undefined>): Mark => {
-  const all = [...marks]
-  return URGENCY.find((mark) => all.includes(mark)) ?? "none"
-}
+import type { Pane, Role, Tab, Where } from "./types.ts"
 
 export const tabOf = (panes: readonly Pane[], pane: string) => panes.find((p) => p.id === pane)?.tab
 export const paneWith = (panes: readonly Pane[], tab: string, role: Role) =>

@@ -12,10 +12,6 @@ export type Where = { session: string; pane: string }
 // What a pane is for, from its name (see the multiplexer's options).
 export type Role = "agent" | "editor" | "shell" | "review"
 
-// What a tab's agents are doing, shown on the tab (status package).
-export type Mark = "none" | "working" | "waiting" | "done" | "failed"
-export type ShownMark = Exclude<Mark, "none">
-
 export type Pane = {
   id: string
   tab: string
@@ -42,17 +38,12 @@ export type MultiplexerAdapter = {
 export interface Multiplexer {
   panes(): Promise<Pane[]>
   tabs(): Promise<Tab[]>
-  // Optional (status package)
-  markTab?(tab: string, mark: Mark): Promise<void>
-  marks?(): Promise<Map<string, Mark>> // tab ID -> mark
-  showTotals?(counts: Record<ShownMark, number>): Promise<void>
 }
 
 // The ADE config (config.ts): choices, and options sections for adapters.
 export type ZellijOptions = {
   layout: string
   panes: Record<Role, string> // pane names, by role
-  totals: string // where the totals go: `zellij pipe` to this plugin and pipe name
 }
 export type Config = {
   multiplexer: string // a built-in name, a path to a module of your own, or "none"

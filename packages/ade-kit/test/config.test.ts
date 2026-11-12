@@ -21,7 +21,6 @@ test("the defaults are today's setup", () => {
     zellij: {
       layout: "dev",
       panes: { agent: "opencode", shell: "main", editor: "editor", review: "review" },
-      totals: "zjstatus::pipe::pipe_agents",
     },
   })
 })
@@ -45,7 +44,6 @@ test("settings merge into the defaults key by key, and other sections are kept",
   assert.deepEqual(config.zellij, {
     layout: "dev",
     panes: { agent: "claude", shell: "main", editor: "editor", review: "review" },
-    totals: "zjstatus::pipe::pipe_agents",
   })
   assert.equal(config.multiplexer, "zellij")
   assert.deepEqual(config.opencode, { command: ["opencode-pane"] })
