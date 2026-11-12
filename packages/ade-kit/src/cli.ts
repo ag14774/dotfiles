@@ -7,8 +7,8 @@
 import { spawn } from "node:child_process"
 import { once } from "node:events"
 import { appendFileSync } from "node:fs"
-import type { Terminal } from "./actions.ts"
-import { open, review, send, tabs } from "./actions.ts"
+import type { Terminal, WorkspaceOptions } from "./actions.ts"
+import { open, review, send, tabs, workspace } from "./actions.ts"
 import { makeKit, run } from "./kit.ts"
 import { scopeOf, scopeWords } from "./review.ts"
 import type { RunOptions } from "./types.ts"
@@ -24,6 +24,9 @@ const USAGE = `usage: ade open FILE[:LINE[:COLUMN]]...
          review this worktree's changes since origin/HEAD, then give the agent your comments
        ade review --scope
          what a review here covers: -r BASE..HEAD (commits), -w (uncommitted changes)
+       ade workspace DIR [--background] [--session ID] [--prompt TEXT]
+         go to the tab of the worktree DIR, or open one there (with --background, without going to
+         it); a new tab's agent starts on the conversation ID and/or TEXT; prints the tab's ID
        ade tabs DIR
          the tabs working in the worktree DIR (all their running panes are inside it), one per
          line: ID:sure, or ID:unsure when one of its panes didn't say where it is
@@ -62,6 +65,9 @@ const terminal: Terminal = {
   },
 }
 
+// What an action tells you, as it happens.
+const say = (message: string) => void process.stderr.write(`${message}\n`)
+
 const traced = (log: string) => async (argv: string[], o?: RunOptions) => {
   const result = await run(argv, o)
   const time = new Date().toTimeString().slice(0, 8)
@@ -99,6 +105,22 @@ async function main(command: string | undefined, args: string[]) {
       }
       if (args.length) throw new UsageError()
       return review(kit(), caller, terminal)
+    }
+    case "workspace": {
+      const o: Partial<WorkspaceOptions> & { focus: boolean } = { focus: true }
+      for (let i = 0; i < args.length; i++) {
+        const arg = args[i]
+        if (arg === "--background") o.focus = false
+        else if (arg === "--session" || arg === "--prompt") {
+          if (i + 1 >= args.length) throw new UsageError()
+          o[arg === "--session" ? "session" : "prompt"] = args[++i]
+        } else if (!arg.startsWith("-") && o.dir === undefined) o.dir = arg
+        else throw new UsageError()
+      }
+      if (o.dir === undefined) throw new UsageError()
+      const { tab } = await workspace(kit(), { ...o, dir: o.dir }, caller, say)
+      process.stdout.write(`${tab}\n`)
+      return
     }
     case "tabs": {
       const json = args[0] === "--json"

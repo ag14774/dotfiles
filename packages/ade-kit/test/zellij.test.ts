@@ -171,3 +171,28 @@ test("focusing the pane that has focus is fine (Zellij 0.46 calls it an error); 
   assert.equal(await mux.start({ tab: "1", role: "editor", argv: ["hx", "a.md"], focus: true }), "9")
   await assert.rejects(recording({}, ["action focus-pane-id terminal_7"]).mux.focus("7"), /zellij action focus-pane-id: boom$/)
 })
+
+test("openTab: the layout's tab in the folder, named after it, in front or in the background; its ID", async () => {
+  const { mux, calls } = recording({
+    "action new-tab --layout dev --name feat --cwd /p/feat --no-focus": "7\n",
+    "action new-tab --layout dev --name feat --cwd /p/feat": "8\n",
+  })
+  assert.equal(await mux.openTab?.({ dir: "/p/feat", focus: false }), "7")
+  assert.equal(await mux.openTab?.({ dir: "/p/feat", focus: true }), "8")
+  assert.deepEqual(actions(calls), [
+    "new-tab --layout dev --name feat --cwd /p/feat --no-focus",
+    "new-tab --layout dev --name feat --cwd /p/feat",
+  ])
+  await assert.rejects(recording({}).mux.openTab!({ dir: "/p/feat", focus: true }), /new-tab printed no tab ID$/)
+  await assert.rejects(recording({}, ["action new-tab --layout dev --name feat --cwd /p/feat"]).mux.openTab!({ dir: "/p/feat", focus: true }), /zellij action new-tab: boom$/)
+})
+
+test("showTab goes to the tab; start in place takes a folder", async () => {
+  const { mux, calls } = recording({ "action new-pane --in-place --pane-id terminal_4 --close-replaced-pane --close-on-exit --no-focus -n opencode --cwd /p/feat -- oc --prompt go": "terminal_9\n" })
+  await mux.showTab?.("3")
+  assert.equal(await mux.start({ tab: "3", role: "agent", argv: ["oc", "--prompt", "go"], focus: false, replace: "4", cwd: "/p/feat" }), "9")
+  assert.deepEqual(actions(calls), [
+    "go-to-tab-by-id 3",
+    "new-pane --in-place --pane-id terminal_4 --close-replaced-pane --close-on-exit --no-focus -n opencode --cwd /p/feat -- oc --prompt go",
+  ])
+})

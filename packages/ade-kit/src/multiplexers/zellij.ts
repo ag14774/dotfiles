@@ -2,6 +2,7 @@
 // --json`, roles from pane names (the `zellij.panes` options). Every call
 // names its session: given a session name that no longer exists, plain
 // `zellij action` acts on whichever session is running.
+import { basename } from "node:path"
 import type { Key, Kit, MultiplexerAdapter, Pane, Role, Tab } from "../types.ts"
 
 type RawPane = {
@@ -112,13 +113,14 @@ export default (kit: Kit): MultiplexerAdapter => ({
       panes: async () => parsePanes(await action("list-panes", "--json"), options.panes),
       tabs: async () => parseTabs(await action("list-tabs", "--json")),
       // The pane closes when its program ends, instead of waiting for Enter.
-      start: async ({ tab, role, argv, focus, replace }) => {
+      start: async ({ tab, role, argv, focus, replace, cwd }) => {
         const name = options.panes[role]
+        const folder = cwd === undefined ? [] : ["--cwd", cwd]
         if (replace !== undefined) {
           const unfocused = focus ? [] : ["--no-focus"]
           const output = await action(
             "new-pane", "--in-place", "--pane-id", id(replace), "--close-replaced-pane", "--close-on-exit",
-            ...unfocused, "-n", name, "--", ...argv,
+            ...unfocused, "-n", name, ...folder, "--", ...argv,
           )
           return paneStarted(output, tab, name)
         }
@@ -126,7 +128,8 @@ export default (kit: Kit): MultiplexerAdapter => ({
         // New panes and swap layouts apply to the tab in front: show this one
         // first (it usually is in front already).
         await action("go-to-tab-by-id", tab)
-        const pane = await paneStarted(await action("new-pane", "--close-on-exit", "-n", name, "--", ...argv), tab, name)
+        const started = await action("new-pane", "--close-on-exit", "-n", name, ...folder, "--", ...argv)
+        const pane = await paneStarted(started, tab, name)
         if (role === "editor") await placeEditor(tab, pane).catch(() => {})
         await focusPane(pane)
         return pane
@@ -136,6 +139,19 @@ export default (kit: Kit): MultiplexerAdapter => ({
         await action("write-chars", "--pane-id", id(pane), `\x1b[200~${text}\x1b[201~`)
       },
       focus: focusPane,
+      // The layout named, as Alt-t does: a resurrected session's own copy of
+      // its new-tab template starts commands suspended. 0.46 prints the new
+      // tab's ID.
+      openTab: async ({ dir, focus }) => {
+        const unfocused = focus ? [] : ["--no-focus"]
+        const output = await action("new-tab", "--layout", options.layout, "--name", basename(dir), "--cwd", dir, ...unfocused)
+        const tab = output.trim()
+        if (!/^\d+$/.test(tab)) throw new Error(`zellij action new-tab printed no tab ID${tab ? `: ${tab}` : ""}`)
+        return tab
+      },
+      showTab: async (tab) => {
+        await action("go-to-tab-by-id", tab)
+      },
     }
   },
 })

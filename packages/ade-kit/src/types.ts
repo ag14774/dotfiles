@@ -48,12 +48,18 @@ export interface Multiplexer {
   panes(): Promise<Pane[]>
   tabs(): Promise<Tab[]>
   // Start `argv` in the tab's pane for `role`: a new pane (only in the tab
-  // you are on), or in place of the stopped pane `replace`. Returns its ID.
-  start(o: { tab: string; role: Role; argv: string[]; focus: boolean; replace?: string }): Promise<string>
+  // you are on), or in place of the pane `replace` (a stopped one, or a new
+  // tab's agent pane), in the folder `cwd` if given. Returns its ID.
+  start(o: { tab: string; role: Role; argv: string[]; focus: boolean; replace?: string; cwd?: string }): Promise<string>
   type(pane: string, keys: Key[]): Promise<void>
   // Paste as a terminal does (bracketed), so nothing is submitted.
   paste(pane: string, text: string): Promise<void>
   focus(pane: string): Promise<void>
+  // Optional, for a tab per worktree (ade workspace): a new tab in the
+  // worktree `dir` with the layout's panes (the agent's and the shell's),
+  // named after it, in front or in the background. Returns its ID.
+  openTab?(o: { dir: string; focus: boolean }): Promise<string>
+  showTab?(tab: string): Promise<void> // bring it to the front
 }
 
 // A file to open, with the place to show when the editor supports it.

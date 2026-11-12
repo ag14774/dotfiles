@@ -5,7 +5,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { test } from "node:test"
 import type { Terminal } from "../src/actions.ts"
-import { ADE, fileRef, open, pastes, review, send, tabs as tabsOf } from "../src/actions.ts"
+import { ADE, fileRef, open, pastes, review, send, tabs as tabsOf, workspace } from "../src/actions.ts"
 import { DEFAULTS } from "../src/config.ts"
 import { makeKit, run } from "../src/kit.ts"
 import type { Config, Key, Multiplexer, Pane, Role, Tab } from "../src/types.ts"
@@ -345,4 +345,109 @@ test("tabs works with the multiplexer's session alone, and not outside one", asy
   assert.deepEqual(await tabsOf(kitWith(), [inner], { env: { FAKE_SESSION: "1" }, cwd: temp }), { [inner]: [{ tab: "2", sure: true }] })
   await assert.rejects(tabsOf(kitWith(), [inner], from(undefined)), /^Error: not inside Fake$/)
   await assert.rejects(tabsOf(kitWith({ multiplexer: "none" }), [inner], from("1")), /^Error: there are no tabs without a multiplexer/)
+})
+
+// A multiplexer with tabs for worktrees: openTab adds a tab with a shell and
+// (unless `agent` is false) an agent pane in the folder, as the layout does.
+const withTabs = (panes: Pane[], o: { agent?: boolean; fail?: "openTab" | "start" } = {}) => {
+  const calls: Call[] = []
+  const state = [...panes]
+  const recorder: Multiplexer = {
+    panes: async () => state,
+    tabs: async () => tabs,
+    start: async (s) => {
+      calls.push(["start", s])
+      if (o.fail === "start") throw new Error("boom")
+      return "99"
+    },
+    type: async () => {},
+    paste: async () => {},
+    focus: async () => {},
+    openTab: async (t) => {
+      calls.push(["openTab", t])
+      if (o.fail === "openTab") throw new Error("boom")
+      state.push(pane("20", "9", "shell", { cwd: t.dir }), ...(o.agent === false ? [] : [pane("21", "9", "agent", { cwd: t.dir })]))
+      return "9"
+    },
+    showTab: async (tab) => void calls.push(["showTab", tab]),
+  }
+  ;(globalThis as { recorder?: Multiplexer }).recorder = recorder
+  return calls
+}
+writeFileSync(join(temp, "bin", "opencode-pane"), "#!/bin/sh\n")
+chmodSync(join(temp, "bin", "opencode-pane"), 0o755)
+const viaPane = { opencode: { command: ["opencode-pane"] } } as Partial<Config>
+// A script with only the session (wt-core's callers may not have a pane).
+const scripted = { env: { FAKE_SESSION: "1", PATH: process.env.PATH }, cwd: temp }
+const told = () => {
+  const messages: string[] = []
+  return { messages, tell: (message: string) => void messages.push(message) }
+}
+
+test("workspace: the worktree's tab, gone to or left in the background; a tab not sure of its panes counts", async () => {
+  const calls = withTabs(nested)
+  const { messages, tell } = told()
+  assert.deepEqual(await workspace(kitWith(), { dir: inner, focus: true }, scripted, tell), { tab: "2", opened: false })
+  assert.deepEqual(await workspace(kitWith(), { dir: "outer", focus: false }, scripted, tell), { tab: "1", opened: false })
+  assert.deepEqual(calls, [["showTab", "2"]])
+  assert.deepEqual(messages, ["outer already has a tab"])
+  const unsure = withTabs(nested.filter((p) => p.tab === "3"))
+  await workspace(kitWith(), { dir: outer, focus: true }, scripted)
+  assert.deepEqual(unsure, [["showTab", "3"]])
+})
+
+test("workspace: a new tab, in front or in the background, also for a worktree with a nested one's tab", async () => {
+  const calls = withTabs(nested.filter((p) => p.tab === "2"))
+  const { messages, tell } = told()
+  assert.deepEqual(await workspace(kitWith(), { dir: outer, focus: true }, scripted, tell), { tab: "9", opened: true })
+  assert.deepEqual(calls, [["openTab", { dir: outer, focus: true }]])
+  assert.deepEqual(messages, [])
+  const background = withTabs([])
+  await workspace(kitWith(), { dir: `${inner}/`, focus: false }, scripted, tell)
+  assert.deepEqual(background, [["openTab", { dir: inner, focus: false }]])
+  assert.deepEqual(messages, ["opened tab inner in the background"])
+})
+
+test("workspace: with a conversation or prompt, the new tab's agent pane is replaced by the agent on them", async () => {
+  const calls = withTabs([])
+  const { messages, tell } = told()
+  await workspace(kitWith(viaPane), { dir: inner, focus: false, session: "ses_1", prompt: "-go on" }, scripted, tell)
+  const argv = [join(temp, "bin", "opencode-pane"), "--session", "ses_1", "--prompt", "-go on"]
+  assert.deepEqual(calls, [
+    ["openTab", { dir: inner, focus: false }],
+    ["start", { tab: "9", role: "agent", argv, focus: false, replace: "21", cwd: inner }],
+  ])
+  assert.deepEqual(messages, ["opened tab inner in the background", "OpenCode in tab inner is working on the prompt"])
+})
+
+test("workspace refuses a conversation or prompt for a worktree with a tab, and an agent it can't find", async () => {
+  const calls = withTabs(nested)
+  await assert.rejects(workspace(kitWith(viaPane), { dir: inner, focus: false, prompt: "go" }, scripted),
+    /^Error: inner already has a tab; send the prompt to its OpenCode instead$/)
+  await assert.rejects(workspace(kitWith(), { dir: inner, focus: false, session: "ses_1" }, { ...scripted, env: { FAKE_SESSION: "1", PATH: "/nowhere" } }),
+    /^Error: OpenCode executable not found \(tried opencode\)$/)
+  assert.deepEqual(calls, [])
+  // A program given with its path is used as it is.
+  const given = withTabs([])
+  await workspace(kitWith({ opencode: { command: ["/opt/oc"] } } as Partial<Config>), { dir: inner, focus: true, prompt: "go" }, scripted)
+  assert.deepEqual((given[1][1] as { argv: string[] }).argv, ["/opt/oc", "--prompt", "go"])
+})
+
+test("workspace says what failed: no tab, no agent pane in it (after a while), the agent not started", async () => {
+  withTabs([], { fail: "openTab" })
+  await assert.rejects(workspace(kitWith(), { dir: inner, focus: false }, scripted), /^Error: could not open a Fake tab for inner$/)
+  withTabs([], { agent: false })
+  const { messages, tell } = told()
+  await assert.rejects(workspace(kitWith(viaPane), { dir: inner, focus: false, prompt: "go" }, scripted, tell),
+    /^Error: no opencode pane in tab inner; prompt not sent \(the tab stays open\)$/)
+  assert.deepEqual(messages, ["opened tab inner in the background"])
+  withTabs([], { fail: "start" })
+  await assert.rejects(workspace(kitWith(viaPane), { dir: inner, focus: false, prompt: "go" }, scripted),
+    /^Error: could not start OpenCode with the prompt in tab inner$/)
+})
+
+test("workspace needs a multiplexer that opens tabs, and a session", async () => {
+  record(nested.filter((p) => p.tab === "2"))
+  await assert.rejects(workspace(kitWith(), { dir: outer, focus: true }, scripted), /^Error: the multiplexer "fake" lacks: openTab$/)
+  await assert.rejects(workspace(kitWith(), { dir: outer, focus: true }, from(undefined)), /^Error: not inside Fake$/)
 })
