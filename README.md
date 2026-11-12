@@ -149,9 +149,18 @@ worktree tabs sit together:
   to locked mode, which is also what makes the bar redraw.
 
 The bar of the tab you are on draws all the tabs, and a tab keeps the bar it
-was opened or resurrected with: tabs from before groups were turned on show
-none until their saved bars get `tab_groups "true"` (with Zellij stopped, as
-in "Upgrading Zellij").
+was opened or resurrected with, so tabs from before groups were turned on
+show none. Keep every bar's options alike: Zellij stores one permission set
+per plugin URL, and a bar without `tab_groups` loading replaces it with its
+smaller set; new tabs' bars then show the permission prompt (grant it again
+as above). So when Zellij is restarted (see "Upgrading Zellij"), after
+`kill-session main` give the saved bars `tab_groups "true"` (on Linux the
+folder is `~/.cache/zellij`):
+
+```sh
+perl -pi.before-groups -e '$_ = "" if /^\s*tab_groups\s/; s/^(\s*)(attention_format\s.*)$/$1$2\n$1tab_groups "true"/' \
+  ~/Library/Caches/org.Zellij-Contributors.Zellij/contract_version_1/session_info/main/session-layout.kdl
+```
 
 ### Upgrading Zellij
 
