@@ -119,6 +119,13 @@ the keys, run `zsh tests/keys_smoke.zsh`: it checks `Alt-y`, Helix's `+ a` and
 the `Alt-v` review end to end in a throwaway session, with a stand-in for
 OpenCode (no model calls).
 
+These three live tests run Zellij in a sandbox (`tests/lib/zellij-sandbox.zsh`),
+so they can be started from inside Zellij: their own Zellij server (their own
+`ZELLIJ_SOCKET_DIR`; a guard refuses any `zellij` command without it), their
+own HOME with this checkout's config and commands, and OpenCode only through a
+private service on a port of its own. They never reach your session or your
+OpenCode service, and leave nothing in your Zellij cache or tuicr's reviews.
+
 The top bar is [ade-zjstatus](https://github.com/ag14774/ade-zjstatus), a
 zjstatus fork that draws agent statuses (they need Zellij 0.46). It shows the
 mode, the tabs (each with the icon of its most urgent agent status, see
