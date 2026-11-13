@@ -5,11 +5,12 @@
 #
 #   zsh tests/zellij_restore_smoke.zsh
 #
-# It drives a throwaway session through a headless terminal, using this
-# checkout's Zellij config and hook with a 1-second save interval. Every Zellij
-# command names that session, and the test stops unless it is running: given a
-# missing session, plain `zellij action` would act on your real one. Needs the
-# dotfiles installed (opencode-pane on PATH); makes no model calls.
+# It drives a throwaway session through a headless terminal, in a sandbox
+# (tests/lib/zellij-sandbox.zsh): its own Zellij server, HOME and config, so it
+# never reaches your session and leaves nothing in your Zellij cache. It uses
+# this checkout's Zellij config and hook with a 1-second save interval, and
+# this checkout's commands (opencode-pane) as installed. OpenCode runs against
+# a private service with an empty config; no model is called.
 
 set -eu
 
@@ -21,31 +22,24 @@ fail() {
 step() { print -r -- "- $*"; }
 
 HELIX=${commands[hx]:-${commands[helix]:-}}
-for tool in zellij jq script tail opencode; do
+for tool in zellij jq script tail opencode python3; do
   (( $+commands[$tool] )) || fail "$tool is not installed"
 done
 [[ -n $HELIX ]] || fail "Helix (hx or helix) is not installed"
-[[ -x $HOME/.local/bin/opencode-pane ]] || fail "opencode-pane is not on PATH; run install.sh"
 
-# Never inherit the session this test is started from.
-unset ZELLIJ ZELLIJ_SESSION_NAME ZELLIJ_PANE_ID
 TMP=$(mktemp -d)
 TMP=${TMP:A}
 session=dotfiles-smoke-$$
-zellij list-sessions --no-formatting 2>/dev/null | grep -q "^$session " && fail "session $session already exists"
-
+cfg=$TMP/zellij
+source "$ROOT/tests/lib/zellij-sandbox.zsh"
+sandbox_init "$cfg"
 cleanup() {
-  zellij kill-session "$session" >/dev/null 2>&1 || true
-  pkill -f "tail -n 0 -f $TMP/keys" 2>/dev/null || true
-  pkill -f "force-run-commands '$session'" 2>/dev/null || true
-  sleep 1
-  zellij delete-session --force "$session" >/dev/null 2>&1 || true
+  sandbox_cleanup "$session"
   rm -rf "$TMP"
 }
 trap cleanup EXIT
 
 # This checkout's config, saving every second and using this checkout's hook.
-cfg=$TMP/zellij
 mkdir -p "$cfg/layouts"
 cp "$ROOT/config/.config/zellij/layouts/dev.kdl" "$cfg/layouts/"
 sed "s|\$HOME/.config/zellij/resurrect-command.sh|$ROOT/config/.config/zellij/resurrect-command.sh|" \
@@ -56,6 +50,9 @@ print 'serialization_interval 1' >> "$cfg/config.kdl"
 # This checkout's ADE config with the default tab names (checked below).
 jq 'del(.zellij.tabName)' "$ROOT/config/.config/ade/config.json" > "$TMP/ade.json"
 export ADE_CONFIG=$TMP/ade.json
+sandbox_config helix
+# The OpenCode panes' service: private, on a port of its own.
+sandbox_opencode || fail "no private OpenCode service"
 
 # A repository in the worktree layout.
 git init -q --bare "$TMP/origin.git"
@@ -71,19 +68,8 @@ git --git-dir="$TMP/origin.git" symbolic-ref HEAD refs/heads/main
 (cd "$TMP/proj" && "$ROOT/config/.local/bin/wt-core" open main >/dev/null 2>&1)
 main=$TMP/proj/main
 
-# A headless client in a pseudo-terminal. `script` needs an ordinary pipe as
-# input (macOS rejects a FIFO); text appended to $TMP/keys becomes keystrokes.
-: > "$TMP/keys"
-start_client() {
-  local cmd="stty rows 50 cols 200; exec zellij --config-dir '$cfg' attach --create --force-run-commands '$session'"
-  if script --version 2>/dev/null | grep -q util-linux; then
-    (cd "$main" && tail -n 0 -f "$TMP/keys" | env TERM=xterm-256color \
-      script -qfc "$cmd" /dev/null >>"$TMP/client.log" 2>&1 &)
-  else
-    (cd "$main" && tail -n 0 -f "$TMP/keys" | env TERM=xterm-256color \
-      script -q /dev/null zsh -fc "$cmd" >>"$TMP/client.log" 2>&1 &)
-  fi
-}
+# A headless client; text appended to $TMP/keys becomes keystrokes.
+start_client() { sandbox_client "$main" --config-dir "$cfg" attach --create --force-run-commands "$session"; }
 press() { print -rn -- "$1" >> "$TMP/keys"; }
 
 zj() { zellij --session "$session" action "$@"; }
@@ -138,6 +124,7 @@ client_log() { sed 's/\x1b\[[0-9;?]*[a-zA-Z]//g' "$TMP/client.log" 2>/dev/null |
 step "start a session with the dev layout"
 start_client
 wait_for 60 session_running || fail "the test session did not start: $(client_log)"
+sandbox_dismiss_welcome "$session"
 wait_for 60 running 0 opencode || fail "the new session did not start OpenCode"
 
 step "open a worktree tab, a file in Helix, and a long command in a shell"
