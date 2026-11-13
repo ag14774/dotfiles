@@ -82,10 +82,10 @@ export default (kit: Kit): MultiplexerAdapter => ({
       throw new Error(`the ${name} pane did not appear`)
     }
 
-    // The layout's swap layout (dev.kdl's `with-editor`) puts the editor above
+    // The layout is expected to have a swap layout that puts the editor above
     // the shell pane. Zellij applies it by itself only while nobody has
-    // rearranged the tab (after `ocreload`, the editor lands in a flat row),
-    // and since 0.46 it keeps the panes' order, so the editor can land below
+    // rearranged the tab (after a pane was replaced, the editor lands in a
+    // flat row), and 0.46 keeps the panes' order, so the editor can land below
     // the shell pane. Only then: apply the swap layout again, and if that
     // doesn't help, move the editor up. A tab that is already right is left
     // alone (applying the swap layout again would cycle away from it).
@@ -158,9 +158,9 @@ export default (kit: Kit): MultiplexerAdapter => ({
         await action("write-chars", "--pane-id", id(pane), `\x1b[200~${text}\x1b[201~`)
       },
       focus: focusPane,
-      // The layout named, as Alt-t does: a resurrected session's own copy of
-      // its new-tab template starts commands suspended. Named from the
-      // tabName option. 0.46 prints the new tab's ID.
+      // The layout named: a resurrected session's own copy of its new-tab
+      // template starts commands suspended. Named from the tabName option.
+      // 0.46 prints the new tab's ID.
       openTab: async ({ dir, focus, agent }) => {
         const unfocused = focus ? [] : ["--no-focus"]
         const name = await kit.tabName(options.tabName, dir)

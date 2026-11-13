@@ -1,5 +1,5 @@
-# worktree.plugin.zsh
-# Bare-repo + git worktree helpers for parallel development.
+# worktree.zsh
+# Git worktree helpers for parallel development.
 #
 # Commands:
 #   wtclone <url> [dir]   set up a bare repo + worktree layout from a remote

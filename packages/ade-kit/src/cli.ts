@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // The `ade` command: ade-kit's actions (actions.ts) for scripts and
 // keybindings. Results on stdout, messages on stderr; the exit status is 2
-// for wrong usage and 1 when the action fails. Stowed as ~/.local/bin/ade.
+// for wrong usage and 1 when the action fails.
 //
 // Debug: set ADE_LOG to a file to append each command it runs.
 import { spawn } from "node:child_process"

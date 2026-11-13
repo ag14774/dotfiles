@@ -178,8 +178,8 @@ keybinds clear-defaults=true {
         bind "Alt t" { NewTab { layout "dev"; }; }
         bind "Alt p" { TogglePaneInGroup; }
         bind "Alt Shift p" { ToggleGroupMarking; }
-        // Alt-o / Alt-i intentionally NOT bound here, so Helix keeps its
-        // expand/shrink-selection. (They were MoveTab; moved to `tab` mode: < >)
+        // Alt-o / Alt-i are left to Helix (expand/shrink selection); tab mode
+        // moves tabs with < and >.
         // Summon Yazi as a floating picker from ANY pane (incl. inside Helix).
         // The script routes the chosen file into the Helix "editor" pane,
         // lazy-spawning one if none exists yet.
@@ -476,8 +476,6 @@ attach_to_session true
 // autostart attaches with --force-run-commands, so restored commands start
 // right away; post_command_discovery_hook (below) limits them to Helix and
 // OpenCode (resuming its conversation) and restores other panes as shells.
-// Zellij 0.45 takes pane commands from the terminal's foreground job, which
-// fixed the old bug that saved the editor pane as a Helix language server.
 // `zreset` deletes the saved session as well.
 session_serialization true
 

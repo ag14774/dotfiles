@@ -59,7 +59,7 @@ layout {
     }
     // CONTENT: main shell (left ~70%) | opencode (right 30%).
     // opencode-pane (config/.local/bin) keeps OpenCode restorable after a
-    // restart; plain OpenCode is the fallback until install.sh has stowed it.
+    // restart; without it on PATH, plain OpenCode starts.
     pane_template name="workspace" split_direction="vertical" {
         pane name="main" focus=true
         pane name="opencode" size="30%" {

@@ -1,4 +1,4 @@
-# init.zsh -- interactive-shell framework. Replaces oh-my-zsh.
+# init.zsh -- interactive-shell framework.
 #
 # Sourced early from the ~/.zshrc managed block. Sets zsh options, completion,
 # and keybindings, then loads zsh-autosuggestions + starship. It does

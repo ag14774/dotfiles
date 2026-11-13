@@ -1,5 +1,5 @@
-# git.zsh -- our git shortcuts (we don't load omz's git plugin).
-# git_current_branch normally comes from omz's lib; fallback for when it doesn't.
+# git.zsh -- git shortcuts.
+# The current branch's name, else the short commit (a detached HEAD).
 (( $+functions[git_current_branch] )) || git_current_branch() {
   git symbolic-ref --quiet --short HEAD 2>/dev/null || git rev-parse --short HEAD 2>/dev/null
 }

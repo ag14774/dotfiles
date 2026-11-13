@@ -3,7 +3,7 @@
 // the app can send it), so text is pasted. OpenCode shows a paste of 3 lines
 // or more, or 150 characters or more, as "[Pasted ~N lines]" and sends its
 // text. Options: "opencode": { "command": [...] } starts it (default:
-// opencode; the dotfiles use opencode-pane).
+// opencode).
 import type { Agent, Kit } from "../types.ts"
 
 export default (kit: Kit) => {

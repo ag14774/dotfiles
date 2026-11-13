@@ -27,7 +27,7 @@ if [ "${1:-}" = --resume ]; then
   [ "$#" -eq 1 ] || usage
 else
   session="" prompt=""
-  [ "${1-x}" != "" ] || shift # an empty first argument means none, as before
+  [ "${1-x}" != "" ] || shift # an empty first argument means no options
   while [ "$#" -gt 0 ]; do
     case "$1" in
       --session)

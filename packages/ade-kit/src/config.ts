@@ -8,9 +8,8 @@ import type { Config } from "./types.ts"
 
 type Env = Record<string, string | undefined>
 
-// Today's setup: Zellij with the dev layout and its pane names, Helix,
-// OpenCode, tuicr's comments filled in for you to send, and worktrees in the
-// bare layout.
+// Zellij with the dev layout and its pane names, Helix, OpenCode, tuicr's
+// comments filled in for you to send, and worktrees in the bare layout.
 export const DEFAULTS: Config = {
   multiplexer: "zellij",
   editor: "helix",

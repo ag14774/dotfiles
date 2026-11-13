@@ -7,8 +7,7 @@
 #                      (real fonts/sizes; needs pandoc). `cheat --pretty FILE` works too.
 # glow gives proper markdown (headings, tables, colors); press q to quit the pager.
 
-# The checkout this file is sourced from (~/dotfiles, or ~/dotfiles/main after
-# wtconvert).
+# The checkout this file is sourced from.
 typeset -g _CHEATSHEET_ROOT=${${(%):-%x}:A:h:h}
 
 mdview() {

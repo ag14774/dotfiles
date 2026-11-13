@@ -1,6 +1,6 @@
 // Helix has no remote control: files open by typing `:open` into its pane.
-// It doesn't reload files changed on disk (`:reload-all`, Ctrl-R in the
-// dotfiles, discards unsaved edits, so that is left to you).
+// It doesn't reload files changed on disk (`:reload-all` discards unsaved
+// edits, so that is left to you).
 import type { Kit } from "../types.ts"
 
 export default (kit: Kit) => {

@@ -1,7 +1,7 @@
-// The bare layout (ours): a bare repository in <project>/.bare, a .git file
-// pointing at it (so <project> acts as the repository's root), and a worktree
-// per branch in <project>/<branch>. In a normal clone, worktrees go inside it
-// (<repo>/<branch>), as wt always did; wtconvert turns it into this layout.
+// The bare layout: a bare repository in <project>/.bare, a .git file pointing
+// at it (so <project> acts as the repository's root), and a worktree per
+// branch in <project>/<branch>. In a normal clone, worktrees go inside it
+// (<repo>/<branch>); convert turns it into this layout.
 import { existsSync, mkdirSync, readdirSync, renameSync, rmSync, writeFileSync } from "node:fs"
 import { dirname, join, relative, resolve } from "node:path"
 import type { Kit, Layout, WorktreeIo as Io } from "../types.ts"

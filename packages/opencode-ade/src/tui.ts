@@ -36,7 +36,7 @@ export default Plugin.define({
 
     // The OpenCode service can go on running old server code after the files
     // change: it reloads a changed package plugin, but not after a failed
-    // reload, and it never reloaded the symlinked file this plugin once was.
+    // reload.
     const warn = (message: string) =>
       context.ui.toast.show({ variant: "warning", title: "ADE plugin", message, duration: 15_000 })
     const stale = "The OpenCode service runs an older version of this plugin. Run `opencode service restart` " +
