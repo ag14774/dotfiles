@@ -15,7 +15,7 @@
 # have an agent use the tools (show_file after /cd, delegate from plain English,
 # also into another repository). Delegated tabs answer their briefs, and one
 # copy is compacted: nine short model calls with your most recent model (or
-# ADE_TEST_MODEL).
+# ADE_TEST_MODEL). When a step fails, the screen of its OpenCode pane is shown.
 
 set -u
 
@@ -31,12 +31,15 @@ mkdir -p "$TMP"/{A,B,C,zj/layouts,src/plugins} "$TMP"/oc/{data/opencode,state/op
 cp "$ROOT/config/.config/zellij/layouts/dev.kdl" "$TMP/zj/layouts/"
 for f in A/notes B/notes A/other A/bg A/two C/none; do print "I am $f" > "$TMP/$f.md"; done
 
+watch= # the OpenCode pane the current step works with
 fail() {
   print -u2 "FAIL: $*"
+  [[ -n $watch ]] && print -u2 -- "--- the OpenCode pane ($watch) shows:"$'\n'"$(last_lines "$watch" 30)"
   exit 1
 }
 step() { print -- "- $*"; }
 zj() { zellij --session "$S" action "$@"; }
+last_lines() { zj dump-screen --pane-id "$1" 2>/dev/null | grep -v '^[[:space:]]*$' | tail -"${2:-12}"; }
 uri() { jq -rn --arg d "$1" '$d | @uri'; }
 wait_for() { local n=$1; shift; for _ in {1..$n}; do "$@" && return 0; sleep 1; done; return 1; }
 gives() { [[ -n $("$@") ]]; } # for wait_for: the command prints something (run on every attempt)
@@ -100,6 +103,22 @@ start_conversation() { # $1 = OpenCode pane, $2 = directory: start one with a sh
   wait_for 60 gives newest "$2" || fail "no conversation started in $2"
   newest "$2"
 }
+history() { oc_cli api GET "/api/session/$1/context" 2>/dev/null; }
+history_has() { history "$1" | grep -q -- "$2"; }
+folder_of() { oc_cli api GET "/api/session/$1" 2>/dev/null | jq -r '.data.location.directory // empty'; }
+in_folder() { [[ $(folder_of "$1") == "$2" ]]; }
+cd_to() { # $1 = OpenCode pane, $2 = its conversation, $3 = folder: /cd there
+  local try
+  zj write-chars --pane-id "terminal_$1" "/cd $3"
+  # Enter first takes the folder from the completion list, if it is open yet,
+  # then runs /cd: press it until the conversation has moved.
+  for try in 1 2 3; do
+    sleep 1
+    zj write --pane-id "terminal_$1" 13
+    wait_for 5 in_folder "$2" "$3" && return 0
+  done
+  return 1
+}
 cleanup() {
   sandbox_cleanup "$S"
   rm -rf "$TMP"
@@ -153,6 +172,7 @@ sandbox_dismiss_welcome "$S"
 
 tab=$(dev_tab "$TMP/A") || exit 1
 oc=$(pane opencode "$tab") ed=$(pane editor "$tab")
+watch=$oc
 sid=$(start_conversation "$oc" "$TMP/A")
 ! screen_has "$oc" "ADE plugin" || fail "the plugin warned about current code"
 
@@ -171,11 +191,9 @@ msg=$(show "$sid" "$TMP/A/notes.md")
 wait_for 10 screen_has "$ed" "I am A/notes" || fail "Helix did not show A/notes.md"
 
 step "an agent calls show_file after /cd: the path follows the conversation, the file opens here"
-type_in "$oc" "/cd $TMP/B"
-sleep 3
-zj write --pane-id "terminal_$oc" 13
-sleep 5
+cd_to "$oc" "$sid" "$TMP/B" || fail "/cd did not move the conversation to $TMP/B; it is in $(folder_of "$sid")"
 type_in "$oc" 'Call the show_file tool with paths ["notes.md"]. Do nothing else.'
+wait_for 30 history_has "$sid" "Call the show_file tool" || fail "the request did not reach the conversation"
 wait_for 120 screen_has "$ed" "I am B/notes" || fail "Helix did not show B/notes.md"
 
 step "a subagent's request opens in its parent's tab"
@@ -188,12 +206,12 @@ wait_for 10 screen_has "$ed" "I am A/other" || fail "Helix did not show the suba
 step "an agent delegates from plain English: a background tab starts on the brief"
 tab_p=$(dev_tab "$TMP/proj/main") || exit 1
 oc_p=$(pane opencode "$tab_p")
+watch=$oc_p
 sid_p=$(start_conversation "$oc_p" "$TMP/proj/main")
 tabs_before=$(zj list-tabs --json | jq length)
 type_in "$oc_p" 'Delegate this to a new worktree named feat-x: reply with exactly the word delegated.'
-last_lines() { zj dump-screen --pane-id "$1" 2>/dev/null | grep -v '^[[:space:]]*$' | tail -${2:-12}; }
 wait_for 120 gives tab_in "$TMP/proj/feat-x" \
-  || fail "no tab opened for the delegated worktree; the agent's pane shows:"$'\n'"$(last_lines "$oc_p")"$'\n'"panes: $(zj list-panes --json | jq -c '[.[] | select(.is_plugin == false) | {id, tab_id, title, cwd: .pane_cwd}]')"
+  || fail "no tab opened for the delegated worktree; panes: $(zj list-panes --json | jq -c '[.[] | select(.is_plugin == false) | {id, tab_id, title, cwd: .pane_cwd}]')"
 [[ $(active_tab) == "$tab_p" ]] || fail "delegate moved you to the new tab"
 (( $(zj list-tabs --json | jq length) == tabs_before + 1 )) || fail "delegate should open exactly one tab"
 wait_for 120 gives newest "$TMP/proj/feat-x" || fail "the delegated tab's OpenCode did not start on the brief"
@@ -221,9 +239,7 @@ msg=$(rpc delegate "$TMP/proj/main" "$(jq -cn --arg s "$sid_p" \
 wait_for 60 gives tab_in "$TMP/proj/feat-full" || fail "no tab for the copy"
 copy=$(newest "$TMP/proj/feat-full")
 [[ -n $copy && $copy != "$sid_p" ]] || fail "no copied conversation in the new worktree"
-history() { oc_cli api GET "/api/session/$1/context" 2>/dev/null; }
 history "$copy" | grep -q copy-marker || fail "the copy lacks the conversation's history"
-history_has() { history "$1" | grep -q -- "$2"; }
 wait_for 60 history_has "$copy" "word copied" || fail "the copy did not get the brief"
 [[ $(oc_cli api GET "/api/session/$sid_p" 2>/dev/null | jq -r '.data.location.directory') == "$TMP/proj/main" ]] \
   || fail "the original conversation should stay where it was"
@@ -274,8 +290,7 @@ msg=$(rpc delegate "$TMP/proj/main" "$(jq -cn --arg s "$sid_p" --arg d "$TMP/now
 
 step "an agent delegates into another repository from plain English"
 type_in "$oc_p" "Delegate this to a new worktree named feat-z of the repository at $TMP/proj2: reply with exactly the word delegated."
-wait_for 120 gives tab_in "$TMP/proj2/feat-z" \
-  || fail "no tab opened in the other repository; the agent's pane shows:"$'\n'"$(last_lines "$oc_p")"
+wait_for 120 gives tab_in "$TMP/proj2/feat-z" || fail "no tab opened in the other repository"
 [[ ! -e $TMP/proj/feat-z ]] || fail "the agent delegated into its own repository"
 [[ $(active_tab) == "$tab_p" ]] || fail "delegate moved you to the new tab"
 
@@ -292,6 +307,7 @@ counts() { # $1 = tab: how many of its panes have each status
 }
 full_tab=$(tab_in "$TMP/proj/feat-full")
 full_oc=$(pane opencode "$full_tab")
+watch=$full_oc
 wait_for 30 status_is "$full_oc" "Done ProgramStatus" || fail "expected done from the status plugin, got: $(pane_status "$full_oc")"
 [[ $(counts "$full_tab") == '{"done":1}' ]] || fail "the tab (and so the bar) should count one done pane: $(counts "$full_tab")"
 back=$(active_tab)
@@ -303,6 +319,7 @@ zj go-to-tab-by-id "$back"
   || fail "a pane in view when its agent finished should show neither done nor failed, got: $(pane_status "$oc")"
 
 step "from a tab you are not on: opens in its Helix, and you stay where you are"
+watch=$oc
 zj new-tab --name elsewhere >/dev/null
 sleep 2
 here=$(active_tab)
@@ -313,6 +330,7 @@ wait_for 10 screen_has "$ed" "I am A/bg" || fail "Helix in the background tab di
 step "a background tab without Helix: nothing opens, you stay, the caller is told"
 tab_c=$(dev_tab "$TMP/C" no-editor) || exit 1
 oc_c=$(pane opencode "$tab_c")
+watch=$oc_c
 sid_c=$(start_conversation "$oc_c" "$TMP/C")
 zj go-to-tab-by-id "$here"
 sleep 2
@@ -328,6 +346,7 @@ zj new-pane --in-place --pane-id "terminal_$oc_2" --close-replaced-pane --name o
   -- opencode --session "$sid" >/dev/null
 sleep 10
 oc_2=$(pane opencode "$tab_2")
+watch=$oc_2
 screen_has "$oc_2" "show_file" || fail "the second pane is not showing the conversation"
 show "$sid" "$TMP/A/two.md" >/dev/null
 sleep 3
@@ -336,6 +355,7 @@ for e in "$ed" "$ed_2"; do screen_has "$e" "I am A/two" && (( n++ )); done
 (( n == 1 )) || fail "$n panes opened the file"
 
 step "a conversation no pane shows: nothing opens, and the caller is told"
+watch=$oc
 for p in "$oc" "$oc_2"; do zj write --pane-id "terminal_$p" 3; sleep 1; zj write --pane-id "terminal_$p" 3; done
 sleep 3
 msg=$(show "$sid" "$TMP/B/notes.md")
@@ -358,6 +378,7 @@ sleep 8
 zj new-pane --cwd "$TMP/C" -- opencode >/dev/null
 sleep 2
 fresh=$(zj list-panes --json | jq -r '[.[] | select(.is_plugin == false)] | max_by(.id) | .id')
+watch=$fresh
 wait_for 30 screen_has "$fresh" "ADE plugin" || fail "no stale warning in a new OpenCode pane"
 
 print "ade plugin smoke test: ok"
