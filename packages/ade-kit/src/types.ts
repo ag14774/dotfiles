@@ -175,6 +175,9 @@ export interface Layout {
   // Optional (wtconvert): turn the normal clone you are in into this layout;
   // the folder to go to.
   convert?(io: WorktreeIo, o: { yes: boolean }): Promise<string>
+  // Optional: before the worktree `dir` is made (inside: keep .worktrees/ out
+  // of git status).
+  prepare?(repo: Repository, dir: string, io: WorktreeIo): Promise<void>
 }
 
 // The ADE config (config.ts): choices, and options sections for adapters.
@@ -186,6 +189,15 @@ export type ZellijOptions = {
   // are found by their panes' folders.
   tabName: string
 }
+// The worktree commands (worktrees.ts).
+export type WorktreeOptions = {
+  // Where new repositories' worktrees go: a built-in layout (bare, sibling,
+  // inside) or a path to your own. A repository keeps the layout it has (see
+  // worktrees.ts's layoutFor).
+  layout: string
+  base: string // where new branches start
+  seed: string[] // untracked files copied into new worktrees (globs allowed)
+}
 export type Config = {
   // Each choice: a built-in name, or a path to a module of your own.
   multiplexer: string // or "none"
@@ -196,6 +208,7 @@ export type Config = {
   // to send, "submit" sends them.
   review: { deliver: "insert" | "submit" }
   zellij: ZellijOptions
+  worktrees: WorktreeOptions
   [section: string]: unknown
 }
 

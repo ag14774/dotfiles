@@ -27,6 +27,7 @@ test("the defaults are today's setup", () => {
       panes: { agent: "opencode", shell: "main", editor: "editor", review: "review" },
       tabName: "{worktree}",
     },
+    worktrees: { layout: "bare", base: "origin/HEAD", seed: [".env", ".env.*", ".envrc", "pyrightconfig.json"] },
   })
 })
 
@@ -69,5 +70,7 @@ test("a broken config file is refused, naming the file and the problem", () => {
   assert.throws(() => readConfig({ XDG_CONFIG_HOME: configHome('{"zellij": {"panes": []}}') }), /strings: zellij\.panes$/)
   assert.throws(() => readConfig({ XDG_CONFIG_HOME: configHome('{"zellij": {"tabName": null}}') }), /strings: zellij\.tabName$/)
   assert.throws(() => readConfig({ XDG_CONFIG_HOME: configHome('{"review": {"deliver": "send"}}') }), /review\.deliver must be "insert" or "submit"$/)
+  assert.throws(() => readConfig({ XDG_CONFIG_HOME: configHome('{"worktrees": {"layout": 1, "base": null}}') }), /strings: worktrees\.layout, worktrees\.base$/)
+  assert.throws(() => readConfig({ XDG_CONFIG_HOME: configHome('{"worktrees": {"seed": ".env"}}') }), /worktrees\.seed must be a list of strings$/)
   assert.equal(readConfig({ XDG_CONFIG_HOME: configHome('{"review": {"deliver": "submit"}}') }).review.deliver, "submit")
 })

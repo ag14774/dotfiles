@@ -8,6 +8,8 @@ import { typedEditor } from "./editor.ts"
 import helix from "./editors/helix.ts"
 import mitos from "./editors/mitos.ts"
 import bare from "./layouts/bare.ts"
+import inside from "./layouts/inside.ts"
+import sibling from "./layouts/sibling.ts"
 import tuicr from "./reviewers/tuicr.ts"
 import type { Agent, Config, Editor, Key, Kit, Layout, Reviewer, RunOptions, RunResult } from "./types.ts"
 
@@ -67,7 +69,7 @@ export async function tabName(run: Kit["run"], template: string, dir: string) {
 const EDITORS: Record<string, (kit: Kit) => Editor> = { helix, mitos }
 const AGENTS: Record<string, (kit: Kit) => Agent> = { opencode }
 const REVIEWERS: Record<string, (kit: Kit) => Reviewer> = { tuicr }
-const LAYOUTS: Record<string, (kit: Kit) => Layout> = { bare }
+const LAYOUTS: Record<string, (kit: Kit) => Layout> = { bare, sibling, inside }
 
 const builtin = <T>(adapters: Record<string, (kit: Kit) => T>, kind: string, name: string, kit: Kit) => {
   const make = Object.hasOwn(adapters, name) ? adapters[name] : undefined

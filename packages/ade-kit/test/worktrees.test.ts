@@ -9,7 +9,7 @@ import { makeKit, run } from "../src/kit.ts"
 import type { Config, Kit, Pane } from "../src/types.ts"
 import { worktreeCommand } from "../src/worktree-cli.ts"
 import type { Io } from "../src/worktrees.ts"
-import { Failed, globIn, list, open, parseLanding, prune, records, remove, repositoryOf, seedsFor, worktreeFor } from "../src/worktrees.ts"
+import { clone, convert, Failed, globIn, layoutFor, list, open, parseLanding, prune, records, remove, repositoryOf, seedsFor, worktreeFor } from "../src/worktrees.ts"
 
 const temp = realpathSync(mkdtempSync(join(tmpdir(), "ade-worktrees-")))
 const git = (cwd: string, ...args: string[]) =>
@@ -147,18 +147,18 @@ test("seedsFor: WT_SEED_FILE, the repository's manifest, WT_SEED, the defaults",
   const common = join(temp, "seeds")
   mkdirSync(common)
   const repo = { common, root: temp, bare: false }
-  assert.deepEqual(seedsFor(repo, {}), { patterns: [".env", ".env.*", ".envrc", "pyrightconfig.json"], label: "default seed list" })
-  assert.deepEqual(seedsFor(repo, { WT_SEED: "a\n\nb" }), { patterns: ["a", "b"], label: "WT_SEED" })
-  assert.deepEqual(seedsFor(repo, { WT_SEED: "" }), { patterns: [], label: "WT_SEED" })
+  assert.deepEqual(seedsFor(repo, {}, DEFAULTS.worktrees.seed), { patterns: [".env", ".env.*", ".envrc", "pyrightconfig.json"], label: "default seed list" })
+  assert.deepEqual(seedsFor(repo, { WT_SEED: "a\n\nb" }, DEFAULTS.worktrees.seed), { patterns: ["a", "b"], label: "WT_SEED" })
+  assert.deepEqual(seedsFor(repo, { WT_SEED: "" }, DEFAULTS.worktrees.seed), { patterns: [], label: "WT_SEED" })
   writeFileSync(join(common, "wt-seed"), "# local\n\n  .env  \r\nconfig/*.toml\n")
-  assert.deepEqual(seedsFor(repo, { WT_SEED: "a" }), { patterns: [".env", "config/*.toml"], label: join(common, "wt-seed") })
+  assert.deepEqual(seedsFor(repo, { WT_SEED: "a" }, DEFAULTS.worktrees.seed), { patterns: [".env", "config/*.toml"], label: join(common, "wt-seed") })
   for (const unsafe of ["/etc/passwd", "..", "../x", "a/../b", "a/.."]) {
     writeFileSync(join(common, "wt-seed"), `${unsafe}\n`)
-    assert.throws(() => seedsFor(repo, {}), new Failed(`wt: unsafe seed pattern in ${join(common, "wt-seed")}: ${unsafe}`))
+    assert.throws(() => seedsFor(repo, {}, DEFAULTS.worktrees.seed), new Failed(`wt: unsafe seed pattern in ${join(common, "wt-seed")}: ${unsafe}`))
   }
   writeFileSync(join(common, "other"), "x\n")
-  assert.deepEqual(seedsFor(repo, { WT_SEED_FILE: join(common, "other") }).patterns, ["x"])
-  assert.throws(() => seedsFor(repo, { WT_SEED_FILE: join(common, "missing") }), new Failed(`wt: WT_SEED_FILE is not readable: ${join(common, "missing")}`))
+  assert.deepEqual(seedsFor(repo, { WT_SEED_FILE: join(common, "other") }, DEFAULTS.worktrees.seed).patterns, ["x"])
+  assert.throws(() => seedsFor(repo, { WT_SEED_FILE: join(common, "missing") }, DEFAULTS.worktrees.seed), new Failed(`wt: WT_SEED_FILE is not readable: ${join(common, "missing")}`))
 })
 
 test("parseLanding: the options before the branch", () => {
@@ -240,4 +240,64 @@ test("remove and prune: the worktree goes, with the messages wt gives", async ()
   await prune(kitWith(), r.io, ["-n", "-y"])
   assert.deepEqual(r.said, ["wtprune: nothing to remove."])
   await assert.rejects(prune(kitWith(), ioIn(main).io, ["-x"]), new Failed("usage: wtprune [-y] [-n|--no-fetch] [-m|--merged]"))
+})
+
+// A kit whose config has these worktree options.
+const kitLaid = (worktrees: Partial<Config["worktrees"]>): Kit =>
+  makeKit({ config: { ...structuredClone(DEFAULTS), multiplexer: "none", worktrees: { ...DEFAULTS.worktrees, ...worktrees } } as Config, run })
+const layoutOf = (dir: string) => git(dir, "config", "--get", "ade.layout").trim()
+
+test("layouts: where each puts a worktree, in a normal clone and in a bare repository", () => {
+  const kit = kitWith()
+  const plain = { common: "/code/repo/.git", root: "/code/repo", bare: false }
+  const bare = { common: "/code/proj/.bare", root: "/code/proj", bare: true }
+  assert.deepEqual(
+    ["bare", "sibling", "inside"].map((name) => [kit.builtin.layout(name).path(plain, "feat-x"), kit.builtin.layout(name).path(bare, "feat-x")]),
+    [
+      ["/code/repo/feat-x", "/code/proj/feat-x"],
+      ["/code/repo.feat-x", "/code/proj/feat-x"],
+      ["/code/repo/.worktrees/feat-x", "/code/proj/feat-x"],
+    ],
+  )
+})
+
+test("a new repository takes the configured layout and keeps it when the config changes", async () => {
+  const cloned = join(temp, "clones")
+  mkdirSync(cloned)
+  // sibling: a normal clone, worktrees beside it.
+  let r = ioIn(cloned)
+  await clone(kitLaid({ layout: "sibling" }), r.io, [origin, "side"])
+  assert.equal(r.said.at(-1), "repo ready → cd side && wt <branch>")
+  assert.equal(layoutOf(join(cloned, "side")), "sibling")
+  r = ioIn(join(cloned, "side"))
+  assert.deepEqual(await open(kitLaid({}), r.io, ["-s", "one"]), { dir: join(cloned, "side.one"), cd: false })
+  // inside: worktrees in .worktrees, which git status doesn't show.
+  await clone(kitLaid({ layout: "inside" }), ioIn(cloned).io, [origin, "in"])
+  assert.deepEqual(await open(kitLaid({ layout: "bare" }), ioIn(join(cloned, "in")).io, ["-s", "two"]), {
+    dir: join(cloned, "in", ".worktrees", "two"),
+    cd: false,
+  })
+  assert.equal(git(join(cloned, "in"), "status", "--porcelain"), "")
+  // A repository from before: its worktrees show its layout (nested: bare),
+  // which is then recorded.
+  git(cloned, "clone", "-q", origin, "old")
+  git(join(cloned, "old"), "worktree", "add", "-q", "-b", "nested", "nested")
+  assert.equal((await layoutFor(kitLaid({ layout: "sibling" }), ioIn(join(cloned, "old")).io, (await repositoryOf(kitWith(), ioIn(join(cloned, "old")).io))!)).choice, "bare")
+  assert.deepEqual(await open(kitLaid({ layout: "sibling" }), ioIn(join(cloned, "old")).io, ["-s", "three"]), { dir: join(cloned, "old", "three"), cd: false })
+  assert.equal(layoutOf(join(cloned, "old")), "bare")
+  // A repository without worktrees: the configured layout; yours to set by hand.
+  git(cloned, "clone", "-q", origin, "fresh")
+  git(join(cloned, "fresh"), "config", "ade.layout", "inside")
+  assert.deepEqual(await open(kitLaid({ layout: "sibling" }), ioIn(join(cloned, "fresh")).io, ["-s", "four"]), {
+    dir: join(cloned, "fresh", ".worktrees", "four"),
+    cd: false,
+  })
+  // A layout of your own, from the config.
+  const mine = join(temp, "mine.ts")
+  writeFileSync(mine, `export default (kit) => ({ ...kit.builtin.layout("sibling"), name: "mine", path: (repo, name) => repo.root + "-wt/" + name })`)
+  git(cloned, "clone", "-q", origin, "custom")
+  assert.deepEqual(await open(kitLaid({ layout: mine }), ioIn(join(cloned, "custom")).io, ["-s", "five"]), { dir: join(cloned, "custom-wt", "five"), cd: false })
+  assert.equal(layoutOf(join(cloned, "custom")), mine)
+  // Only the bare layout converts a clone.
+  await assert.rejects(convert(kitLaid({ layout: "sibling" }), ioIn(join(cloned, "fresh")).io, ["-y"]), new Failed("wtconvert: the sibling layout has no conversion (the bare layout has)"))
 })

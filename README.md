@@ -455,6 +455,33 @@ except the tab you run them from. Tabs with a pane elsewhere, such as a tab
 where one shell `cd`'d into the worktree, are never focused or closed. Options
 go before the branch.
 
+### Worktree layouts
+
+Where `wt` puts worktrees is the ADE config's `worktrees.layout`:
+
+- `bare` (the default): the repository is a bare one in `project/.bare`, as
+  `wtclone` and `wtconvert` make it, and each branch's worktree is
+  `project/<branch>` (`/` becomes `-`). In a normal clone, worktrees go inside
+  it (`repo/<branch>`).
+- `sibling`: beside a normal clone, `repo.<branch>`.
+- `inside`: in a normal clone's `repo/.worktrees/<branch>`, which git status
+  doesn't show (an entry in the repository's `info/exclude`).
+- A file of your own, `"layout": "~/.config/ade/my-layout.ts"`, exporting
+  `(kit) => ({ ...kit.builtin.layout("sibling"), name: "mine", path: (repo,
+  name) => ... })`.
+
+In a bare repository, `sibling` and `inside` also use `project/<branch>`.
+`wtclone` clones as the layout says (`sibling` and `inside`: a normal clone);
+only `bare` converts a clone. A repository keeps its layout when the config
+changes: ade records it in the repository's own git config (`ade.layout`) when
+it clones the repository or makes its first worktree there, and before that
+goes by where the repository's worktrees already are. `git config ade.layout
+<name>` changes it for one repository; existing worktrees stay where they are
+and keep working. `worktrees.base` (`origin/HEAD`) is where new branches start;
+`worktrees.seed` lists the untracked files copied into new worktrees (`.env`,
+`.env.*`, `.envrc`, `pyrightconfig.json`; `WT_SEED` and a repository's
+`<common-dir>/wt-seed` replace it).
+
 ### Reviewing changes
 
 `Alt-v` opens a [tuicr](https://tuicr.dev) review of the worktree of the pane

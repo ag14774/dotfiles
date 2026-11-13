@@ -96,8 +96,8 @@ export const loadAgent = async (kit: Kit, o: LoadOptions = {}) =>
 export const loadReviewer = async (kit: Kit, o: LoadOptions = {}) =>
   (await loadAdapter(kit, "reviewer", kit.config.reviewer, o)) as Reviewer
 
-// Where worktrees go: our bare layout.
-export const loadLayout = async (kit: Kit, value = "bare", o: LoadOptions = {}) =>
+// Where worktrees go (see worktrees.ts's layoutFor for a repository's).
+export const loadLayout = async (kit: Kit, value = kit.config.worktrees.layout, o: LoadOptions = {}) =>
   (await loadAdapter(kit, "layout", value, o)) as Layout
 
 // An adapter's name in messages.

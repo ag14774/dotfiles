@@ -4,7 +4,7 @@
 // process's folder or reads its environment: both come with the Io.
 import { spawn } from "node:child_process"
 import { accessSync, constants, cpSync, existsSync, mkdirSync, readdirSync, readFileSync } from "node:fs"
-import { basename, dirname, join } from "node:path"
+import { basename, dirname, join, resolve } from "node:path"
 import type { TabIn } from "./actions.ts"
 import { closeTabs, tabs, workspace } from "./actions.ts"
 import { onPath } from "./editor.ts"
@@ -91,10 +91,10 @@ export async function defaultWorktree(kit: Kit, io: Io, repo: Repository) {
 
 // --- Seeding: untracked files (secrets, local config) that git won't carry
 // into a new worktree. WT_SEED_FILE names a manifest; else the repository's
-// <common-dir>/wt-seed; else WT_SEED (newline-separated); else the defaults.
-// A manifest has one relative path or glob per line (blank lines and comments
-// allowed). Not .venv or node_modules: recreate those.
-export const SEED_DEFAULTS = [".env", ".env.*", ".envrc", "pyrightconfig.json"]
+// <common-dir>/wt-seed; else WT_SEED (newline-separated); else the ADE
+// config's worktrees.seed. A manifest has one relative path or glob per line
+// (blank lines and comments allowed). Not .venv or node_modules: recreate
+// those.
 export type Seeds = { patterns: string[]; label: string }
 
 const readable = (path: string) => {
@@ -108,7 +108,7 @@ const readable = (path: string) => {
 
 // The seed patterns; refuses an unreadable WT_SEED_FILE, or a manifest line
 // that leaves the worktree.
-export function seedsFor(repo: Repository, env: Env): Seeds {
+export function seedsFor(repo: Repository, env: Env, defaults: string[]): Seeds {
   const file = env.WT_SEED_FILE || join(repo.common, "wt-seed")
   if (env.WT_SEED_FILE && !readable(file)) throw new Failed(`wt: WT_SEED_FILE is not readable: ${file}`)
   if (readable(file)) {
@@ -128,7 +128,7 @@ export function seedsFor(repo: Repository, env: Env): Seeds {
     return { patterns, label: file }
   }
   if (env.WT_SEED !== undefined) return { patterns: env.WT_SEED.split("\n").filter(Boolean), label: "WT_SEED" }
-  return { patterns: SEED_DEFAULTS, label: "default seed list" }
+  return { patterns: defaults, label: "default seed list" }
 }
 
 // A name pattern (*, ?, [...]) as a regular expression.
@@ -286,9 +286,37 @@ export async function land(kit: Kit, io: Io, dir: string, name: string, landing:
   return { dir, cd: false }
 }
 
+// --- Layouts: where a repository's worktrees go (layouts/).
+const LAYOUTS = ["bare", "sibling", "inside"]
+
+// A repository's layout, first match: the one recorded in its git config
+// (ade.layout, set by you or by ade when it made the repository's first
+// worktree, cloned or converted it); the one its worktrees show (the layout
+// explaining most of them; on a tie, the configured one); the configured one
+// (worktrees.layout). So a repository keeps its layout when the config
+// changes. `choice` is what to record.
+export async function layoutFor(kit: Kit, io: Io, repo: Repository) {
+  const recorded = line(await query(kit, io, ["--git-dir", repo.common, "config", "--get", "ade.layout"]))
+  if (recorded) return { layout: await loadLayout(kit, recorded), choice: recorded, recorded: true }
+  const configured = kit.config.worktrees.layout
+  const worktrees = (await worktreeRecords(kit, io, repo.root)).slice(1).filter((r) => !r.bare && r.branch)
+  let best = { choice: configured, explains: 0 }
+  for (const choice of [configured, ...LAYOUTS.filter((name) => name !== configured)]) {
+    const layout = await loadLayout(kit, choice)
+    const explains = worktrees.filter((r) => realPath(layout.path(repo, (r.branch ?? "").replaceAll("/", "-"))) === realPath(r.path)).length
+    if (explains > best.explains) best = { choice, explains }
+  }
+  return { layout: await loadLayout(kit, best.choice), choice: best.choice, recorded: false }
+}
+
+// Remember a repository's layout in its own git config (never --global).
+const record = (kit: Kit, io: Io, repo: Repository, choice: string) =>
+  query(kit, io, ["--git-dir", repo.common, "config", "ade.layout", choice])
+
 // wt: the worktree for a branch, created if needed (a local branch as it is;
-// one only on origin, tracking it; else a new branch from `base`, default
-// origin/HEAD, without an upstream), seeded, then landed on.
+// one only on origin, tracking it; else a new branch from `base`, default the
+// config's worktrees.base, origin/HEAD, without an upstream), where the
+// repository's layout puts it, seeded, then landed on.
 export const WT_USAGE = "usage: wt [-s|-t|-b] [-p PROMPT] [--session ID] <branch> [base]   (options before the branch)"
 export async function open(kit: Kit, io: Io, args: string[]): Promise<Landed> {
   const { landing, rest } = parseLanding("wt", args)
@@ -299,18 +327,20 @@ export async function open(kit: Kit, io: Io, args: string[]): Promise<Landed> {
   if (!repo) throw new Failed("wt: not inside a git repo")
   const existing = await worktreeOf(kit, io, repo, branch)
   if (existing) return land(kit, io, existing, "wt", landing)
-  const layout = await loadLayout(kit)
+  const { layout, choice, recorded } = await layoutFor(kit, io, repo)
   const dir = layout.path(repo, branch.replaceAll("/", "-"))
   if (!isDirectory(dir)) {
-    const seeds = seedsFor(repo, io.env)
+    const seeds = seedsFor(repo, io.env, kit.config.worktrees.seed)
     await loud(kit, io, ["fetch", "-q", "origin"], repo.root)
     const has = async (ref: string) => (await query(kit, io, ["show-ref", "-q", "--verify", ref], repo.root)) !== undefined
     const add = (await has(`refs/heads/${branch}`))
       ? ["worktree", "add", dir, branch]
       : (await has(`refs/remotes/origin/${branch}`))
         ? ["worktree", "add", "--track", "-b", branch, dir, `origin/${branch}`]
-        : ["worktree", "add", "--no-track", "-b", branch, dir, given || "origin/HEAD"]
+        : ["worktree", "add", "--no-track", "-b", branch, dir, given || kit.config.worktrees.base]
+    await layout.prepare?.(repo, dir, io)
     if (!(await loud(kit, io, add, repo.root))) throw new Failed()
+    if (!recorded) await record(kit, io, repo, choice)
     // From the worktree you are in; from the project folder, the default branch's.
     let from = line(await query(kit, io, ["rev-parse", "--show-toplevel"])) || (await defaultWorktree(kit, io, repo))
     if (from === dir) from = undefined
@@ -439,21 +469,33 @@ export async function prune(kit: Kit, io: Io, args: string[]) {
   if (failed) throw new Failed()
 }
 
-// wtclone: a repository from `url`, laid out for worktrees.
+// wtclone: a repository from `url`, laid out for worktrees as the config
+// says (a layout without a way of its own: a normal clone).
 export async function clone(kit: Kit, io: Io, args: string[]) {
   const [url, given] = args
   if (!url) throw new Failed("usage: wtclone <url> [dir]")
-  const layout = await loadLayout(kit)
-  if (!layout.clone) throw new Failed(`wtclone: the ${labelOf(layout)} layout clones no repositories`)
-  await layout.clone(url, given || basename(url.replace(/\.git$/, "")), io)
+  const choice = kit.config.worktrees.layout
+  const layout = await loadLayout(kit, choice)
+  const dir = given || basename(url.replace(/\.git$/, ""))
+  if (layout.clone) await layout.clone(url, dir, io)
+  else {
+    if (!(await loud(kit, io, ["clone", url, dir]))) throw new Failed()
+    io.say(`repo ready → cd ${dir} && wt <branch>`)
+  }
+  const repo = await repositoryOf(kit, io, resolve(io.cwd, dir))
+  if (repo) await record(kit, io, repo, choice)
 }
 
-// wtconvert: the normal clone you are in, laid out for worktrees (-y: without
-// asking first).
+// wtconvert: the normal clone you are in, laid out for worktrees as the
+// config says (-y: without asking first).
 export async function convert(kit: Kit, io: Io, args: string[]): Promise<Landed> {
-  const layout = await loadLayout(kit)
-  if (!layout.convert) throw new Failed(`wtconvert: the ${labelOf(layout)} layout converts no clones`)
-  return { dir: await layout.convert(io, { yes: args[0] === "-y" || args[0] === "--yes" }), cd: true }
+  const choice = kit.config.worktrees.layout
+  const layout = await loadLayout(kit, choice)
+  if (!layout.convert) throw new Failed(`wtconvert: the ${labelOf(layout)} layout has no conversion (the bare layout has)`)
+  const dir = await layout.convert(io, { yes: args[0] === "-y" || args[0] === "--yes" })
+  const repo = await repositoryOf(kit, io, dir)
+  if (repo) await record(kit, io, repo, choice)
+  return { dir, cd: true }
 }
 
 export type Listed = {

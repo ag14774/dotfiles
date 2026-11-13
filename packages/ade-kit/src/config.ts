@@ -9,7 +9,8 @@ import type { Config } from "./types.ts"
 type Env = Record<string, string | undefined>
 
 // Today's setup: Zellij with the dev layout and its pane names, Helix,
-// OpenCode, and tuicr's comments filled in for you to send.
+// OpenCode, tuicr's comments filled in for you to send, and worktrees in the
+// bare layout.
 export const DEFAULTS: Config = {
   multiplexer: "zellij",
   editor: "helix",
@@ -20,6 +21,11 @@ export const DEFAULTS: Config = {
     layout: "dev",
     panes: { agent: "opencode", shell: "main", editor: "editor", review: "review" },
     tabName: "{worktree}",
+  },
+  worktrees: {
+    layout: "bare",
+    base: "origin/HEAD",
+    seed: [".env", ".env.*", ".envrc", "pyrightconfig.json"],
   },
 }
 
@@ -45,6 +51,7 @@ const merge = (base: unknown, over: unknown): unknown => {
 // The settings ade-kit itself reads must have the right type.
 const check = (config: Config, path: string) => {
   const zellij: Record<string, unknown> = isObject(config.zellij) ? config.zellij : {}
+  const worktrees: Record<string, unknown> = isObject(config.worktrees) ? config.worktrees : {}
   const panes: [string, unknown][] = isObject(zellij.panes) ? Object.entries(zellij.panes) : [["", undefined]]
   const values: Record<string, unknown> = {
     multiplexer: config.multiplexer,
@@ -53,10 +60,15 @@ const check = (config: Config, path: string) => {
     reviewer: config.reviewer,
     "zellij.layout": zellij.layout,
     "zellij.tabName": zellij.tabName,
+    "worktrees.layout": worktrees.layout,
+    "worktrees.base": worktrees.base,
     ...Object.fromEntries(panes.map(([role, name]) => [`zellij.panes${role ? `.${role}` : ""}`, name])),
   }
   const wrong = Object.keys(values).filter((key) => typeof values[key] !== "string")
   if (wrong.length) throw new Error(`ade: in ${path}, these must be strings: ${wrong.join(", ")}`)
+  const seed = worktrees.seed
+  if (!Array.isArray(seed) || seed.some((pattern) => typeof pattern !== "string"))
+    throw new Error(`ade: in ${path}, worktrees.seed must be a list of strings`)
   const deliver = isObject(config.review) ? config.review.deliver : undefined
   if (deliver !== "insert" && deliver !== "submit")
     throw new Error(`ade: in ${path}, review.deliver must be "insert" or "submit"`)

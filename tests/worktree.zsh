@@ -113,6 +113,10 @@ esac
 EOF
 chmod +x "$TMP/bin/zellij"
 export PATH="$TMP/bin:$PATH"
+# This checkout's ADE config (OpenCode through opencode-pane, worktrees in the
+# bare layout) with the default tab names, never your own.
+jq 'del(.zellij.tabName)' "$ROOT/config/.config/ade/config.json" > "$TMP/ade.json"
+export ADE_CONFIG=$TMP/ade.json
 
 tab_in() { # tab whose main pane is in directory $1
   awk -F'\t' -v d="$1" '$3 == "main" && $4 == d { print $2 }' "$ZJ_STATE/panes"
@@ -144,6 +148,9 @@ source "$ROOT/shell/git.zsh"
 
 cd "$TMP"
 wtclone "$remote" project >/dev/null
+# The repository remembers its layout, so a change of config doesn't move its
+# worktrees.
+assert_eq "$(git -C "$project" config --get ade.layout)" bare
 cd "$project"
 wt main >/dev/null
 print 'seeded secret' > .env
@@ -448,11 +455,8 @@ cd "$project/main"
 # --- Zellij tabs, against the fake zellij: the caller is pane 1 in tab 1. ---
 export ZJ_STATE=$TMP/zj ZELLIJ=0 ZELLIJ_SESSION_NAME=test ZELLIJ_PANE_ID=1
 mkdir -p "$ZJ_STATE"
-# This checkout's ADE config (OpenCode through opencode-pane) with the default
-# tab names, and opencode-pane on PATH, as installed.
-jq 'del(.zellij.tabName)' "$ROOT/config/.config/ade/config.json" > "$TMP/ade.json"
+# opencode-pane on PATH, as installed.
 ln -s "$ROOT/config/.local/bin/opencode-pane" "$TMP/bin/"
-export ADE_CONFIG=$TMP/ade.json
 print 1000 > "$ZJ_STATE/next" # generated IDs never meet the hand-made ones below
 printf '1\thome\n' > "$ZJ_STATE/tabs"
 printf '1\t1\tmain\t%s\t-\n' "$TMP" > "$ZJ_STATE/panes"
