@@ -1,6 +1,17 @@
 {
   "name": "dotfiles",
   "private": true,
+  "license": "MIT",
   "type": "module",
-  "workspaces": ["packages/*"]
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "test": "zsh tests/run.zsh",
+    "check": "tsc -p ."
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "typescript": "^7.0.2"
+  }
 }

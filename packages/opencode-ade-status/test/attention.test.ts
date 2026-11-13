@@ -88,7 +88,7 @@ test("not done while one of its subagents still runs", () => {
   const sessions: Record<string, Info> = { s1: {}, c1: { parentID: "s1", status: "running" } }
   const a = app(sessions, ["s1"])
   a.send("session.execution.succeeded", { sessionID: "s1" })
-  assert.deepEqual(a.notices, [])
+  assert.equal(a.notices.length, 0)
   sessions.c1.status = "idle"
   a.send("session.execution.succeeded", { sessionID: "s1" })
   assert.equal(a.notices[0]?.sound.name, "done")

@@ -2,11 +2,29 @@
   "name": "opencode-ade-worktrees",
   "version": "0.0.0",
   "private": true,
-  "description": "OpenCode plugin: OpenCode's worktree strategy through ade-kit (the repository's layout, real branches, seeded files, wtrm's checks)",
+  "description": "OpenCode plugin: OpenCode's own worktrees through ade-kit (the repository's layout, real branches, seeded files, ade worktree rm's checks)",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ag14774/dotfiles.git",
+    "directory": "packages/opencode-ade-worktrees"
+  },
   "type": "module",
-  "dependencies": { "ade-kit": "*" },
   "exports": {
     ".": "./src/server.ts"
   },
-  "scripts": { "test": "node --test test/*.test.ts" }
+  "dependencies": {
+    "ade-kit": "*"
+  },
+  "peerDependencies": {
+    "@opencode/plugin": ">=2.2.5"
+  },
+  "peerDependenciesMeta": {
+    "@opencode/plugin": {
+      "optional": true
+    }
+  },
+  "scripts": {
+    "test": "node --test test/*.test.ts"
+  }
 }

@@ -1,0 +1,16 @@
+{
+  "compilerOptions": {
+    "target": "esnext",
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "allowImportingTsExtensions": true,
+    "erasableSyntaxOnly": true,
+    "verbatimModuleSyntax": true,
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "types": ["node"]
+  },
+  "include": ["packages/*/src/**/*.ts", "packages/*/test/**/*.ts"],
+  "exclude": ["packages/opencode-ade/src/server.ts", "packages/opencode-ade/src/tui.ts", "packages/opencode-ade-status/src/tui.ts", "packages/opencode-ade-worktrees/src/server.ts"]
+}
