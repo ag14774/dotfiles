@@ -3,8 +3,10 @@
 // Messages are the wt commands' own ("wt: ..."). Nothing here changes the
 // process's folder or reads its environment: both come with the Io.
 import { spawn } from "node:child_process"
-import { tabs } from "./actions.ts"
-import { loadMultiplexer } from "./load.ts"
+import { accessSync, constants, cpSync, existsSync, mkdirSync, readdirSync, readFileSync } from "node:fs"
+import { basename, dirname, join } from "node:path"
+import { tabs, workspace } from "./actions.ts"
+import { labelOf, loadAgent, loadMultiplexer } from "./load.ts"
 import type { Kit, MultiplexerAdapter, Where } from "./types.ts"
 import { isDirectory } from "./workspace.ts"
 
@@ -79,6 +81,250 @@ export async function multiplexerOf(kit: Kit, env: Env): Promise<{ adapter?: Mul
   const label = adapter.label ?? adapter.name
   const where = adapter.here(env)
   return where ? { adapter, where, why: "" } : { adapter, why: `not inside ${label}` }
+}
+
+// The worktree checked out on `branch`, wherever it is.
+export const worktreeOf = async (kit: Kit, io: Io, repo: Repository, branch: string) =>
+  (await worktreeRecords(kit, io, repo.root)).find((r) => r.branch === branch)?.path
+
+// The worktree of the default branch (origin/HEAD's, else HEAD's): where new
+// worktrees are seeded from when you are not in one.
+export async function defaultWorktree(kit: Kit, io: Io, repo: Repository) {
+  const ref = async (name: string) => line(await query(kit, io, ["--git-dir", repo.common, "symbolic-ref", "--quiet", name]))
+  const branch =
+    (await ref("refs/remotes/origin/HEAD"))?.replace(/^refs\/remotes\/origin\//, "") ||
+    (await ref("HEAD"))?.replace(/^refs\/heads\//, "")
+  if (!branch) return undefined
+  return (await worktreeRecords(kit, io, io.cwd, "--git-dir", repo.common)).find((r) => r.branch === branch)?.path
+}
+
+// --- Seeding: untracked files (secrets, local config) that git won't carry
+// into a new worktree. WT_SEED_FILE names a manifest; else the repository's
+// <common-dir>/wt-seed; else WT_SEED (newline-separated); else the defaults.
+// A manifest has one relative path or glob per line (blank lines and comments
+// allowed). Not .venv or node_modules: recreate those.
+export const SEED_DEFAULTS = [".env", ".env.*", ".envrc", "pyrightconfig.json"]
+export type Seeds = { patterns: string[]; label: string }
+
+const readable = (path: string) => {
+  try {
+    accessSync(path, constants.R_OK)
+    return true
+  } catch {
+    return false
+  }
+}
+
+// The seed patterns; refuses an unreadable WT_SEED_FILE, or a manifest line
+// that leaves the worktree.
+export function seedsFor(repo: Repository, env: Env): Seeds {
+  const file = env.WT_SEED_FILE || join(repo.common, "wt-seed")
+  if (env.WT_SEED_FILE && !readable(file)) throw new Failed(`wt: WT_SEED_FILE is not readable: ${file}`)
+  if (readable(file)) {
+    let text = ""
+    try {
+      text = readFileSync(file, "utf8")
+    } catch {
+      // a folder, say: no patterns
+    }
+    const patterns = []
+    for (const raw of text.split("\n")) {
+      const pattern = raw.replace(/\r$/, "").trim()
+      if (!pattern || pattern.startsWith("#")) continue
+      if (/^\/|^\.\.(\/|$)|\/\.\.(\/|$)/.test(pattern)) throw new Failed(`wt: unsafe seed pattern in ${file}: ${pattern}`)
+      patterns.push(pattern)
+    }
+    return { patterns, label: file }
+  }
+  if (env.WT_SEED !== undefined) return { patterns: env.WT_SEED.split("\n").filter(Boolean), label: "WT_SEED" }
+  return { patterns: SEED_DEFAULTS, label: "default seed list" }
+}
+
+// A name pattern (*, ?, [...]) as a regular expression.
+function nameRegex(pattern: string) {
+  let source = ""
+  for (let i = 0; i < pattern.length; i++) {
+    const c = pattern[i]
+    const close = c === "[" ? pattern.indexOf("]", i + 2) : -1
+    if (c === "*") source += ".*"
+    else if (c === "?") source += "."
+    else if (close > 0) {
+      const inside = pattern.slice(i + 1, close)
+      source += `[${/^[!^]/.test(inside) ? `^${inside.slice(1)}` : inside}]`.replace(/\\/g, "\\\\")
+      i = close
+    } else source += c.replace(/[.+^${}()|[\]\\]/g, "\\$&")
+  }
+  return new RegExp(`^${source}$`, "s")
+}
+
+// The paths under `root` that a seed pattern matches, relative to it, sorted:
+// *, ? and [...] within a name, ** for any depth of folders. As in zsh, a
+// wildcard doesn't match a name's leading dot, and a pattern without
+// wildcards is there when the file is.
+export function globIn(root: string, pattern: string): string[] {
+  const parts = pattern.split("/").filter((part) => part && part !== ".")
+  const found: string[] = []
+  const entries = (dir: string) => {
+    try {
+      return readdirSync(dir, { withFileTypes: true })
+    } catch {
+      return []
+    }
+  }
+  const walk = (dir: string, rel: string, rest: string[]) => {
+    const [part, ...after] = rest
+    if (part === undefined) return void (rel && found.push(rel))
+    const into = (name: string) => [join(dir, name), rel ? `${rel}/${name}` : name] as const
+    if (part === "**" && after.length) {
+      walk(dir, rel, after)
+      for (const entry of entries(dir)) if (entry.isDirectory() && !entry.name.startsWith(".")) walk(...into(entry.name), rest)
+      return
+    }
+    if (!/[*?[]/.test(part)) {
+      const [path, next] = into(part)
+      if (after.length ? isDirectory(path) : existsSync(path)) walk(path, next, after)
+      return
+    }
+    const regex = nameRegex(part === "**" ? "*" : part)
+    for (const entry of entries(dir)) {
+      if (entry.name.startsWith(".") && !part.startsWith(".")) continue
+      if (!regex.test(entry.name)) continue
+      const [path, next] = into(entry.name)
+      if (!after.length || isDirectory(path)) walk(path, next, after)
+    }
+  }
+  walk(root, "", parts)
+  return [...new Set(found)].sort()
+}
+
+// Copy the seeds from worktree `from` into the new worktree `to`, except what
+// is there already (each worktree keeps its own copies).
+export function seed(io: Io, from: string | undefined, to: string, seeds: Seeds) {
+  if (!from || !isDirectory(from) || from === to) return
+  let copied = 0
+  for (const pattern of seeds.patterns)
+    for (const rel of globIn(from, pattern)) {
+      const target = join(to, rel)
+      if (existsSync(target)) continue
+      try {
+        mkdirSync(dirname(target), { recursive: true })
+        cpSync(join(from, rel), target, { recursive: true, verbatimSymlinks: true })
+        copied++
+      } catch (error) {
+        io.say(`wt: could not seed ${rel}: ${(error as Error).message}`)
+      }
+    }
+  if (copied) io.say(`wt: seeded ${copied} local file(s) from ${basename(from)}/ (${seeds.label})`)
+}
+
+// --- Landing: what happens once the worktree exists. -s reports it; -t
+// focuses its tab (opening one), -b opens it in the background; -p/--session
+// start the agent in a new background tab. Without either, the caller changes
+// to it (the shell function cds). Outside a multiplexer, -t changes directory,
+// -b stays and -p fails.
+export type Landing = { mode: "cd" | "stay" | "tab" | "background"; prompt?: string; session?: string }
+export type Landed = { dir: string; cd: boolean }
+
+// The landing options before the other arguments (`name` for messages).
+export function parseLanding(name: string, args: string[]): { landing: Landing; rest: string[] } {
+  const modes: Landing["mode"][] = []
+  let prompt = ""
+  let session = ""
+  let i = 0
+  for (; i < args.length; i++) {
+    const arg = args[i]
+    if (arg === "-s" || arg === "--stay") modes.push("stay")
+    else if (arg === "-t" || arg === "--tab") modes.push("tab")
+    else if (arg === "-b" || arg === "--background") modes.push("background")
+    else if (arg === "-p" || arg === "--prompt") {
+      if (i + 1 >= args.length) throw new Failed(`${name}: ${arg} needs a prompt`)
+      prompt = args[++i]
+    } else if (arg.startsWith("--prompt=")) prompt = arg.slice(9)
+    else if (arg === "--session") {
+      if (!args[i + 1]) throw new Failed(`${name}: ${arg} needs a conversation ID`)
+      session = args[++i]
+    } else if (arg === "--") {
+      i++
+      break
+    } else if (arg.startsWith("-")) throw new Failed(`${name}: unknown option '${arg}'`)
+    else break
+  }
+  const unique = [...new Set(modes)]
+  if (unique.length > 1) throw new Failed(`${name}: choose one of -s, -t or -b`)
+  let mode = unique[0]
+  if (prompt || session) {
+    if (mode === "stay") throw new Failed(`${name}: -p/--session need a tab; they cannot be combined with -s`)
+    mode ??= "background"
+  }
+  const landing = { mode: mode ?? "cd", ...(prompt ? { prompt } : {}), ...(session ? { session } : {}) }
+  return { landing, rest: args.slice(i) }
+}
+
+const message = (error: unknown) => String((error as Error)?.message ?? error).replace(/^ade: /, "")
+
+// A tab needs a multiplexer: -p/--session fail before anything is created.
+async function needsTab(kit: Kit, io: Io, name: string, landing: Landing) {
+  if (!landing.prompt && !landing.session) return
+  const at = await multiplexerOf(kit, io.env).catch((error) => {
+    throw new Failed(`${name}: ${message(error)}`)
+  })
+  if (at.where) return
+  const agent = await loadAgent(kit).then(labelOf, () => "the agent")
+  const where = at.adapter ? `a ${labelOf(at.adapter)} tab` : "a new tab"
+  throw new Failed(`${name}: -p/--session start ${agent} in ${where}; ${at.why}`)
+}
+
+export async function land(kit: Kit, io: Io, dir: string, name: string, landing: Landing): Promise<Landed> {
+  let mode = landing.mode
+  if (mode === "tab" || mode === "background") {
+    const at = await multiplexerOf(kit, io.env).catch((error) => {
+      throw new Failed(`${name}: ${message(error)}`)
+    })
+    if (!at.where) {
+      io.say(`${name}: ${at.why}; ${mode === "tab" ? "changing directory" : "staying here"} instead of opening a tab`)
+      mode = mode === "tab" ? "cd" : "stay"
+    }
+  }
+  if (mode === "cd" || mode === "stay") return { dir, cd: mode === "cd" }
+  const o = { dir, focus: mode === "tab", ...(landing.session ? { session: landing.session } : {}), ...(landing.prompt ? { prompt: landing.prompt } : {}) }
+  try {
+    await workspace(kit, o, { env: io.env, cwd: io.cwd }, (said) => io.say(`${name}: ${said}`))
+  } catch (error) {
+    throw new Failed(`${name}: ${message(error)}`)
+  }
+  return { dir, cd: false }
+}
+
+// wt: the worktree for a branch, created if needed (a local branch as it is;
+// one only on origin, tracking it; else a new branch from `base`, default
+// origin/HEAD, without an upstream), seeded, then landed on.
+export const WT_USAGE = "usage: wt [-s|-t|-b] [-p PROMPT] [--session ID] <branch> [base]   (options before the branch)"
+export async function open(kit: Kit, io: Io, args: string[]): Promise<Landed> {
+  const { landing, rest } = parseLanding("wt", args)
+  await needsTab(kit, io, "wt", landing)
+  const [branch, given] = rest
+  if (!branch || rest.length > 2 || branch.startsWith("-") || given?.startsWith("-")) throw new Failed(WT_USAGE)
+  const repo = await repositoryOf(kit, io)
+  if (!repo) throw new Failed("wt: not inside a git repo")
+  const existing = await worktreeOf(kit, io, repo, branch)
+  if (existing) return land(kit, io, existing, "wt", landing)
+  const dir = join(repo.root, branch.replaceAll("/", "-"))
+  if (!isDirectory(dir)) {
+    const seeds = seedsFor(repo, io.env)
+    await loud(kit, io, ["fetch", "-q", "origin"], repo.root)
+    const has = async (ref: string) => (await query(kit, io, ["show-ref", "-q", "--verify", ref], repo.root)) !== undefined
+    const add = (await has(`refs/heads/${branch}`))
+      ? ["worktree", "add", dir, branch]
+      : (await has(`refs/remotes/origin/${branch}`))
+        ? ["worktree", "add", "--track", "-b", branch, dir, `origin/${branch}`]
+        : ["worktree", "add", "--no-track", "-b", branch, dir, given || "origin/HEAD"]
+    if (!(await loud(kit, io, add, repo.root))) throw new Failed()
+    // From the worktree you are in; from the project folder, the default branch's.
+    let from = line(await query(kit, io, ["rev-parse", "--show-toplevel"])) || (await defaultWorktree(kit, io, repo))
+    if (from === dir) from = undefined
+    seed(io, from, dir, seeds)
+  }
+  return land(kit, io, dir, "wt", landing)
 }
 
 export type Listed = {

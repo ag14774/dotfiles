@@ -16,7 +16,7 @@
 # Output: progress, prompts and errors go to stderr. stdout carries only the
 # result (a worktree path, or `ls`/`help` output), so callers can capture it.
 
-typeset -g _WT_CWD_FILE= _WT_RESULT= _WT_MODE=cd _WT_PROMPT= _WT_SESSION=
+typeset -g _WT_CWD_FILE= _WT_RESULT=
 # The ade command (packages/ade-kit), next to this script, for the tabs: it
 # works before it is stowed too.
 typeset -g _WT_ADE=${0:A:h}/ade
@@ -35,70 +35,6 @@ _wt_chdir() {
   fi
 }
 
-# Parse open's landing options. Sets _WT_MODE (cd, stay, tab, background),
-# _WT_PROMPT and _WT_SESSION; leaves the remaining arguments in $reply.
-_wt_parse_landing() { # $1=command name for messages, then its arguments
-  emulate -L zsh
-  local name=$1 mode
-  local -a modes
-  shift
-  _WT_PROMPT= _WT_SESSION=
-  while (( $# )); do
-    case $1 in
-      -s | --stay) modes+=(stay) ;;
-      -t | --tab) modes+=(tab) ;;
-      -b | --background) modes+=(background) ;;
-      -p | --prompt)
-        (( $# >= 2 )) || { print -u2 "$name: $1 needs a prompt"; return 1; }
-        _WT_PROMPT=$2
-        shift
-        ;;
-      --prompt=*) _WT_PROMPT=${1#--prompt=} ;;
-      --session)
-        [[ -n ${2-} ]] || { print -u2 "$name: $1 needs a conversation ID"; return 1; }
-        _WT_SESSION=$2
-        shift
-        ;;
-      --) shift; break ;;
-      -*) print -u2 "$name: unknown option '$1'"; return 1 ;;
-      *) break ;;
-    esac
-    shift
-  done
-  modes=(${(u)modes})
-  (( $#modes <= 1 )) || { print -u2 "$name: choose one of -s, -t or -b"; return 1; }
-  mode=${modes[1]-}
-  if [[ -n $_WT_PROMPT$_WT_SESSION ]]; then
-    [[ $mode == stay ]] && { print -u2 "$name: -p/--session need a tab; they cannot be combined with -s"; return 1; }
-    _wt_in_zellij || { print -u2 "$name: -p/--session start OpenCode in a Zellij tab; not inside Zellij"; return 1; }
-    [[ -n $mode ]] || mode=background
-  fi
-  _WT_MODE=${mode:-cd}
-  reply=("$@")
-}
-
-# Finish open in worktree $1 according to _WT_MODE. Outside Zellij, -t falls
-# back to changing directory and -b to staying.
-_wt_land() { # $1=worktree $2=command name for messages
-  emulate -L zsh
-  local wt=$1 name=$2 mode=$_WT_MODE
-  if [[ $mode == (tab|background) ]] && ! _wt_in_zellij; then
-    if [[ $mode == tab ]]; then
-      print -u2 "$name: not inside Zellij; changing directory instead of opening a tab"
-      mode=cd
-    else
-      print -u2 "$name: not inside Zellij; staying here instead of opening a tab"
-      mode=stay
-    fi
-  fi
-  case $mode in
-    cd) _wt_chdir "$wt" ;;
-    stay) _WT_RESULT=$wt ;;
-    tab) _wt_tab_open "$wt" "$name" 1 "$_WT_PROMPT" && _WT_RESULT=$wt ;;
-    background) _wt_tab_open "$wt" "$name" 0 "$_WT_PROMPT" && _WT_RESULT=$wt ;;
-  esac
-}
-
 # Set reply to "ID:sure" or "ID:unsure" for each tab working in worktree $1
 # (`ade tabs`): a tab with a live pane inside the worktree and no pane known to
 # be elsewhere, found by directories, which survive renamed tabs and restored
@@ -110,25 +46,6 @@ _wt_tabs_in() { # $1=worktree
   _wt_in_zellij || return 1
   reply=(${(f)"$("$_WT_ADE" tabs "${1:A}" 2>/dev/null)"})
   (( $#reply ))
-}
-
-# Focus or open the tab for worktree $1 (`ade workspace`): the dev layout, like
-# Alt-t, in the worktree, focused or in the background. With a prompt and/or a
-# conversation (_WT_SESSION), the new tab's OpenCode starts on them (the ADE
-# config's opencode.command: opencode-pane). ade's messages are this command's.
-_wt_tab_open() { # $1=worktree $2=command name $3=focus(1|0) $4=prompt
-  emulate -L zsh
-  local name=$2 out line rc
-  local -a args=(workspace "$1")
-  (( $3 )) || args+=(--background)
-  [[ -n $_WT_SESSION ]] && args+=(--session "$_WT_SESSION")
-  [[ -n $4 ]] && args+=(--prompt "$4")
-  out=$("$_WT_ADE" "${args[@]}" 2>&1 >/dev/null)
-  rc=$?
-  for line in "${(@f)out}"; do
-    [[ -n $line ]] && print -r -- "$name: ${line#ade workspace: }"
-  done
-  return rc
 }
 
 # Close the tabs of removed worktree $1 that _wt_tabs_in found before it was
@@ -173,85 +90,6 @@ wtclone() {
   print "worktree repo ready → cd ${dir} && wt <branch>"
 }
 
-# Untracked/ignored files git won't carry into a new worktree but you want there
-# anyway (secrets, local config). Globs allowed. WT_SEED replaces these defaults:
-# set it as a zsh array in ~/.zshrc (the shell wrappers forward it), or pass it
-# newline-separated in the environment. A readable <git-common-dir>/wt-seed
-# replaces them for one repository, and WT_SEED_FILE can select an explicit
-# manifest. Do NOT list .venv/node_modules -- recreate those (uv sync / npm
-# install), don't copy them.
-typeset -ga WT_SEED_DEFAULT=(.env '.env.*' .envrc pyrightconfig.json)
-
-# Copy configured matches from $1 (source worktree) into $2 (new worktree),
-# skipping any that already exist so each worktree keeps its own copies. $3 is
-# the git common dir. A seed manifest contains one relative path/glob per line;
-# blank lines and comments are ignored.
-_wt_seed() {
-  emulate -L zsh
-  setopt local_options extended_glob null_glob
-  local src=$1 dest=$2 common=$3 pat f rel line n=0
-  local seed_file="${WT_SEED_FILE:-$common/wt-seed}"
-  local seed_label=WT_SEED
-  local -a patterns
-
-  if [[ -n ${WT_SEED_FILE:-} && ! -r $seed_file ]]; then
-    print -u2 "wt: WT_SEED_FILE is not readable: $seed_file"
-    return 1
-  fi
-
-  if [[ -r $seed_file ]]; then
-    while IFS= read -r line || [[ -n $line ]]; do
-      pat=${line%$'\r'}
-      pat=${pat##[[:space:]]#}
-      pat=${pat%%[[:space:]]#}
-      [[ -z $pat || $pat == \#* ]] && continue
-      if [[ $pat == /* || $pat == .. || $pat == ../* || $pat == */../* || $pat == */.. ]]; then
-        print -u2 "wt: unsafe seed pattern in $seed_file: $pat"
-        return 1
-      fi
-      patterns+=("$pat")
-    done < "$seed_file"
-    seed_label=$seed_file
-  elif (( ${+WT_SEED} )); then
-    patterns=(${(f)WT_SEED})
-  else
-    patterns=("${WT_SEED_DEFAULT[@]}")
-    seed_label="default seed list"
-  fi
-
-  [[ -n $src && -d $src && $src != $dest ]] || return 0
-  for pat in "${patterns[@]}"; do
-    for f in $src/${~pat}; do
-      [[ -e $f ]] || continue   # literal patterns (.env, .envrc) skip null_glob; drop them when the source lacks them
-      rel=${f#$src/}
-      [[ -e $dest/$rel ]] && continue
-      mkdir -p "$dest/${rel:h}" && cp -R "$f" "$dest/$rel" && (( ++n ))
-    done
-  done
-  (( n )) && print "wt: seeded $n local file(s) from ${src:t}/ ($seed_label)"
-  return 0
-}
-
-# print the path of the worktree checked out on the repo's default branch
-# (origin/HEAD, e.g. develop or main), or nothing if it can't be found. Used as
-# the seed source when `wt` runs from the bare root, where there's no current
-# worktree to copy from.
-_wt_default_worktree() {
-  emulate -L zsh
-  local gitdir=$1 def line cur=
-  def=$(git --git-dir="$gitdir" symbolic-ref --quiet refs/remotes/origin/HEAD 2>/dev/null)
-  def=${def#refs/remotes/origin/}
-  [[ -z $def ]] && { def=$(git --git-dir="$gitdir" symbolic-ref --quiet HEAD 2>/dev/null); def=${def#refs/heads/}; }
-  [[ -z $def ]] && return 0
-  for line in ${(f)"$(git --git-dir="$gitdir" worktree list --porcelain 2>/dev/null)"}; do
-    case $line in
-      ("worktree "*) cur=${line#worktree } ;;
-      ("branch refs/heads/$def") print -r -- "$cur"; return 0 ;;
-    esac
-  done
-  return 0
-}
-
 # Set REPLY to the registered worktree path for a local branch, or empty.
 _wt_worktree_for_branch() { # $1=project root $2=branch
   emulate -L zsh
@@ -292,48 +130,6 @@ _wt_worktree_for_arg() { # $1=project root $2=branch-or-name
   [[ -n $name_path ]] && { REPLY=$name_path; return 0; }
   REPLY="$proj/${arg//\//-}"
   [[ -d $REPLY ]]
-}
-
-# create/reuse a worktree for <branch>, then cd into it (or -s/-t/-b, see help)
-wt() {
-  emulate -L zsh
-  _wt_parse_landing wt "$@" || return 1
-  set -- "${reply[@]}"
-  if [[ -z ${1-} ]] || (( $# > 2 )) || [[ $1 == -* || ${2-} == -* ]]; then
-    print -u2 "usage: wt [-s|-t|-b] [-p PROMPT] [--session ID] <branch> [base]   (options before the branch)"
-    return 1
-  fi
-  local branch="$1" base="${2:-origin/HEAD}"
-  local common proj wtdir
-  common=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null) \
-    || { print -u2 "wt: not inside a git repo"; return 1; }
-  proj=${common:h}
-  if _wt_worktree_for_branch "$proj" "$branch"; then
-    _wt_land "$REPLY" wt
-    return
-  fi
-  wtdir="$proj/${branch//\//-}"
-  if [[ ! -d "$wtdir" ]]; then
-    # Validate an explicit/per-repo manifest before creating anything. _wt_seed
-    # returns after parsing when source/destination are empty.
-    _wt_seed "" "" "$common" || return 1
-    git -C "$proj" fetch -q origin
-    if git -C "$proj" show-ref -q --verify "refs/heads/$branch"; then
-      git -C "$proj" worktree add "$wtdir" "$branch" || return 1                               # existing local branch
-    elif git -C "$proj" show-ref -q --verify "refs/remotes/origin/$branch"; then
-      git -C "$proj" worktree add --track -b "$branch" "$wtdir" "origin/$branch" || return 1   # new branch tracking origin
-    else
-      git -C "$proj" worktree add --no-track -b "$branch" "$wtdir" "$base" || return 1         # brand-new branch: --no-track so it doesn't inherit the base's upstream; first push sets origin/<branch> (push.autoSetupRemote)
-    fi
-    # seed untracked local files (.env, etc.) into the new worktree: prefer the
-    # worktree we're standing in; if we're not in one (e.g. run from the bare
-    # root), fall back to the default branch's worktree (origin/HEAD).
-    local src; src=$(git rev-parse --show-toplevel 2>/dev/null)
-    [[ -z $src ]] && src=$(_wt_default_worktree "$common")
-    [[ $src == $wtdir ]] && src=   # never seed a worktree from itself
-    _wt_seed "$src" "$wtdir" "$common" || return 1
-  fi
-  _wt_land "$wtdir" wt
 }
 
 # remove a worktree
@@ -628,11 +424,13 @@ fi
 
 cmd=${1:-help}
 (( $# )) && shift
+# Ported to ade-kit: `ade worktree` (packages/ade-kit/src/worktree-cli.ts).
+typeset -a cwd_file=()
+[[ -n $_WT_CWD_FILE ]] && cwd_file=(--cwd-file "$_WT_CWD_FILE")
 case $cmd in
-  ls) exec "$_WT_ADE" worktree ls "$@" ;;
+  ls | open) exec "$_WT_ADE" worktree "${cwd_file[@]}" "$cmd" "$@" ;;
   help | -h | --help) _wt_core_usage; exit ;;
   clone) fn=wtclone ;;
-  open) fn=wt ;;
   rm) fn=wtrm ;;
   prune) fn=wtprune ;;
   convert) fn=wtconvert ;;

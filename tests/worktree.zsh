@@ -622,6 +622,23 @@ zellij action go-to-tab-by-id 1
 wtrm grouped >/dev/null 2>&1
 [[ -z $(tab_in "$project/grouped") ]] || fail "wtrm should close the grouped tab"
 
+# Whether there is a multiplexer to open tabs in is the ADE config's (finding
+# 12): with none configured, even inside Zellij, -t changes directory, -b
+# stays and -p fails before creating anything. (wt-core went by Zellij's
+# variables, then failed in ade.)
+jq '.multiplexer = "none"' "$TMP/ade.json" > "$TMP/none.json"
+ADE_CONFIG=$TMP/none.json core open -t unmuxed || fail "wt -t without a multiplexer failed: $(<"$TMP/err")"
+assert_eq "$out" "$project/unmuxed"
+said "wt: no multiplexer is configured; changing directory instead of opening a tab"
+ADE_CONFIG=$TMP/none.json core open -b unmuxed || fail "wt -b without a multiplexer failed: $(<"$TMP/err")"
+assert_eq "$out" "$project/unmuxed"
+said "wt: no multiplexer is configured; staying here instead of opening a tab"
+ADE_CONFIG=$TMP/none.json core open -p x unprompted && fail "wt -p without a multiplexer should fail"
+said "wt: -p/--session start OpenCode in a new tab; no multiplexer is configured"
+[[ ! -d $project/unprompted ]] || fail "wt -p without a multiplexer should create nothing"
+[[ -z $(tab_in "$project/unmuxed") ]] || fail "no tab should open without a multiplexer"
+wtrm unmuxed >/dev/null 2>&1
+
 # wtrm closes the worktree's tab.
 wtrm -f prompted >/dev/null 2>&1
 [[ -z $(tab_in "$project/prompted") ]] || fail "wtrm should close the worktree's tab"
@@ -764,6 +781,13 @@ cd "$project/main"
 
 # Outside Zellij, -p fails before creating anything and -t changes directory.
 unset ZELLIJ ZELLIJ_SESSION_NAME ZELLIJ_PANE_ID
+core open -p x outside && fail "wt -p outside Zellij should fail"
+said "wt: -p/--session start OpenCode in a Zellij tab; not inside Zellij"
+core open -b outside-b || fail "wt -b outside Zellij failed: $(<"$TMP/err")"
+said "wt: not inside Zellij; staying here instead of opening a tab"
+assert_eq "$out" "$project/outside-b"
+core open -t outside-b
+said "wt: not inside Zellij; changing directory instead of opening a tab"
 if wt -p 'x' outside >/dev/null 2>&1; then fail "wt -p outside Zellij should fail"; fi
 [[ ! -d $project/outside ]] || fail "wt -p outside Zellij should not create a worktree"
 wt -t outside >/dev/null 2>&1

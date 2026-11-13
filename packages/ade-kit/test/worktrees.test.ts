@@ -9,7 +9,7 @@ import { makeKit, run } from "../src/kit.ts"
 import type { Config, Kit, Pane } from "../src/types.ts"
 import { worktreeCommand } from "../src/worktree-cli.ts"
 import type { Io } from "../src/worktrees.ts"
-import { Failed, list, records, repositoryOf } from "../src/worktrees.ts"
+import { Failed, globIn, list, open, parseLanding, records, repositoryOf, seedsFor } from "../src/worktrees.ts"
 
 const temp = realpathSync(mkdtempSync(join(tmpdir(), "ade-worktrees-")))
 const git = (cwd: string, ...args: string[]) =>
@@ -123,4 +123,78 @@ test("ade worktree: ls, its exit statuses and messages", async () => {
   r = ioIn(main)
   assert.equal(await worktreeCommand(kitWith(), [], r.io), 0)
   assert.match(r.output(), /^usage: ade worktree /)
+})
+
+test("globIn: names, classes, folders at any depth; no leading dots for wildcards", () => {
+  const root = join(temp, "glob")
+  for (const file of [".env", ".env.local", ".envrc", "a.txt", "b.txt", "sub/.env", "sub/c.txt", ".hidden/.env", "d/e/.env"]) {
+    mkdirSync(join(root, file, ".."), { recursive: true })
+    writeFileSync(join(root, file), "")
+  }
+  assert.deepEqual(globIn(root, ".env"), [".env"])
+  assert.deepEqual(globIn(root, ".env.*"), [".env.local"])
+  assert.deepEqual(globIn(root, "*.txt"), ["a.txt", "b.txt"])
+  assert.deepEqual(globIn(root, "[a]*"), ["a.txt"])
+  assert.deepEqual(globIn(root, "[!a]*"), ["b.txt", "d", "sub"])
+  assert.deepEqual(globIn(root, "*"), ["a.txt", "b.txt", "d", "sub"])
+  assert.deepEqual(globIn(root, "**/.env"), [".env", "d/e/.env", "sub/.env"])
+  assert.deepEqual(globIn(root, "sub/*"), ["sub/c.txt"])
+  assert.deepEqual(globIn(root, "missing"), [])
+  assert.deepEqual(globIn(root, "./sub/c.txt"), ["sub/c.txt"])
+})
+
+test("seedsFor: WT_SEED_FILE, the repository's manifest, WT_SEED, the defaults", () => {
+  const common = join(temp, "seeds")
+  mkdirSync(common)
+  const repo = { common, root: temp }
+  assert.deepEqual(seedsFor(repo, {}), { patterns: [".env", ".env.*", ".envrc", "pyrightconfig.json"], label: "default seed list" })
+  assert.deepEqual(seedsFor(repo, { WT_SEED: "a\n\nb" }), { patterns: ["a", "b"], label: "WT_SEED" })
+  assert.deepEqual(seedsFor(repo, { WT_SEED: "" }), { patterns: [], label: "WT_SEED" })
+  writeFileSync(join(common, "wt-seed"), "# local\n\n  .env  \r\nconfig/*.toml\n")
+  assert.deepEqual(seedsFor(repo, { WT_SEED: "a" }), { patterns: [".env", "config/*.toml"], label: join(common, "wt-seed") })
+  for (const unsafe of ["/etc/passwd", "..", "../x", "a/../b", "a/.."]) {
+    writeFileSync(join(common, "wt-seed"), `${unsafe}\n`)
+    assert.throws(() => seedsFor(repo, {}), new Failed(`wt: unsafe seed pattern in ${join(common, "wt-seed")}: ${unsafe}`))
+  }
+  writeFileSync(join(common, "other"), "x\n")
+  assert.deepEqual(seedsFor(repo, { WT_SEED_FILE: join(common, "other") }).patterns, ["x"])
+  assert.throws(() => seedsFor(repo, { WT_SEED_FILE: join(common, "missing") }), new Failed(`wt: WT_SEED_FILE is not readable: ${join(common, "missing")}`))
+})
+
+test("parseLanding: the options before the branch", () => {
+  assert.deepEqual(parseLanding("wt", ["x"]), { landing: { mode: "cd" }, rest: ["x"] })
+  assert.deepEqual(parseLanding("wt", ["-t", "-t", "x", "-s"]), { landing: { mode: "tab" }, rest: ["x", "-s"] })
+  assert.deepEqual(parseLanding("wt", ["-p", "go", "x"]), { landing: { mode: "background", prompt: "go" }, rest: ["x"] })
+  assert.deepEqual(parseLanding("wt", ["--prompt=go", "-t", "--session", "s1", "--", "-x"]), {
+    landing: { mode: "tab", prompt: "go", session: "s1" },
+    rest: ["-x"],
+  })
+  for (const [args, said] of [
+    [["-s", "-t", "x"], "wt: choose one of -s, -t or -b"],
+    [["-p"], "wt: -p needs a prompt"],
+    [["--session", ""], "wt: --session needs a conversation ID"],
+    [["-x"], "wt: unknown option '-x'"],
+    [["-s", "-p", "go", "x"], "wt: -p/--session need a tab; they cannot be combined with -s"],
+  ] as const)
+    assert.throws(() => parseLanding("wt", [...args]), new Failed(said))
+})
+
+test("open: a new branch from origin/HEAD, seeded, reused; git's output as messages in-process", async () => {
+  const main = join(project, "main")
+  writeFileSync(join(main, ".env"), "secret\n")
+  let r = ioIn(main)
+  assert.deepEqual(await open(kitWith(), r.io, ["-s", "topic/one"]), { dir: join(project, "topic-one"), cd: false })
+  assert.ok(r.said.some((said) => said.startsWith("Preparing worktree")), r.said.join("\n"))
+  assert.equal(r.said.at(-1), "wt: seeded 1 local file(s) from main/ (default seed list)")
+  assert.equal(git(join(project, "topic-one"), "symbolic-ref", "--short", "HEAD"), "topic/one\n")
+  r = ioIn(join(project, "feat"))
+  assert.deepEqual(await open(kitWith(), r.io, ["topic/one"]), { dir: join(project, "topic-one"), cd: true })
+  assert.deepEqual(r.said, [])
+  await assert.rejects(open(kitWith(), ioIn(main).io, []), new Failed("usage: wt [-s|-t|-b] [-p PROMPT] [--session ID] <branch> [base]   (options before the branch)"))
+  await assert.rejects(open(kitWith(), ioIn(temp).io, ["x"]), new Failed("wt: not inside a git repo"))
+  // Without a multiplexer: -t changes directory, -p refuses before anything is made.
+  r = ioIn(main)
+  assert.deepEqual(await open(kitWith(), r.io, ["-t", "topic/one"]), { dir: join(project, "topic-one"), cd: true })
+  assert.deepEqual(r.said, ["wt: no multiplexer is configured; changing directory instead of opening a tab"])
+  await assert.rejects(open(kitWith(), ioIn(main).io, ["-p", "go", "never"]), new Failed("wt: -p/--session start OpenCode in a new tab; no multiplexer is configured"))
 })

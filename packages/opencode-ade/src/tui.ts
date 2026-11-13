@@ -1,11 +1,10 @@
 // App part of the ADE plugin: it runs in the OpenCode app inside each
 // multiplexer pane, so its environment names that pane for certain. It carries
 // out the server part's requests for the conversation this pane shows,
-// including those of its subagents (they act for their parent): show_file
-// through ade-kit's open, status through `ade worktree` (in-process), delegate
-// through wt-core. (The agent statuses on the tabs come from the status
-// plugin, packages/opencode-ade-status.)
-import { execFile } from "node:child_process"
+// including those of its subagents (they act for their parent), in-process:
+// show_file through ade-kit's open, delegate and status through
+// `ade worktree`. (The agent statuses on the tabs come from the status plugin,
+// packages/opencode-ade-status.)
 import { Plugin } from "@opencode/plugin/tui"
 import { createEffect, createMemo, createRoot } from "solid-js"
 import { open } from "../../ade-kit/src/actions.ts"
@@ -28,10 +27,7 @@ type Request = {
 }
 type Result = { ok: boolean; stdout: string; stderr: string }
 
-// The only command a request may run, by action (show_file and status run
-// none: they are carried out in-process).
-const COMMANDS: Record<string, string> = { delegate: "wt-core" }
-const IN_PROCESS = new Set(["show_file", "status"])
+const ACTIONS = new Set(["show_file", "delegate", "status"])
 
 export default Plugin.define({
   id: "local.ade",
@@ -92,42 +88,6 @@ export default Plugin.define({
       return (await rootOf(sessionID)) === (await rootOf(route.sessionID))
     }
 
-    const run = (command: string, request: Request) =>
-      new Promise<Result>((done) => {
-        const options = { env, cwd: request.cwd, timeout: request.timeout }
-        execFile(command, request.args, options, (error, stdout, stderr) => {
-          const message = String(stderr) || (error ? String(error.message) : "")
-          done({ ok: !error, stdout: String(stdout), stderr: message })
-        })
-      })
-
-    // Copy the conversation into the worktree `prepare` creates (compacting the
-    // copy if asked), then run the request's command on the copy.
-    const runOnCopy = async (command: string, request: Request, copy: Copy) => {
-      const prepared = await run(command, { ...request, args: copy.prepare })
-      if (!prepared.ok) return prepared
-      const client = context.client
-      const fork = await client.session.fork({ sessionID: copy.sessionID, before: copy.before })
-      try {
-        await client.session.move({ sessionID: fork.id, directory: prepared.stdout.trim() })
-        if (copy.compact) await client.session.compact({ sessionID: fork.id })
-        await client.experimental.session.wait({ sessionID: fork.id })
-        const [verb, ...rest] = request.args
-        const result = await run(command, { ...request, args: [verb, "--session", fork.id, ...rest] })
-        if (!result.ok) await client.session.remove({ sessionID: fork.id }).catch(() => {})
-        return result
-      } catch (error) {
-        await client.session.remove({ sessionID: fork.id }).catch(() => {})
-        throw error
-      }
-    }
-
-    // In this pane's tab; the server part made the paths absolute.
-    const showFile = async (request: Request): Promise<Result> => {
-      await open(kit(), request.args, { env, cwd: request.cwd })
-      return { ok: true, stdout: "", stderr: "" }
-    }
-
     // `ade worktree ARGS`, as the command would answer.
     const worktree = async (request: Request): Promise<Result> => {
       let stdout = ""
@@ -143,16 +103,41 @@ export default Plugin.define({
       return { ok: code === 0, stdout, stderr: stderr.join("\n") }
     }
 
+    // Copy the conversation into the worktree `prepare` creates (compacting the
+    // copy if asked), then run the request's command on the copy.
+    const runOnCopy = async (request: Request, copy: Copy) => {
+      const prepared = await worktree({ ...request, args: copy.prepare })
+      if (!prepared.ok) return prepared
+      const client = context.client
+      const fork = await client.session.fork({ sessionID: copy.sessionID, before: copy.before })
+      try {
+        await client.session.move({ sessionID: fork.id, directory: prepared.stdout.trim() })
+        if (copy.compact) await client.session.compact({ sessionID: fork.id })
+        await client.experimental.session.wait({ sessionID: fork.id })
+        const [verb, ...rest] = request.args
+        const result = await worktree({ ...request, args: [verb, "--session", fork.id, ...rest] })
+        if (!result.ok) await client.session.remove({ sessionID: fork.id }).catch(() => {})
+        return result
+      } catch (error) {
+        await client.session.remove({ sessionID: fork.id }).catch(() => {})
+        throw error
+      }
+    }
+
+    // In this pane's tab; the server part made the paths absolute.
+    const showFile = async (request: Request): Promise<Result> => {
+      await open(kit(), request.args, { env, cwd: request.cwd })
+      return { ok: true, stdout: "", stderr: "" }
+    }
+
     const handle = async (request: Request) => {
-      const command = COMMANDS[request.action]
-      if ((!command && !IN_PROCESS.has(request.action)) || !(await shows(request.sessionID))) return
+      if (!ACTIONS.has(request.action) || !(await shows(request.sessionID))) return
       const { granted } = (await ade.claim({ id: request.id })) as { granted: boolean }
       if (!granted) return
       let result: Result = { ok: false, stdout: "", stderr: "" }
       try {
         if (request.action === "show_file") result = await showFile(request)
-        else if (request.action === "status") result = await worktree(request)
-        else if (command) result = request.copy ? await runOnCopy(command, request, request.copy) : await run(command, request)
+        else result = request.copy ? await runOnCopy(request, request.copy) : await worktree(request)
       } catch (error) {
         result.stderr = (error as { message?: string })?.message ?? JSON.stringify(error)
       }
