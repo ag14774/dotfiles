@@ -438,9 +438,8 @@ a different landing with `-s` (stay here and print the path), `-t` (focus the
 worktree's Zellij tab, opening one with OpenCode if needed), or `-b` (open that
 tab in the background). `wt -p "fix the flaky test" <branch>` opens a background
 tab whose OpenCode immediately starts on the prompt; `--session ID` (with or
-without `-p`) opens it on an existing OpenCode conversation. `wtreview` accepts
-the same options. Outside Zellij, `-t` changes directory, `-b` stays, and `-p`
-fails.
+without `-p`) opens it on an existing OpenCode conversation. Outside Zellij,
+`-t` changes directory, `-b` stays, and `-p` fails.
 
 A worktree's tab is any tab whose panes are all inside the worktree's
 directory; names and tab IDs play no part, so renaming a tab or restoring the
@@ -457,7 +456,8 @@ go before the branch.
 you are in, in a floating pane: everything it changed since it left the
 remote's default branch (`origin/HEAD`, the base `wt` uses), committed or not.
 That covers an agent's commits, which Helix's gutter no longer shows.
-In a `wtreview` worktree, it shows the PR plus your own edits.
+To review a pull request, open its branch's worktree (`wt -t <branch>`; for a
+fork's PR, `gh pr checkout <number>` inside a worktree) and press `Alt-v`.
 
 In tuicr, `c` comments on a line, `v` selects lines for a range comment, `e`
 opens the file in the tab's editor pane (`Alt-v` brings the review back), and
@@ -472,22 +472,6 @@ for uncommitted changes, and, to their left, the same signs in blue for what
 the branch's commits changed since `origin/HEAD` (a local plugin,
 `config/.config/yazi/plugins/git-branch.yazi`). Like git.yazi, an open Yazi
 picks up a new commit when you re-enter the folder; each `Alt-y` starts fresh.
-
-### Pull request worktrees
-
-`wtreview <number-or-url>` creates a detached `review-pr-<number>` worktree
-whose `HEAD` is the PR merge base while its index and files are the PR head.
-Helix therefore shows the complete PR in its Git gutter. In this mode,
-`git diff --cached` is the original PR and `git diff` is only your own edits.
-Configured worktree seed files are copied immediately; unchanged seeds are
-treated as review baseline, while modified seeds are protected as personal data.
-
-Run `wtchange` inside that worktree before committing or pushing. It attaches
-the original PR branch, configures its upstream (including contributor forks),
-and preserves staged and unstaged review edits. `ggpush` and `ggpull` use the
-configured upstream; both refuse detached review mode. `wtprune --merged`
-removes clean review worktrees after their exact PR head is merged, but leaves
-reviews with personal edits alone.
 
 ## Changing the theme
 

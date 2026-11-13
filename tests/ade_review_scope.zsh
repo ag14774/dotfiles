@@ -48,11 +48,11 @@ check "agent commits" "$W" "-r $base..HEAD"
 print new > "$W/b.txt"
 check "agent commits and a new file" "$W" "-r $base..HEAD -w"
 
-# A wtreview worktree: HEAD at the merge base, the PR staged.
+# HEAD at the merge base, a branch's changes staged (detached).
 git -C "$W" add b.txt
 git -C "$W" switch -q --detach
 git -C "$W" reset -q --soft "$base"
-check "review worktree" "$W" "-w"
+check "staged on the merge base" "$W" "-w"
 
 mkdir "$W/sub"
 check "from a subdirectory" "$W/sub" "-w"

@@ -36,6 +36,6 @@ brew "node" # provides npm for the JS-based LSPs (TypeScript/yaml/json/bash)
 brew "stow"      # symlink manager for the config/ package
 brew "git-delta" # delta: syntax-highlighted git diffs for reviewing changes (see ~/.config/git/config)
 brew "tuicr"     # code review TUI: Alt-v reviews the tab's worktree, comments go to OpenCode
-brew "gh"        # GitHub CLI: PR review worktrees (`wtreview`) and merged-worktree pruning
+brew "gh"        # GitHub CLI: merged-worktree pruning (`wtprune -m`)
 brew "glow"      # render markdown in the terminal (the `cheat` command -> CHEATSHEET.md)
 brew "pandoc"    # md -> styled HTML for `cheat --pretty` (opens in the browser)

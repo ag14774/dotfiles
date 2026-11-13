@@ -125,9 +125,9 @@ export type PasteAgentOptions = {
 }
 
 // What a review covers: the commits since the merge base with origin/HEAD
-// (`base`), and uncommitted changes (new files included). In a wtreview
-// worktree, HEAD is the merge base, so only `uncommitted` is set: the PR plus
-// your edits.
+// (`base`), and uncommitted changes (new files included). With HEAD at the
+// merge base (a branch's changes staged on a detached HEAD), only
+// `uncommitted` is set.
 export type Scope = { dir: string; base?: string; commits: boolean; uncommitted: boolean }
 
 export interface Reviewer {

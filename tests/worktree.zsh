@@ -19,28 +19,16 @@ assert_eq() {
   [[ $1 == $2 ]] || fail "expected '$2', got '$1'"
 }
 
-review_mode() {
-  git config --file "$(git rev-parse --path-format=absolute --git-dir)/wt-review" --get review.mode
-}
-
 mkdir -p "$TMP/bin" "$TMP/acme"
+# Stand-in for gh: `gh pr list` (wtprune -m) answers with GH_PR_NUMBER when
+# GH_PR_STATE is MERGED.
 cat > "$TMP/bin/gh" <<'EOF'
 #!/usr/bin/env zsh
-if [[ $1 == pr && $2 == view ]]; then
-  if [[ " $* " == *"number,url,state,baseRefName"* ]]; then
-    printf '%s\thttps://github.com/acme/demo/pull/%s\t%s\tmain\t%s\tfeature/review\t%s\t%s\t%s\t%s\t%s\n' \
-      "$GH_PR_NUMBER" "$GH_PR_NUMBER" "$GH_PR_STATE" "$GH_BASE_OID" "$GH_HEAD_OID" \
-      "$GH_HEAD_REPO" "$GH_HEAD_OWNER" "$GH_CROSS_REPO" "$GH_MAINTAIN"
-  elif [[ $GH_PR_STATE == MERGED ]]; then
-    print -r -- "$GH_PR_NUMBER"
-  fi
-elif [[ $1 == pr && $2 == list ]]; then
+if [[ $1 == pr && $2 == list ]]; then
   # With GH_MERGED_OID set, only the branch whose tip it is matches (like the
   # --jq filter on the exact head SHA).
   [[ $GH_PR_STATE == MERGED && ( -z ${GH_MERGED_OID:-} || " $* " == *"$GH_MERGED_OID"* ) ]] \
     && print -r -- "$GH_PR_NUMBER"
-elif [[ $1 == api && $2 == user ]]; then
-  print -r -- reviewer
 else
   exit 1
 fi
@@ -145,16 +133,6 @@ git -C "$seed" branch -M main
 git -C "$seed" remote add origin "$remote"
 git -C "$seed" push -q -u origin main
 git --git-dir="$remote" symbolic-ref HEAD refs/heads/main
-export GH_BASE_OID=$(git -C "$seed" rev-parse HEAD)
-
-git -C "$seed" switch -qc feature/review
-print 'feature' >> "$seed/app.txt"
-print 'new file' > "$seed/new.txt"
-git -C "$seed" add app.txt new.txt
-git -C "$seed" commit -qm feature
-export GH_HEAD_OID=$(git -C "$seed" rev-parse HEAD)
-git -C "$seed" push -q origin feature/review
-git -C "$seed" push -q origin HEAD:refs/pull/7/head HEAD:refs/pull/8/head
 
 source "$ROOT/shell/worktree.zsh"
 source "$ROOT/shell/git.zsh"
@@ -205,87 +183,6 @@ wtrm -f seed-array >/dev/null
 wtrm -f seed-file >/dev/null
 rm "$project/main/custom.txt"
 cd "$project"
-
-export GH_HEAD_REPO=acme/demo GH_HEAD_OWNER=contributor GH_CROSS_REPO=false GH_MAINTAIN=true
-export GH_PR_NUMBER=7 GH_PR_STATE=OPEN
-wtreview 7 >/dev/null
-assert_eq "$PWD" "$project/review-pr-7"
-assert_eq "$(git rev-parse HEAD)" "$GH_BASE_OID"
-assert_eq "$(git show :app.txt)" $'base\nfeature'
-assert_eq "$(<.env)" 'seeded secret'
-git diff --quiet || fail "review worktree should match the PR-head index"
-git diff --cached --quiet && fail "PR baseline should be staged against the merge base"
-
-print 'reviewer edit' >> app.txt
-wtchange >/dev/null
-assert_eq "$(git symbolic-ref --short HEAD)" feature/review
-assert_eq "$(git rev-parse '@{upstream}')" "$GH_HEAD_OID"
-[[ -f .env ]] || fail "wtchange should seed local files"
-git diff --quiet && fail "reviewer edit should survive wtchange"
-git diff --cached --quiet || fail "original PR baseline should disappear after wtchange"
-assert_eq "$(review_mode)" change
-
-cd "$project/main"
-wt feature/review
-assert_eq "$PWD" "$project/review-pr-7"
-cd "$project/main"
-wtrm -f feature/review >/dev/null
-[[ ! -d $project/review-pr-7 ]] || fail "branch-aware wtrm should remove the changed review worktree"
-
-# A fork PR should retain its original contributor remote as the branch upstream.
-mkdir -p "$TMP/contributor"
-fork_remote="$TMP/contributor/fork.git"
-git init -q --bare "$fork_remote"
-git -C "$seed" push -q "$fork_remote" HEAD:refs/heads/feature/review
-git -C "$seed" push -q origin HEAD:refs/pull/9/head
-git -C "$project" remote add contributor "$fork_remote"
-export GH_HEAD_REPO=contributor/fork GH_HEAD_OWNER=contributor GH_CROSS_REPO=true GH_MAINTAIN=true
-export GH_PR_NUMBER=9 GH_PR_STATE=OPEN
-cd "$project/main"
-wtreview 9 >/dev/null
-wtchange >/dev/null
-assert_eq "$(git rev-parse --abbrev-ref --symbolic-full-name '@{upstream}')" contributor/feature/review
-# A pruned tracking ref must not make ggpush fall back to origin.
-git --git-dir="$remote" update-ref -d refs/heads/feature/review
-git -C "$project" update-ref -d refs/remotes/contributor/feature/review
-ggpush >/dev/null
-git --git-dir="$remote" show-ref -q --verify refs/heads/feature/review \
-  && fail "ggpush should keep using the configured fork when its tracking ref is missing"
-git --git-dir="$fork_remote" show-ref -q --verify refs/heads/feature/review \
-  || fail "ggpush should target the configured contributor fork"
-git --git-dir="$fork_remote" update-ref -d refs/heads/feature/review
-git -C "$project" fetch -q --prune contributor
-cd "$project/main"
-# Without a terminal to confirm (as for an agent), wtprune refuses to prompt.
-if wtprune -n </dev/null >/dev/null 2>&1; then fail "wtprune without -y should need a terminal"; fi
-[[ -d $project/review-pr-9 ]] || fail "an unconfirmed wtprune should remove nothing"
-wtprune -n -y >/dev/null
-[[ ! -d $project/review-pr-9 ]] || fail "wtprune should remove a changed review whose upstream was deleted"
-
-export GH_HEAD_REPO=acme/demo GH_HEAD_OWNER=contributor GH_CROSS_REPO=false GH_MAINTAIN=true
-export GH_PR_NUMBER=8 GH_PR_STATE=OPEN
-cd "$project/main"
-wtreview 8 >/dev/null
-if ggpush >/dev/null 2>&1; then
-  fail "ggpush should refuse detached review mode"
-fi
-print 'personal note' > scratch.txt
-cd "$project/main"
-if wtrm review-pr-8 >/dev/null 2>&1; then
-  fail "wtrm should refuse a review worktree with personal edits"
-fi
-rm "$project/review-pr-8/scratch.txt"
-print 'changed secret' > "$project/review-pr-8/.env"
-if wtrm review-pr-8 >/dev/null 2>&1; then
-  fail "wtrm should refuse a review worktree with a modified seed file"
-fi
-print 'seeded secret' > "$project/review-pr-8/.env"
-
-export GH_PR_STATE=MERGED
-wtprune -n -m -y >/dev/null
-[[ ! -d $project/review-pr-8 ]] || fail "wtprune --merged should remove a clean merged review worktree"
-git -C "$project" show-ref -q --verify refs/wt-review/pr-8/head \
-  && fail "review refs should be deleted with the worktree"
 
 # --- wtprune on branches ---
 # A pushed branch whose remote branch was deleted is "gone" and removed; a
@@ -522,13 +419,6 @@ assert_eq "$(grep '^wt: ' "$TMP/err" | grep -v '^wt: seeded ')" $'wt: opened tab
 for name in said spoken nopane broken agentless unstarted; do wtrm -f "$name" >/dev/null 2>&1; done
 [[ -z $(tab_in "$project/said")$(tab_in "$project/spoken") ]] || fail "wtrm should close the tabs opened above"
 
-# Messages carry the command's name.
-export GH_HEAD_REPO=acme/demo GH_HEAD_OWNER=contributor GH_CROSS_REPO=false GH_MAINTAIN=true
-export GH_PR_NUMBER=7 GH_PR_STATE=OPEN
-"$ROOT/config/.local/bin/wt-core" review -b 7 >/dev/null 2>"$TMP/err" || fail "wtreview -b failed: $(<"$TMP/err")"
-said "wtreview: opened tab review-pr-7 in the background"
-wtrm -f review-pr-7 >/dev/null 2>&1
-
 # With zellij.tabName "{project}: {worktree}" (ade-zjstatus can group such
 # tabs), a new tab's name has the project's too; it is still found by its
 # panes, and the messages name the worktree.
@@ -690,4 +580,4 @@ if wt -p 'x' outside >/dev/null 2>&1; then fail "wt -p outside Zellij should fai
 wt -t outside >/dev/null 2>&1
 assert_eq "$PWD" "$project/outside"
 
-print "worktree review tests: ok"
+print "worktree tests: ok"

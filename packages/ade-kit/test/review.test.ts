@@ -33,7 +33,7 @@ test("the scope: commits since the merge base with origin/HEAD, and uncommitted 
   assert.deepEqual(await scopeOf(kit, work), { dir: work, base, commits: true, uncommitted: false })
   writeFileSync(join(work, "b.txt"), "new\n")
   assert.deepEqual(await scopeOf(kit, work), { dir: work, base, commits: true, uncommitted: true })
-  // A wtreview worktree: HEAD at the merge base, the PR staged.
+  // HEAD at the merge base, a branch's changes staged (detached).
   git(work, "add", "b.txt")
   git(work, "switch", "-q", "--detach")
   git(work, "reset", "-q", "--soft", base)

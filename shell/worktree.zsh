@@ -6,13 +6,10 @@
 #   wt <branch> [base]    create/reuse a worktree for <branch> and cd into it
 #                         (seeds configured local files into new worktrees;
 #                         -s stays, -t/-b open its Zellij tab, -p prompts OpenCode)
-#   wtreview <pr>         review a GitHub PR with its changes visible in Helix
-#                         (same -s/-t/-b/-p options as wt)
-#   wtchange              turn the current review worktree into the PR branch
 #   wtrm [-f] <name>      remove a worktree by branch or directory name (and the
 #                         tabs whose panes are all inside it)
 #   wtprune [-ynm]        wtrm worktrees whose remote branch was deleted ("gone");
-#                         -m also removes merged branches/clean PR reviews (via gh)
+#                         -m also removes branches merged through a PR (via gh)
 #   wtls                  list worktrees
 #   wtconvert [-y]        convert a normal clone (CWD) into this bare/worktree layout
 #   wthelp                show help for these commands
@@ -48,8 +45,6 @@ _wt_core() {
 
 wtclone() { _wt_core clone "$@"; }
 wt() { _wt_core open "$@"; }
-wtreview() { _wt_core review "$@"; }
-wtchange() { _wt_core change "$@"; }
 wtrm() { _wt_core rm "$@"; }
 wtls() { _wt_core ls "$@"; }
 wtprune() { _wt_core prune "$@"; }
@@ -70,19 +65,13 @@ wthelp() {
      -p PROMPT          start OpenCode in a new background tab with PROMPT
      --session ID       like -p, on OpenCode conversation ID (with or without -p)
                         (outside Zellij: -t changes directory, -b stays, -p fails)
-  wtreview <pr>         create/reuse review-pr-<number> for a GitHub PR;
-                        highlights PR changes and seeds local files (needs gh);
-                        takes the same -s/-t/-b/-p options as wt
-  wtchange              convert the current review worktree to the real PR
-                        branch; preserves edits, sets upstream, and seeds files
-  wtrm [-f] <name>      remove by branch or worktree name; clean synthetic
-                        reviews are removed safely, -f discards personal edits;
-                        also closes tabs whose panes are all inside the
-                        worktree (never the tab you run it from)
+  wtrm [-f] <name>      remove by branch or worktree name (-f: even with
+                        uncommitted changes); also closes tabs whose panes are
+                        all inside the worktree (never the tab you run it from)
   wtprune [-ynm]        remove worktrees whose remote branch was deleted ("gone");
                         leaves branches that never had a remote. -n skips fetch --prune;
-                        -m/--merged also removes branches and clean review
-                        worktrees merged via a PR (GitHub only; exact head SHA);
+                        -m/--merged also removes branches merged via a PR
+                        (GitHub only; exact head SHA);
                         closes their tabs like wtrm; without -y it needs a terminal
   wtls                  list worktrees
   wtconvert [-y]        convert a normal clone (CWD) into the bare/worktree layout
@@ -98,8 +87,8 @@ wthelp() {
 # run the shell function `_fn`". Inside _fn we build an array of candidates and
 # hand them to `compadd`, which shows/inserts them.
 
-# Complete the -s/-t/-b/-p options shared by `wt` and `wtreview`. Returns 0 when
-# the current word was one of them (or the free-text prompt after -p).
+# Complete `wt`'s -s/-t/-b/-p options. Returns 0 when the current word was one
+# of them (or the free-text prompt after -p).
 _wt_landing_options() {
   if [[ ${words[CURRENT-1]} == (-p|--prompt) ]]; then
     _message 'prompt for OpenCode'
@@ -119,17 +108,6 @@ _wt() {
   compadd -a -- ${(u)branches}          # (u) = keep unique names only
 }
 (( $+functions[compdef] )) && compdef _wt wt
-
-# Complete `wtreview` with open PR numbers and descriptions (GitHub only).
-_wtreview() {
-  _wt_landing_options && return
-  local -a prs
-  (( $+commands[gh] )) || return 0
-  prs=(${(f)"$(gh pr list --state open --json number,title,headRefName \
-    --jq '.[] | "\(.number):\(.headRefName) — \(.title)"' 2>/dev/null)"})
-  _describe 'pull request' prs
-}
-(( $+functions[compdef] )) && compdef _wtreview wtreview
 
 # Complete `wtrm` with existing worktree directory and branch names.
 _wtrm() {

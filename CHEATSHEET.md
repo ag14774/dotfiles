@@ -25,7 +25,7 @@ The handful you reach for constantly. Each also has a home in its tool's section
 | ★ `gu` → `Ctrl-o` | Goto **super-method** (parent class's override), then jump back |
 | ★ `j <dir>` · `ji` | zoxide jump · interactive jump (shell) |
 | ★ `wt <branch>` · `-s` · `-t` · `-b` | Worktree for a branch: cd into it · stay here · focus its tab (with OpenCode) · open that tab in the background |
-| ★ `wt -p "task" <branch>` | New background tab whose OpenCode starts on the task (`wtreview` takes the same options; `wtrm` closes the tab) |
+| ★ `wt -p "task" <branch>` | New background tab whose OpenCode starts on the task (`wtrm` closes the tab) |
 | `git diff` | Review changes (delta, side-by-side) |
 | ★ `gcai` | AI commit msg from staged diff → edit → commit (`gcai -y` = no edit; optional free-text arg adds prompt hints, e.g. `gcai 'note X is a placeholder'`) |
 
@@ -292,10 +292,6 @@ Multi-step workflows and the reasoning. The individual keys are in the tables ab
 4. **Peek one block** — ★ `+` `g` on a changed line: a floating pane shows just that hunk (delta, vs HEAD); `q` closes it.
 5. **Exact diff** — `git diff` (or `git diff HEAD`) in a pane (delta, side-by-side).
 
-### Reviewing a pull request in Helix
+### Reviewing a pull request
 
-1. **Open a highlighted review worktree** — `wtreview 123` (a PR URL also works), then open Helix there. The full PR appears in the Git gutter even though its commits are already pushed; normal worktree seed files are copied too.
-2. **Separate PR changes from your edits** — `git diff --cached` is the original PR; `git diff` is only edits made during review; `git diff HEAD` combines both. ★ `Alt-v` reviews both in tuicr.
-3. **Turn the review into a normal branch** — run `wtchange`. It preserves your edits, attaches the PR branch and its push remote, copies normal seed files, and leaves only your own edits highlighted.
-4. **Commit and update the PR** — use the normal `git add` / `gcai` / `ggpush` flow. Fork PR pushes still require GitHub permission or “Allow edits by maintainers.”
-5. **Clean up** — `wtrm review-pr-123` removes a clean review; `wtprune -m` removes clean reviews whose exact PR head was merged. Reviews with personal edits are retained.
+★ `wt -t <branch>` opens the PR's branch in its own tab (a fork's PR: `gh pr checkout <number>` inside a worktree), then ★ `Alt-v` reviews everything it changed since `origin/HEAD` in tuicr; `Alt-y`'s blue signs mark the same files.

@@ -4,15 +4,14 @@
   git symbolic-ref --quiet --short HEAD 2>/dev/null || git rev-parse --short HEAD 2>/dev/null
 }
 
-# Push/pull the configured upstream when one exists (including a contributor's
-# fork set up by `wtchange`). New branches still default to origin and record an
-# upstream so `wtprune` can later recognize a deleted remote branch. Refuse a
-# detached HEAD: in particular, a `wtreview` checkout must run `wtchange` first.
+# Push/pull the configured upstream when one exists (such as a contributor's
+# fork). New branches still default to origin and record an upstream so
+# `wtprune` can later recognize a deleted remote branch. Refuse a detached HEAD.
 ggpush() {
 	emulate -L zsh
 	local branch
 	branch=$(git symbolic-ref --quiet --short HEAD 2>/dev/null) \
-		|| { print -u2 "ggpush: detached HEAD -- run wtchange or switch to a branch first"; return 1; }
+		|| { print -u2 "ggpush: detached HEAD -- switch to a branch first"; return 1; }
 	if [[ -n $(git config --get "branch.$branch.remote" 2>/dev/null) \
 		&& -n $(git config --get "branch.$branch.merge" 2>/dev/null) ]]; then
 		git push "$@"
@@ -25,7 +24,7 @@ ggpull() {
 	emulate -L zsh
 	local branch
 	branch=$(git symbolic-ref --quiet --short HEAD 2>/dev/null) \
-		|| { print -u2 "ggpull: detached HEAD -- run wtchange or switch to a branch first"; return 1; }
+		|| { print -u2 "ggpull: detached HEAD -- switch to a branch first"; return 1; }
 	if [[ -n $(git config --get "branch.$branch.remote" 2>/dev/null) \
 		&& -n $(git config --get "branch.$branch.merge" 2>/dev/null) ]]; then
 		git pull "$@"
