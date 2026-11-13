@@ -1,7 +1,6 @@
 #!/usr/bin/env zsh
-# What the Alt-v review covers (ade review --scope, behind review.sh): the
-# commits since the merge base with origin/HEAD (-r BASE..HEAD) and
-# uncommitted changes (-w).
+# What the Alt-v review covers (`ade review --scope`): the commits since the
+# merge base with origin/HEAD (-r BASE..HEAD) and uncommitted changes (-w).
 
 set -eu
 
@@ -72,4 +71,4 @@ check "no remote, edited" "$TMP/local" "-w"
 mkdir "$TMP/plain"
 if scope "$TMP/plain" >/dev/null 2>&1; then fail "outside a repository, --scope should fail"; fi
 
-print "review scope tests: ok"
+print "ade review scope tests: ok"

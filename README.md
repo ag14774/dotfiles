@@ -111,8 +111,8 @@ plugin, also run `zsh tests/ade_plugin_smoke.zsh` (see "OpenCode agents and Zell
 After changing `packages/`, run `node --test` in each of `packages/ade-kit`,
 `packages/opencode-ade` and `packages/opencode-ade-status` (Node's own test
 runner, no dependencies), and
-`zsh tests/hx_open.zsh`, `zsh tests/opencode_send.zsh` and
-`zsh tests/review_scope.zsh`, which check `ade open` and `ade send` against a
+`zsh tests/ade_open.zsh`, `zsh tests/ade_send.zsh` and
+`zsh tests/ade_review_scope.zsh`, which check `ade open` and `ade send` against a
 stand-in for Zellij, and what `ade review` covers.
 After upgrading Zellij, Helix, Yazi or tuicr, or changing the scripts behind
 the keys, run `zsh tests/keys_smoke.zsh`: it checks `Alt-y`, Helix's `+ a` and
@@ -465,7 +465,7 @@ opens the file in the tab's editor pane (`Alt-v` brings the review back), and
 ready to send. `:q` quits without sending. `Alt-v` runs `ade review`, which
 takes the reviewer from the ADE config (tuicr; `"review": {"deliver":
 "submit"}` would send the comments instead of filling them in).
-`zsh tests/review_scope.zsh` checks what the review covers.
+`zsh tests/ade_review_scope.zsh` checks what the review covers.
 
 Yazi marks the same changes: git.yazi's yellow, green, red and magenta signs
 for uncommitted changes, and, to their left, the same signs in blue for what

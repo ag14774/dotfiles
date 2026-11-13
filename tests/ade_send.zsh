@@ -1,6 +1,6 @@
 #!/usr/bin/env zsh
-# `ade send` (behind opencode-send) pastes a code reference, and the selection
-# as a fenced block, into the OpenCode pane of the caller's tab, then focuses it.
+# `ade send` pastes a code reference, and the selection as a fenced block, into
+# the OpenCode pane of the caller's tab, then focuses it.
 
 set -eu
 
@@ -14,8 +14,7 @@ fail() {
   exit 1
 }
 
-mkdir -p "$TMP/bin" "$TMP/home/.config/zellij" "$TMP/repo/src" "$TMP/other"
-ln -s "$ROOT/config/.config/zellij/pane-id.sh" "$TMP/home/.config/zellij/"
+mkdir -p "$TMP/bin" "$TMP/home" "$TMP/repo/src" "$TMP/other"
 cat > "$TMP/bin/zellij" <<'EOF'
 #!/usr/bin/env zsh
 [[ $1 == --session ]] && shift 2
@@ -87,4 +86,4 @@ for case in "4|this tab has no OpenCode pane" "42|does not exist"; do
   [[ ! -s $FAKE_LOG ]] || fail "a refusal must not touch any pane: $(<"$FAKE_LOG")"
 done
 
-print "opencode-send tests: ok"
+print "ade send tests: ok"
