@@ -9,9 +9,9 @@ import type { TabIn } from "./actions.ts"
 import { closeTabs, tabs, workspace } from "./actions.ts"
 import { builtins } from "./builtins.ts"
 import { onPath } from "./editor.ts"
-import { labelOf, loadAgent, loadLayout, loadMultiplexer } from "./load.ts"
-import type { Kit, Layout, MultiplexerAdapter, Repository, Where, WorktreeIo } from "./types.ts"
-import { isDirectory, realPath } from "./workspace.ts"
+import { labelOf, loadAgent, loadLayout } from "./load.ts"
+import type { Kit, Layout, Repository, WorktreeIo } from "./types.ts"
+import { isDirectory, multiplexerAt, outside, realPath } from "./workspace.ts"
 
 type Env = Record<string, string | undefined>
 
@@ -74,16 +74,6 @@ export function records(porcelain: string): WorktreeRecord[] {
 }
 export const worktreeRecords = async (kit: Kit, io: Io, cwd: string, ...gitDir: string[]) =>
   records((await query(kit, io, [...gitDir, "worktree", "list", "--porcelain"], cwd)) ?? "")
-
-// The caller's multiplexer session when it runs inside the configured one;
-// otherwise why not ("not inside Zellij", or none configured).
-export async function multiplexerOf(kit: Kit, env: Env): Promise<{ adapter?: MultiplexerAdapter; where?: Where; why: string }> {
-  const adapter = await loadMultiplexer(kit)
-  if (!adapter) return { why: "no multiplexer is configured" }
-  const label = adapter.label ?? adapter.name
-  const where = adapter.here(env)
-  return where ? { adapter, where, why: "" } : { adapter, why: `not inside ${label}` }
-}
 
 // The worktree checked out on `branch`, wherever it is.
 export const worktreeOf = async (kit: Kit, io: Io, repo: Repository, branch: string) =>
@@ -267,23 +257,23 @@ const message = (error: unknown) => String((error as Error)?.message ?? error).r
 // A tab needs a multiplexer: -p/--session fail before anything is created.
 async function needsTab(kit: Kit, io: Io, name: string, landing: Landing) {
   if (!landing.prompt && !landing.session) return
-  const at = await multiplexerOf(kit, io.env).catch((error) => {
+  const at = await multiplexerAt(kit, io.env).catch((error) => {
     throw new Failed(`${name}: ${message(error)}`)
   })
   if (at.where) return
   const agent = await loadAgent(kit).then(labelOf, () => "the agent")
   const where = at.adapter ? `a ${labelOf(at.adapter)} tab` : "a new tab"
-  throw new Failed(`${name}: -p/--session start ${agent} in ${where}; ${at.why}`)
+  throw new Failed(`${name}: -p/--session start ${agent} in ${where}; ${outside(at.adapter)}`)
 }
 
 export async function land(kit: Kit, io: Io, dir: string, name: string, landing: Landing): Promise<Landed> {
   let mode = landing.mode
   if (mode === "tab" || mode === "background") {
-    const at = await multiplexerOf(kit, io.env).catch((error) => {
+    const at = await multiplexerAt(kit, io.env).catch((error) => {
       throw new Failed(`${name}: ${message(error)}`)
     })
     if (!at.where) {
-      io.say(`${name}: ${at.why}; ${mode === "tab" ? "changing directory" : "staying here"} instead of opening a tab`)
+      io.say(`${name}: ${outside(at.adapter)}; ${mode === "tab" ? "changing directory" : "staying here"} instead of opening a tab`)
       mode = mode === "tab" ? "cd" : "stay"
     }
   }
@@ -376,7 +366,7 @@ export async function worktreeFor(kit: Kit, io: Io, repo: Repository, arg: strin
 
 // The tabs working in worktree `dir` (none outside a multiplexer).
 async function tabsOf(kit: Kit, io: Io, dir: string) {
-  if (!(await multiplexerOf(kit, io.env).catch(() => undefined))?.where) return []
+  if (!(await multiplexerAt(kit, io.env).catch(() => undefined))?.where) return []
   const path = realPath(dir)
   return (await tabs(kit, [path], { env: io.env, cwd: io.cwd }).catch(() => ({}) as Record<string, TabIn[]>))[path] ?? []
 }
@@ -573,7 +563,7 @@ export async function list(kit: Kit, io: Io): Promise<Listed[]> {
   const found = (await worktreeRecords(kit, io, io.cwd)).filter((r) => !r.bare && isDirectory(r.path))
   const paths = found.map((r) => r.path)
   let tabsOf: Record<string, { sure: boolean }[]> = {}
-  if (paths.length && (await multiplexerOf(kit, io.env).catch(() => undefined))?.where)
+  if (paths.length && (await multiplexerAt(kit, io.env).catch(() => undefined))?.where)
     tabsOf = await tabs(kit, paths, { env: io.env, cwd: io.cwd }).catch(() => ({}))
   return Promise.all(
     found.map(async ({ path, branch }) => {

@@ -7,11 +7,11 @@ import { existsSync } from "node:fs"
 import { basename, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 import { onPath } from "./editor.ts"
-import { labelOf, loadAgent, loadEditor, loadMultiplexer, loadReviewer } from "./load.ts"
+import { labelOf, loadAgent, loadEditor, loadReviewer } from "./load.ts"
 import { isActive, paneWith, tabOf, tabsIn } from "./multiplexer.ts"
 import { reviewerEnv, scopeOf } from "./review.ts"
 import type { Agent, FileRef, Kit, Multiplexer, MultiplexerAdapter, OpenedTab, Workspace } from "./types.ts"
-import { callerFolder, isDirectory, located, realPath, sessionOf, workspaceOf, worktreesOf } from "./workspace.ts"
+import { callerFolder, isDirectory, located, multiplexerAt, outside, realPath, sessionOf, workspaceOf, worktreesOf } from "./workspace.ts"
 
 type Env = Record<string, string | undefined>
 export type Caller = { env: Env; cwd: string }
@@ -30,10 +30,9 @@ export function fileRef(arg: string, cwd: string): FileRef {
 
 // The caller's tab in its multiplexer, and the panes there are.
 async function callerTab(kit: Kit, caller: Caller, why: string) {
-  const adapter = await loadMultiplexer(kit)
+  const { adapter, where } = await multiplexerAt(kit, caller.env)
   if (!adapter) throw new Error(`${why}, and no multiplexer is configured`)
-  const where = adapter.here(caller.env)
-  if (where?.pane === undefined) throw new Error(`not inside ${labelOf(adapter)}`)
+  if (where?.pane === undefined) throw new Error(outside(adapter))
   const mux = adapter.connect(where)
   const panes = await mux.panes()
   const tab = tabOf(panes, where.pane)
@@ -44,10 +43,9 @@ async function callerTab(kit: Kit, caller: Caller, why: string) {
 // The caller's multiplexer session, for the actions on its tabs (which don't
 // need the caller's pane).
 async function callerSession(kit: Kit, caller: Caller) {
-  const adapter = await loadMultiplexer(kit)
+  const { adapter, where } = await multiplexerAt(kit, caller.env)
   if (!adapter) throw new Error("there are no tabs without a multiplexer, and none is configured")
-  const where = adapter.here(caller.env)
-  if (!where) throw new Error(`not inside ${labelOf(adapter)}`)
+  if (!where) throw new Error(outside(adapter))
   return { adapter, where, mux: adapter.connect(where) }
 }
 

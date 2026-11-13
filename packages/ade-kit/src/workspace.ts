@@ -3,7 +3,7 @@
 import { createHash } from "node:crypto"
 import { realpathSync, statSync } from "node:fs"
 import type { LoadOptions } from "./load.ts"
-import { loadMultiplexer } from "./load.ts"
+import { labelOf, loadMultiplexer } from "./load.ts"
 import { callerDir } from "./multiplexer.ts"
 import type { Kit, Multiplexer, MultiplexerAdapter, Pane, Where, Workspace } from "./types.ts"
 
@@ -41,13 +41,23 @@ export function realPath(path: string) {
   }
 }
 
+// The configured multiplexer (none for "none") and the caller's place in it
+// (none outside it).
+export async function multiplexerAt(kit: Kit, env: Env = process.env, o: LoadOptions = {}) {
+  const adapter = await loadMultiplexer(kit, o)
+  return { adapter, where: adapter?.here(env) }
+}
+
+// Why the caller has no place in a multiplexer, for messages.
+export const outside = (adapter: MultiplexerAdapter | undefined) =>
+  adapter ? `not inside ${labelOf(adapter)}` : "no multiplexer is configured"
+
 export type Located = { adapter: MultiplexerAdapter; where: Required<Where>; mux: Multiplexer }
 
 // The caller's multiplexer location, when it runs in a pane of the configured
 // one.
 export async function located(kit: Kit, env: Env = process.env, o: LoadOptions = {}): Promise<Located | undefined> {
-  const adapter = await loadMultiplexer(kit, o)
-  const where = adapter?.here(env)
+  const { adapter, where } = await multiplexerAt(kit, env, o)
   if (!adapter || where?.pane === undefined) return undefined
   return { adapter, where: { session: where.session, pane: where.pane }, mux: adapter.connect(where) }
 }
