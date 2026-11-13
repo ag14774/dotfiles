@@ -15,9 +15,7 @@ sessions that are not running:
                                     session, update its bars, then open a
                                     terminal to get it back
 
-It also takes out of saved tab names the agent status icons that the ADE
-plugin put in front of them before Zellij 0.46 drew statuses itself. Each
-changed layout keeps a copy next to it (session-layout.kdl.before-bar).
+Each changed layout keeps a copy next to it (session-layout.kdl.before-bar).
 """
 
 import os
@@ -33,9 +31,6 @@ from pathlib import Path
 
 DEV_KDL = Path(__file__).resolve().parents[2] / ".config/zellij/layouts/dev.kdl"
 BAR = re.compile(r'plugin location="([^"]*/zjstatus\.wasm)" \{')
-# A tab name starting with a status icon (bell, times-circle, check,
-# timer-sand) and a space.
-MARKED_TAB = re.compile('(tab name=")[\uf0f3\uf057\uf00c\U000f051f] ')
 UTF8 = "utf-8"
 
 
@@ -90,7 +85,7 @@ def with_bar(layout, url, options):
         inner = "".join(f"{indent}    {line}\n" for line in options) if saved else ""
         out += [layout[pos : match.start()], f'plugin location="{url}" {{\n{inner}{indent}}}']
         pos = end
-    return MARKED_TAB.sub(r"\1", "".join(out) + layout[pos:])
+    return "".join(out) + layout[pos:]
 
 
 def indexed_names(folder):
