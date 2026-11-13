@@ -43,10 +43,10 @@ test("an unknown built-in name, or something that is neither a name nor a path, 
 })
 
 test("a path loads that file, which gets the kit", async () => {
-  const path = adapter("mine", fake(`api: 1, layout: kit.config.zellij.layout, ${mux}`))
+  const path = adapter("mine", fake(`api: 1, layout: kit.config.worktrees.layout, ${mux}`))
   const loaded = (await loadAdapter(kitWith(path), "multiplexer", path)) as { name: string; layout: string }
   assert.equal(loaded.name, "fake")
-  assert.equal(loaded.layout, "dev")
+  assert.equal(loaded.layout, "bare")
   assert.equal((await loadMultiplexer(kitWith(path)))?.name, "fake")
 })
 

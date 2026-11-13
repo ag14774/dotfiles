@@ -3,13 +3,13 @@ import { readFileSync } from "node:fs"
 import { test } from "node:test"
 import { DEFAULTS } from "../src/config.ts"
 import { makeKit } from "../src/kit.ts"
-import zellij, { parsePanes, parseTabs } from "../src/multiplexers/zellij.ts"
+import zellij, { DEFAULTS as ZELLIJ, optionsOf, parsePanes, parseTabs } from "../src/multiplexers/zellij.ts"
 import type { RunResult } from "../src/types.ts"
 
 const fixture = (name: string) => readFileSync(new URL(`fixtures/${name}`, import.meta.url), "utf8")
 
 test("list-panes --json: terminal panes with their roles, directories and states", () => {
-  assert.deepEqual(parsePanes(fixture("zellij-list-panes.json"), DEFAULTS.zellij.panes), [
+  assert.deepEqual(parsePanes(fixture("zellij-list-panes.json"), ZELLIJ.panes), [
     { id: "0", tab: "0", role: "shell", cwd: "/work/A", running: true, floating: false, focused: false },
     { id: "1", tab: "0", role: "agent", cwd: "/work/A", running: true, floating: false, focused: false },
     { id: "2", tab: "0", role: "editor", cwd: "/work/A", running: true, floating: false, focused: false },
@@ -224,7 +224,7 @@ test("openTab with an agent: no agent pane in the new tab (after a while), or th
 
 test("openTab names the tab from the tabName option", async () => {
   const calls: string[][] = []
-  const config = { ...DEFAULTS, zellij: { ...DEFAULTS.zellij, tabName: "{project}: {worktree}" } }
+  const config = { ...DEFAULTS, zellij: { tabName: "{project}: {worktree}" } }
   const kit = makeKit({
     config,
     run: async (argv) => {
@@ -238,4 +238,19 @@ test("openTab names the tab from the tabName option", async () => {
     ["git", "-C", "/home/me/dotfiles/feat", "rev-parse", "--path-format=absolute", "--git-common-dir"],
     ["zellij", "--session", "test", "action", "new-tab", "--layout", "dev", "--name", "dotfiles: feat", "--cwd", "/home/me/dotfiles/feat", "--no-focus"],
   ])
+})
+
+test("the zellij section merges over the defaults key by key; wrong types are refused", () => {
+  const kitWith = (zellij: unknown) => makeKit({ config: { ...DEFAULTS, zellij }, run: async () => ({ ok: true, stdout: "", stderr: "" }) })
+  assert.deepEqual(optionsOf(kitWith(undefined)), ZELLIJ)
+  assert.deepEqual(optionsOf(kitWith({ panes: { agent: "claude" } })), {
+    layout: "dev",
+    panes: { agent: "claude", shell: "main", editor: "editor", review: "review" },
+    tabName: "{worktree}",
+  })
+  assert.equal(ZELLIJ.panes.agent, "opencode")
+  assert.throws(() => zellij(kitWith({ panes: { agent: null } })), /in the ADE config, these must be strings: zellij\.panes\.agent$/)
+  assert.throws(() => optionsOf(kitWith({ panes: [] })), /strings: zellij\.panes$/)
+  assert.throws(() => optionsOf(kitWith({ tabName: null, layout: 1 })), /strings: zellij\.layout, zellij\.tabName$/)
+  assert.throws(() => optionsOf(kitWith("dev")), /strings: zellij\.layout, zellij\.tabName, zellij\.panes$/)
 })

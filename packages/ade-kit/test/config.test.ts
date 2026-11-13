@@ -15,18 +15,13 @@ const configHome = (text?: string) => {
   return home
 }
 
-test("the defaults are today's setup", () => {
+test("the defaults: Zellij, Helix, OpenCode, tuicr, the bare layout", () => {
   assert.deepEqual(DEFAULTS, {
     multiplexer: "zellij",
     editor: "helix",
     agent: "opencode",
     reviewer: "tuicr",
     review: { deliver: "insert" },
-    zellij: {
-      layout: "dev",
-      panes: { agent: "opencode", shell: "main", editor: "editor", review: "review" },
-      tabName: "{worktree}",
-    },
     worktrees: { layout: "bare", base: "origin/HEAD", seed: [".env", ".env.*", ".envrc", "pyrightconfig.json"] },
   })
 })
@@ -34,8 +29,8 @@ test("the defaults are today's setup", () => {
 test("without a config file, the defaults apply (as a copy)", () => {
   const config = readConfig({ XDG_CONFIG_HOME: configHome() })
   assert.deepEqual(config, DEFAULTS)
-  config.zellij.panes.agent = "changed"
-  assert.equal(DEFAULTS.zellij.panes.agent, "opencode")
+  config.worktrees.seed.push("changed")
+  assert.deepEqual(DEFAULTS.worktrees.seed, [".env", ".env.*", ".envrc", "pyrightconfig.json"])
 })
 
 test("the config file is found through XDG_CONFIG_HOME, else ~/.config", () => {
@@ -47,13 +42,10 @@ test("the config file is found through XDG_CONFIG_HOME, else ~/.config", () => {
 })
 
 test("settings merge into the defaults key by key, and other sections are kept", () => {
-  const settings = { zellij: { panes: { agent: "claude" } }, opencode: { command: ["opencode-pane"] } }
+  const settings = { worktrees: { base: "origin/develop" }, zellij: { panes: { agent: "claude" } }, opencode: { command: ["opencode-pane"] } }
   const config = readConfig({ XDG_CONFIG_HOME: configHome(JSON.stringify(settings)) })
-  assert.deepEqual(config.zellij, {
-    layout: "dev",
-    panes: { agent: "claude", shell: "main", editor: "editor", review: "review" },
-    tabName: "{worktree}",
-  })
+  assert.deepEqual(config.worktrees, { layout: "bare", base: "origin/develop", seed: [".env", ".env.*", ".envrc", "pyrightconfig.json"] })
+  assert.deepEqual(config.zellij, { panes: { agent: "claude" } })
   assert.equal(config.multiplexer, "zellij")
   assert.deepEqual(config.opencode, { command: ["opencode-pane"] })
 })
@@ -64,11 +56,9 @@ test("a broken config file is refused, naming the file and the problem", () => {
     error.message.includes(join(broken, "ade", "config.json")) && error.message.includes("not valid JSON"))
   assert.throws(() => readConfig({ XDG_CONFIG_HOME: configHome("[1, 2]") }), /must hold a JSON object/)
   assert.throws(
-    () => readConfig({ XDG_CONFIG_HOME: configHome('{"multiplexer": 1, "editor": [], "agent": {}, "reviewer": 2, "zellij": {"panes": {"agent": null}}}') }),
-    /these must be strings: multiplexer, editor, agent, reviewer, zellij\.panes\.agent$/,
+    () => readConfig({ XDG_CONFIG_HOME: configHome('{"multiplexer": 1, "editor": [], "agent": {}, "reviewer": 2}') }),
+    /these must be strings: multiplexer, editor, agent, reviewer$/,
   )
-  assert.throws(() => readConfig({ XDG_CONFIG_HOME: configHome('{"zellij": {"panes": []}}') }), /strings: zellij\.panes$/)
-  assert.throws(() => readConfig({ XDG_CONFIG_HOME: configHome('{"zellij": {"tabName": null}}') }), /strings: zellij\.tabName$/)
   assert.throws(() => readConfig({ XDG_CONFIG_HOME: configHome('{"review": {"deliver": "send"}}') }), /review\.deliver must be "insert" or "submit"$/)
   assert.throws(() => readConfig({ XDG_CONFIG_HOME: configHome('{"worktrees": {"layout": 1, "base": null}}') }), /strings: worktrees\.layout, worktrees\.base$/)
   assert.throws(() => readConfig({ XDG_CONFIG_HOME: configHome('{"worktrees": {"seed": ".env"}}') }), /worktrees\.seed must be a list of strings$/)

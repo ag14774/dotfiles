@@ -3,7 +3,7 @@ import { execFile } from "node:child_process"
 import { basename, dirname } from "node:path"
 import { pasteAgent } from "./agent.ts"
 import { builtin } from "./builtins.ts"
-import { readConfig } from "./config.ts"
+import { merge, readConfig } from "./config.ts"
 import { typedEditor } from "./editor.ts"
 import type { Config, Key, Kit, RunOptions, RunResult } from "./types.ts"
 
@@ -68,6 +68,7 @@ export function makeKit(
     run: o.run ?? run,
     quote,
     keys,
+    options: <T>(name: string, defaults: T) => merge(structuredClone(defaults), kit.config[name]) as T,
     tabName: (template, dir) => tabName(kit.run, template, dir),
     typedEditor,
     pasteAgent,

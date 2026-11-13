@@ -180,15 +180,8 @@ export interface Layout {
   prepare?(repo: Repository, dir: string, io: WorktreeIo): Promise<void>
 }
 
-// The ADE config (config.ts): choices, and options sections for adapters.
-export type ZellijOptions = {
-  layout: string
-  panes: Record<Role, string> // pane names, by role
-  // The name of a worktree's tab (see Kit's tabName): "{project}: {worktree}"
-  // groups each project's tabs in ade-zjstatus. Names are only shown: tabs
-  // are found by their panes' folders.
-  tabName: string
-}
+// The ADE config (config.ts): choices, the worktree commands' options, and
+// a section of options per adapter, which the adapter reads (Kit's options).
 // The worktree commands (worktrees.ts).
 export type WorktreeOptions = {
   // Where new repositories' worktrees go: a built-in layout (bare, sibling,
@@ -207,7 +200,6 @@ export type Config = {
   // How review comments reach the agent: "insert" fills in its input for you
   // to send, "submit" sends them.
   review: { deliver: "insert" | "submit" }
-  zellij: ZellijOptions
   worktrees: WorktreeOptions
   [section: string]: unknown
 }
@@ -226,6 +218,9 @@ export type Kit = {
     single(text: string): string // '...', with '' for a ' inside
   }
   keys: { escape: Key; enter: Key; text(text: string): Key }
+  // An adapter's options: the config's section `name` merged over `defaults`
+  // (objects key by key; anything else replaces the default). Unchecked.
+  options<T>(name: string, defaults: T): T
   // A tab's name for the worktree `dir`, from a template: {worktree} is the
   // worktree folder's name, {project} its repository's root folder's.
   tabName(template: string, dir: string): Promise<string>

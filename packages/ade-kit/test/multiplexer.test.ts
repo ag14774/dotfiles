@@ -1,15 +1,14 @@
 import assert from "node:assert/strict"
 import { readFileSync } from "node:fs"
 import { test } from "node:test"
-import { DEFAULTS } from "../src/config.ts"
 import { callerDir, isActive, paneWith, tabOf, tabsIn } from "../src/multiplexer.ts"
-import { parsePanes, parseTabs } from "../src/multiplexers/zellij.ts"
+import { DEFAULTS as ZELLIJ, parsePanes, parseTabs } from "../src/multiplexers/zellij.ts"
 import type { Pane } from "../src/types.ts"
 
 // A Zellij session: tab 0 in /work/A (main, opencode, editor, a stopped pane
 // that has focus, a floating review pane in /work/B), tab 1 in /work/B.
 const fixture = (name: string) => readFileSync(new URL(`fixtures/${name}`, import.meta.url), "utf8")
-const panes = parsePanes(fixture("zellij-list-panes.json"), DEFAULTS.zellij.panes)
+const panes = parsePanes(fixture("zellij-list-panes.json"), ZELLIJ.panes)
 const tabs = parseTabs(fixture("zellij-list-tabs.json"))
 
 const pane = (id: string, tab: string, cwd: string | undefined, more: Partial<Pane> = {}): Pane => ({
