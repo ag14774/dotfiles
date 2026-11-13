@@ -21,7 +21,8 @@ commands (interactive shell equivalent in parentheses):
                             its tabs, except the tab of the caller (wtrm)
   ls [--json]               list worktrees (wtls); --json for programs
   prune [-y] [-n] [-m]      remove deleted-remote/merged worktrees (wtprune)
-  convert [-y]              convert the normal clone in CWD (wtconvert)
+  convert [-y]              convert the normal clone in CWD to the configured
+                            layout (wtconvert)
   help                      show this help
 
 LAND (open) chooses what happens after the worktree exists:

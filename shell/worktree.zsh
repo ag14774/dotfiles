@@ -11,7 +11,7 @@
 #   wtprune [-ynm]        wtrm worktrees whose remote branch was deleted ("gone");
 #                         -m also removes branches merged through a PR (via gh)
 #   wtls                  list worktrees
-#   wtconvert [-y]        convert a normal clone (CWD) into this bare/worktree layout
+#   wtconvert [-y]        convert a normal clone (CWD) to the configured layout
 #   wthelp                show help for these commands
 #
 # The implementation is `ade worktree` (packages/ade-kit/src/worktree-cli.ts),
@@ -75,8 +75,10 @@ wthelp() {
                         (GitHub only; exact head SHA);
                         closes their tabs like wtrm; without -y it needs a terminal
   wtls                  list worktrees
-  wtconvert [-y]        convert a normal clone (CWD) into the bare/worktree layout
-                        (needs a clean tree; keeps ignored files; stashes survive)
+  wtconvert [-y]        convert a normal clone (CWD) to the configured layout:
+                        bare (needs a clean tree; keeps ignored files, stashes
+                        and its other worktrees), or sibling/inside (moves
+                        its worktrees where they go); refused once converted
   <common-dir>/wt-seed  one relative path/glob per line; replaces $WT_SEED
   WT_SEED_FILE=<path>   use an explicit seed manifest for the next `wt`
   wthelp                show this help'

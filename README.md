@@ -471,8 +471,13 @@ Where `wt` puts worktrees is the ADE config's `worktrees.layout`:
   name) => ... })`.
 
 In a bare repository, `sibling` and `inside` also use `project/<branch>`.
-`wtclone` clones as the layout says (`sibling` and `inside`: a normal clone);
-only `bare` converts a clone. A repository keeps its layout when the config
+`wtclone` clones as the layout says (`sibling` and `inside`: a normal clone).
+`wtconvert` converts a normal clone ade hasn't set up (one made with `git
+clone`, say) to the configured layout: to `bare` as described above (the
+clone's other worktrees stay where they are and keep working; a worktree inside
+the clone is already where `bare` puts it); to `sibling` or `inside` by moving
+its worktrees where that layout puts them. It refuses a bare repository, or one
+already recorded with that layout. A repository keeps its layout when the config
 changes: ade records it in the repository's own git config (`ade.layout`) when
 it clones the repository or makes its first worktree there, and before that
 goes by where the repository's worktrees already are. `git config ade.layout

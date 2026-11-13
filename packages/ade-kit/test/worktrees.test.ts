@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
 import { execFileSync } from "node:child_process"
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs"
+import { mkdirSync, mkdtempSync, readdirSync, realpathSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { test } from "node:test"
@@ -298,6 +298,78 @@ test("a new repository takes the configured layout and keeps it when the config 
   git(cloned, "clone", "-q", origin, "custom")
   assert.deepEqual(await open(kitLaid({ layout: mine }), ioIn(join(cloned, "custom")).io, ["-s", "five"]), { dir: join(cloned, "custom-wt", "five"), cd: false })
   assert.equal(layoutOf(join(cloned, "custom")), mine)
-  // Only the bare layout converts a clone.
-  await assert.rejects(convert(kitLaid({ layout: "sibling" }), ioIn(join(cloned, "fresh")).io, ["-y"]), new Failed("wtconvert: the sibling layout has no conversion (the bare layout has)"))
+})
+
+test("wtconvert into bare: the clone's worktrees stay and work; a folder named like the branch; a hook's file kept", async () => {
+  const dir = join(temp, "converts")
+  mkdirSync(dir)
+  // Worktrees inside the clone (as wt made them there) and beside it.
+  const c1 = join(dir, "c1")
+  git(dir, "clone", "-q", origin, "c1")
+  git(c1, "worktree", "add", "-q", "-b", "nested", "nested")
+  git(c1, "worktree", "add", "-q", "-b", "side", "../c1.side")
+  writeFileSync(join(c1, "nested", "wip.txt"), "wip\n")
+  let r = ioIn(c1)
+  assert.deepEqual(await convert(kitLaid({}), r.io, ["-y"]), { dir: join(c1, "main"), cd: true })
+  assert.ok(r.said.includes("  relinked 2 existing worktree(s)"), r.said.join("\n"))
+  assert.equal(git(join(c1, "nested"), "status", "--porcelain"), "?? wip.txt\n")
+  assert.equal(git(join(dir, "c1.side"), "symbolic-ref", "--short", "HEAD"), "side\n")
+  assert.deepEqual(readdirSync(c1).sort(), [".bare", ".git", "main", "nested"])
+  assert.equal(layoutOf(c1), "bare")
+  // The branch is called like one of the clone's folders.
+  const c2 = join(dir, "c2")
+  git(dir, "clone", "-q", origin, "c2")
+  git(c2, "switch", "-q", "-c", "docs")
+  mkdirSync(join(c2, "docs"))
+  writeFileSync(join(c2, "docs", "readme"), "docs\n")
+  git(c2, "add", "docs")
+  git(c2, "commit", "-q", "-m", "docs")
+  assert.deepEqual(await convert(kitLaid({}), ioIn(c2).io, ["-y"]), { dir: join(c2, "docs"), cd: true })
+  assert.equal(git(join(c2, "docs"), "symbolic-ref", "--short", "HEAD"), "docs\n")
+  assert.deepEqual(readdirSync(join(c2, "docs")).sort(), [".git", "docs"])
+  // A checkout hook makes .venv in the new worktree: the clone's own is kept beside it.
+  const c3 = join(dir, "c3")
+  git(dir, "clone", "-q", origin, "c3")
+  writeFileSync(join(c3, ".gitignore"), ".venv/\n")
+  git(c3, "add", ".gitignore")
+  git(c3, "commit", "-q", "-m", "ignore")
+  mkdirSync(join(c3, ".venv"))
+  writeFileSync(join(c3, ".venv", "old"), "mine\n")
+  writeFileSync(join(c3, ".git", "hooks", "post-checkout"), "#!/bin/sh\nmkdir -p .venv && : > .venv/made\n", { mode: 0o755 })
+  r = ioIn(c3)
+  await convert(kitLaid({}), r.io, ["-y"])
+  assert.ok(r.said.includes("  kept (already in the worktree): .venv -> .venv.wtconvert-kept"), r.said.join("\n"))
+  assert.deepEqual([readdirSync(join(c3, "main", ".venv")), readdirSync(join(c3, "main", ".venv.wtconvert-kept"))], [["made"], ["old"]])
+})
+
+test("wtconvert into sibling or inside: worktrees move where the layout puts them; refused when done already", async () => {
+  const dir = join(temp, "relayouts")
+  mkdirSync(dir)
+  const s1 = join(dir, "s1")
+  git(dir, "clone", "-q", origin, "s1")
+  git(s1, "worktree", "add", "-q", "-b", "nested", "nested")
+  writeFileSync(join(s1, "nested", "wip.txt"), "wip\n")
+  await assert.rejects(convert(kitLaid({ layout: "sibling" }), ioIn(s1).io, []), new Failed("wtconvert: no terminal to confirm; rerun with -y"))
+  // From inside the worktree that moves: you land in its new place.
+  let r = ioIn(join(s1, "nested"))
+  assert.deepEqual(await convert(kitLaid({ layout: "sibling" }), r.io, ["-y"]), { dir: join(dir, "s1.nested"), cd: true })
+  assert.deepEqual(r.said.filter((said) => !said.startsWith("HEAD")), [
+    "convert to the sibling layout:",
+    `  repo:   ${s1}`,
+    `  move:   ${join(s1, "nested")}  ->  ${join(dir, "s1.nested")}`,
+    `done: ${s1} uses the sibling layout`,
+  ])
+  assert.equal(git(join(dir, "s1.nested"), "status", "--porcelain"), "?? wip.txt\n")
+  assert.equal(git(s1, "status", "--porcelain"), "")
+  assert.equal(layoutOf(s1), "sibling")
+  await assert.rejects(convert(kitLaid({ layout: "sibling" }), ioIn(s1).io, ["-y"]), new Failed(`wtconvert: ${s1} uses the sibling layout already`))
+  // inside: into .worktrees, which git status doesn't show.
+  const i1 = join(dir, "i1")
+  git(dir, "clone", "-q", origin, "i1")
+  git(i1, "worktree", "add", "-q", "-b", "nested", "nested")
+  assert.deepEqual(await convert(kitLaid({ layout: "inside" }), ioIn(i1).io, ["-y"]), { dir: i1, cd: true })
+  assert.equal(git(join(i1, ".worktrees", "nested"), "symbolic-ref", "--short", "HEAD"), "nested\n")
+  assert.equal(git(i1, "status", "--porcelain"), "")
+  // A bare repository was converted already.
+  await assert.rejects(convert(kitLaid({ layout: "sibling" }), ioIn(join(project, "main")).io, ["-y"]), new Failed(`wtconvert: ${project} is a bare repository (already converted?)`))
 })

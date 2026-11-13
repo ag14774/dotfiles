@@ -9,7 +9,7 @@ import type { TabIn } from "./actions.ts"
 import { closeTabs, tabs, workspace } from "./actions.ts"
 import { onPath } from "./editor.ts"
 import { labelOf, loadAgent, loadLayout, loadMultiplexer } from "./load.ts"
-import type { Kit, MultiplexerAdapter, Repository, Where, WorktreeIo } from "./types.ts"
+import type { Kit, Layout, MultiplexerAdapter, Repository, Where, WorktreeIo } from "./types.ts"
 import { isDirectory, realPath } from "./workspace.ts"
 
 type Env = Record<string, string | undefined>
@@ -309,9 +309,10 @@ export async function layoutFor(kit: Kit, io: Io, repo: Repository) {
   return { layout: await loadLayout(kit, best.choice), choice: best.choice, recorded: false }
 }
 
-// Remember a repository's layout in its own git config (never --global).
+// Remember a repository's layout in its own git config (never --global),
+// from its folder: the caller's may be gone (moved or converted away).
 const record = (kit: Kit, io: Io, repo: Repository, choice: string) =>
-  query(kit, io, ["--git-dir", repo.common, "config", "ade.layout", choice])
+  query(kit, io, ["--git-dir", repo.common, "config", "ade.layout", choice], repo.root)
 
 // wt: the worktree for a branch, created if needed (a local branch as it is;
 // one only on origin, tracking it; else a new branch from `base`, default the
@@ -486,13 +487,59 @@ export async function clone(kit: Kit, io: Io, args: string[]) {
   if (repo) await record(kit, io, repo, choice)
 }
 
-// wtconvert: the normal clone you are in, laid out for worktrees as the
-// config says (-y: without asking first).
+// Into a layout without a conversion of its own (sibling, inside, yours): the
+// clone stays as it is; its worktrees move to where the layout puts them.
+// Refused for a bare repository, or one recorded with this layout already.
+// Lands where the caller's folder is now.
+async function relayout(kit: Kit, io: Io, layout: Layout, choice: string, yes: boolean): Promise<Landed> {
+  const repo = await repositoryOf(kit, io)
+  if (!repo || line(await query(kit, io, ["rev-parse", "--is-inside-work-tree"])) !== "true")
+    throw new Failed("wtconvert: run this inside a normal (non-bare) git clone")
+  const label = labelOf(layout)
+  if (repo.bare) throw new Failed(`wtconvert: ${repo.root} is a bare repository (already converted?)`)
+  if (line(await query(kit, io, ["--git-dir", repo.common, "config", "--get", "ade.layout"])) === choice)
+    throw new Failed(`wtconvert: ${repo.root} uses the ${label} layout already`)
+  const moves = (await worktreeRecords(kit, io, repo.root))
+    .slice(1)
+    .flatMap(({ path, branch }) => (branch ? [{ from: path, to: layout.path(repo, branch.replaceAll("/", "-")) }] : []))
+    .filter(({ from, to }) => realPath(to) !== realPath(from))
+  io.say(`convert to the ${label} layout:`)
+  io.say(`  repo:   ${repo.root}`)
+  for (const { from, to } of moves) io.say(`  move:   ${from}  ->  ${to}`)
+  if (!yes) {
+    if (!io.confirm) throw new Failed("wtconvert: no terminal to confirm; rerun with -y")
+    if (!(await io.confirm("proceed? [y/N] "))) {
+      io.say("aborted")
+      throw new Failed()
+    }
+  }
+  let failed = false
+  let here = io.cwd
+  for (const { from, to } of moves) {
+    if (existsSync(to)) {
+      io.say(`wtconvert: ${to} exists; ${from} stays where it is`)
+      failed = true
+      continue
+    }
+    mkdirSync(dirname(to), { recursive: true })
+    await layout.prepare?.(repo, to, io)
+    if (!(await loud(kit, io, ["worktree", "move", from, to], repo.root))) failed = true
+    else if (here === from || here.startsWith(`${from}/`)) here = join(to, here.slice(from.length))
+  }
+  await record(kit, io, repo, choice)
+  io.say(`done: ${repo.root} uses the ${label} layout`)
+  if (failed) throw new Failed()
+  return { dir: here, cd: true }
+}
+
+// wtconvert: the normal clone you are in (one not set up for worktrees yet),
+// into the configured layout (-y: without asking first).
 export async function convert(kit: Kit, io: Io, args: string[]): Promise<Landed> {
+  const yes = args[0] === "-y" || args[0] === "--yes"
   const choice = kit.config.worktrees.layout
   const layout = await loadLayout(kit, choice)
-  if (!layout.convert) throw new Failed(`wtconvert: the ${labelOf(layout)} layout has no conversion (the bare layout has)`)
-  const dir = await layout.convert(io, { yes: args[0] === "-y" || args[0] === "--yes" })
+  if (!layout.convert) return relayout(kit, io, layout, choice, yes)
+  const dir = await layout.convert(io, { yes })
   const repo = await repositoryOf(kit, io, dir)
   if (repo) await record(kit, io, repo, choice)
   return { dir, cd: true }
