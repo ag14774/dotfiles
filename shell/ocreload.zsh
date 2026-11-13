@@ -21,11 +21,8 @@ ocreload() {
   local resolver="$HOME/.config/zellij/pane-id.sh"
   local tab id
 
-  # V2's server survives the client pane. Reload it too so config edits apply.
-  local version=$(command opencode --version 2>/dev/null)
-  if [[ $version == "opencode v2."* ]]; then
-    command opencode reload || return
-  fi
+  # The shared service outlives the pane: reload it too, so config edits apply.
+  command opencode reload || return
 
   tab=$(zellij action current-tab-info 2>/dev/null | awk '/^id:/{print $2}')
 
