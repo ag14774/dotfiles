@@ -38,9 +38,10 @@
 #   sandbox_dismiss_welcome SESSION  Esc on the welcome screen a new session
 #                                    shows, if it does (never Enter: that
 #                                    installs Zellij.app)
-#   sandbox_cleanup SESSION...       quit the sessions, stop the private service
-#                                    and what is left of the sandbox's servers,
-#                                    remove the socket dir
+#   sandbox_cleanup SESSION...       quit the sessions, stop the OpenCode apps
+#                                    still working in $TMP, then the private
+#                                    service and what is left of the sandbox's
+#                                    servers, remove the socket dir
 
 SANDBOX_ROOT=${${(%):-%x}:A:h:h:h}
 
@@ -179,13 +180,28 @@ sandbox_dismiss_welcome() { # $1 = session
   print -u2 "sandbox_dismiss_welcome: the welcome screen stayed open"
 }
 
+sandbox_apps() { # the PIDs of OpenCode apps working in the test's folder (not its service)
+  local service=
+  [[ -n ${SANDBOX_SERVICE:-} && -f $SANDBOX_SERVICE ]] && service=$(jq -r .pid "$SANDBOX_SERVICE")
+  lsof -a -c opencode -d cwd -Fpn 2>/dev/null | awk -v t="$TMP/" -v s="$service" \
+    '/^p/ { p = substr($0, 2) } /^n/ && p != s && index(substr($0, 2) "/", t) == 1 { print p }'
+}
+
 sandbox_cleanup() { # $@ = the test's sessions
   setopt local_options no_err_exit
-  local s
+  local s i
+  local -a apps
+  # The OpenCode apps go before the service: an app whose service is gone
+  # starts one itself, on the default port (yours). They end with their
+  # sessions' panes; any still working in the test's folder are stopped.
+  if [[ ${ZELLIJ_SOCKET_DIR:-} == /tmp/zjt.* ]]; then
+    for s; do zellij kill-session "$s" >/dev/null 2>&1; done
+  fi
+  for i in {1..20}; do apps=($(sandbox_apps)); (( $#apps )) || break; sleep 0.5; done
+  (( $#apps )) && kill $apps 2>/dev/null
   # By its pid: `opencode service stop` would stop yours if the environment were lost.
   [[ -n ${SANDBOX_SERVICE:-} && -f $SANDBOX_SERVICE ]] && kill "$(jq -r .pid "$SANDBOX_SERVICE")" 2>/dev/null
   [[ ${ZELLIJ_SOCKET_DIR:-} == /tmp/zjt.* ]] || return 0
-  for s; do zellij kill-session "$s" >/dev/null 2>&1; done
   pkill -f "tail -n 0 -f $TMP/keys" 2>/dev/null
   sleep 1
   pkill -f -- "--server $ZELLIJ_SOCKET_DIR/" 2>/dev/null
