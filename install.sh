@@ -226,7 +226,7 @@ zellij_version="$(zellij --version 2>/dev/null | awk '{print $2}' || true)"
 IFS=. read -r zellij_major zellij_minor _ <<<"$zellij_version"
 if [[ $zellij_major =~ ^[0-9]+$ && $zellij_minor =~ ^[0-9]+$ ]] && ((zellij_major == 0 && zellij_minor < 46)); then
   echo "WARNING: Zellij $zellij_version is older than 0.46, so the top bar shows no agent statuses." >&2
-  echo "  Upgrade Zellij, then restart it (see \"Upgrading Zellij\" in README.md)." >&2
+  echo "  Upgrade Zellij, then restart it (see \"Keeping it running\" in README.md)." >&2
 fi
 
 # A resurrected tab keeps the top bar it was saved with: give saved sessions
