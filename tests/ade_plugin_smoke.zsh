@@ -176,7 +176,7 @@ sid=$(start_conversation "$oc" "$TMP/A")
 
 step "a conversation a pane shows gets the environment instructions; one no pane shows doesn't"
 wait_for 15 has_environment "$sid" || fail "no environment instructions on the conversation"
-[[ $(environment_of "$sid") == *"inside a Zellij terminal tab"*"a Helix editor pane"*"with git, wt, zellij"*'`directory`'* ]] \
+[[ $(environment_of "$sid") == *"inside a Zellij terminal tab"*"a Helix editor pane"*"with git, ade, zellij"*'`directory`'* ]] \
   || fail "unexpected environment instructions: $(environment_of "$sid")"
 loose=$(oc_cli api POST /api/session -d "{\"location\":{\"directory\":\"$TMP/C\"}}" 2>/dev/null | jq -r '.data.id // empty')
 [[ -n $loose ]] || fail "could not create a conversation without a pane"
@@ -357,7 +357,7 @@ watch=$oc
 for p in "$oc" "$oc_2"; do zj write --pane-id "terminal_$p" 3; sleep 1; zj write --pane-id "terminal_$p" 3; done
 sleep 3
 msg=$(show "$sid" "$TMP/B/notes.md")
-[[ $msg == "No OpenCode pane in Zellij is showing this conversation"* ]] || fail "unexpected answer: $msg"
+[[ $msg == "No OpenCode pane in a multiplexer is showing this conversation"* ]] || fail "unexpected answer: $msg"
 
 # A conversation keeps the environment of the last pane that showed it (OpenCode
 # does that); one that never had a pane gets the service's, without Zellij.

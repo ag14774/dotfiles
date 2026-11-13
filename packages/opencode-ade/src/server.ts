@@ -133,7 +133,7 @@ export default Plugin.define({
         request.finish = finish
         pending.set(id, request)
         const claimTimer = setTimeout(() => {
-          if (!request.claimed) refuse("No OpenCode pane in Zellij is showing this conversation, so nothing was done.")
+          if (!request.claimed) refuse("No OpenCode pane in a multiplexer is showing this conversation, so nothing was done.")
         }, CLAIM_TIMEOUT_MS)
         const timeout = TIMEOUT_MS[action] + (copy?.compact ? COMPACT_TIMEOUT_MS : 0)
         const resultTimer = setTimeout(
@@ -273,7 +273,7 @@ export default Plugin.define({
       editor.add({
         name: "show_file",
         description:
-          "Show files to the user: open them in the Helix editor of the Zellij tab where the user is talking " +
+          "Show files to the user: open them in the editor of the terminal tab where the user is talking " +
           "to you. Use this, not a shell command, whenever the user asks to see or open a file. It never " +
           "switches the user to another tab; it reports whether the files were opened.",
         input: {
@@ -298,7 +298,7 @@ export default Plugin.define({
       editor.add({
         name: "delegate",
         description:
-          "Start work in another git worktree, in a new Zellij tab: creates (or reuses) the worktree for " +
+          "Start work in another git worktree, in a new terminal tab: creates (or reuses) the worktree for " +
           "`branch` and opens it in a background tab, where a new OpenCode conversation starts on `brief`. Use " +
           "it when the user asks to delegate something, to work on it in parallel, or to do it in a new worktree " +
           "or tab; never on your own initiative. The new conversation sees nothing of this one, so write a " +
@@ -317,7 +317,8 @@ export default Plugin.define({
             brief: { type: "string", minLength: 1, description: "The complete task for the new conversation." },
             base: {
               type: "string",
-              description: "Where a new branch starts (a branch or commit). Default: the remote's default branch.",
+              description:
+                "Where a new branch starts (a branch or commit). Default: the configured base, usually the remote's default branch.",
             },
             context: {
               type: "string",
@@ -347,7 +348,7 @@ export default Plugin.define({
         name: "status",
         description:
           "Show how this project's worktrees are doing: for each, its branch, uncommitted changes, commits " +
-          "ahead of the default branch, whether it has a Zellij tab, and its latest OpenCode conversation " +
+          "ahead of the configured base, whether it has a tab, and its latest OpenCode conversation " +
           "(working, waiting for the user, idle, failed) with the start of its last answer. Read-only. Use it " +
           "when the user asks about other worktrees, tabs or delegated tasks. For another repository's " +
           "worktrees, set `directory` to a folder in it.",

@@ -52,7 +52,7 @@ export default Plugin.define({
         }
         await new Promise((done) => setTimeout(done, 2_000))
       }
-      warn("The plugin's server part (packages/opencode-ade) is not running; see the OpenCode log.")
+      warn("The plugin's server part is not running; see the OpenCode log.")
     }
     void checkServer()
 

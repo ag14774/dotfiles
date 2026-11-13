@@ -13,11 +13,11 @@ import { environment, environmentFor } from "../src/environment.ts"
 // config (plugins/ade.ts).
 const BEFORE = [
   "This conversation is shown in OpenCode inside a Zellij terminal tab. Each tab belongs to one git worktree of",
-  "the project, managed with the user's `wt` command, and also has a shell pane and a Helix editor pane.",
+  "the project, managed with `ade worktree`, and also has a shell pane and a Helix editor pane.",
   "- To show the user a file, use the show_file tool. To see how the project's worktrees and their",
   "  conversations are doing, use the status tool.",
   "- Work in another worktree only when the user asks (for example \"delegate this\" or \"do this in a new",
-  "  worktree\"), with the delegate tool. Don't create worktrees, tabs or panes yourself (with git, wt, zellij",
+  "  worktree\"), with the delegate tool. Don't create worktrees, tabs or panes yourself (with git, ade, zellij",
   "  or OpenCode's worktree tools).",
 ].join("\n")
 
@@ -38,7 +38,7 @@ test("with the default config, the instructions are the ones attached before, an
 test("the instructions name the configured multiplexer and editor; without a multiplexer there are none", async () => {
   const text = await environmentFor(kitWith({ editor: "mitos" }))
   assert.match(text ?? "", /a shell pane and a Mitos editor pane\./)
-  assert.match(environment({ multiplexer: "tmux", command: "tmux", editor: "Emacs" }), /inside a tmux terminal tab.*an Emacs editor pane.*with git, wt, tmux$/ms)
+  assert.match(environment({ multiplexer: "tmux", command: "tmux", editor: "Emacs" }), /inside a tmux terminal tab.*an Emacs editor pane.*with git, ade, tmux$/ms)
   assert.equal(await environmentFor(kitWith({ multiplexer: "none" })), undefined)
 })
 
