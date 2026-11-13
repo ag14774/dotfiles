@@ -10,12 +10,12 @@
 #
 #   zsh tests/keys_smoke.zsh
 #
-# It drives a throwaway session through a headless terminal; every Zellij
-# command names that session. A pane running `cat` stands in for OpenCode, so
-# no model is called. Helix gets a copy of this checkout's config whose `+ a`
-# calls this checkout's opencode-send; your other ~/.config folders are used as
-# they are (Yazi's plugins live there). tuicr's records of the test's review
-# are removed afterwards.
+# It drives a throwaway session through a headless terminal, in a sandbox
+# (tests/lib/zellij-sandbox.zsh): its own Zellij server, HOME and config, so it
+# never reaches your session and leaves nothing in your Zellij cache or tuicr's
+# records. A pane running `cat` stands in for OpenCode, so no model is called.
+# The sandbox's config is this checkout's (Helix's `+ a` calling this checkout's
+# opencode-send), with the Yazi plugins and flavor you installed.
 
 set -u
 
@@ -32,32 +32,13 @@ for tool in zellij jq script tail yazi tuicr git; do
 done
 [[ -n $HELIX ]] || fail "Helix (hx or helix) is not installed"
 
-# Never inherit the session this test is started from.
-unset ZELLIJ ZELLIJ_SESSION_NAME ZELLIJ_PANE_ID
 TMP=$(mktemp -d)
 TMP=${TMP:A}
 S=keys-smoke-$$
-zellij list-sessions --no-formatting 2>/dev/null | grep -q "^$S " && fail "session $S already exists"
-
-forget_reviews() { # tuicr keeps a session file per review and an index entry
-  local f dir
-  tuicr review list --all 2>/dev/null | jq -r --arg tmp "$TMP" \
-    '.[] | select((.canonical_repo_path // .slug // "") | contains($tmp | split("/") | last)) | .path' \
-    | while IFS= read -r f; do
-      [[ -n $f ]] || continue
-      dir=${f:h:h}
-      rm -f -- "$f"
-      [[ -f $dir/index.json ]] && jq --arg tmp "${TMP:t}" \
-        '.entries |= with_entries(select([.value[]?.canonical_repo_path // ""] | map(contains($tmp)) | any | not))' \
-        "$dir/index.json" > "$dir/index.json.new" && mv "$dir/index.json.new" "$dir/index.json"
-    done
-}
+source "$ROOT/tests/lib/zellij-sandbox.zsh"
+sandbox_init "$TMP/zj"
 cleanup() {
-  zellij kill-session "$S" >/dev/null 2>&1
-  pkill -f "tail -n 0 -f $TMP/keys" 2>/dev/null
-  sleep 1
-  zellij delete-session --force "$S" >/dev/null 2>&1
-  forget_reviews
+  sandbox_cleanup "$S"
   rm -rf "$TMP"
 }
 trap cleanup EXIT
@@ -80,19 +61,23 @@ keys_to() { zj write-chars --pane-id "terminal_$(pane "$1")" "$2"; sleep "${3:-1
 enter_in() { zj write --pane-id "terminal_$(pane "$1")" 13; sleep "${2:-1}"; }
 press() { print -rn -- "$1" >> "$TMP/keys"; } # through the client: Zellij's own keys
 
-# This checkout's Zellij config, its keys pointing at this checkout's scripts.
-mkdir -p "$TMP/zj"
+# This checkout's Zellij config, its keys pointing at this checkout's scripts
+# (Alt-t's dev layout must exist for the config to load).
+mkdir -p "$TMP/zj/layouts"
+cp "$ROOT/config/.config/zellij/layouts/dev.kdl" "$TMP/zj/layouts/"
 sed "s|\$HOME/.config/zellij/|$ROOT/config/.config/zellij/|g" "$ROOT/config/.config/zellij/config.kdl" > "$TMP/zj/config.kdl"
 grep -q "$ROOT/config/.config/zellij/review.sh" "$TMP/zj/config.kdl" || fail "could not point Alt-v at this checkout"
 grep -q "$ROOT/config/.config/zellij/yazi-picker.sh" "$TMP/zj/config.kdl" || fail "could not point Alt-y at this checkout"
 
-# Your config folders, except Helix: this checkout's, with `+ a` calling this
-# checkout's opencode-send.
-mkdir -p "$TMP/config"
-for d in ~/.config/*(N); do [[ ${d:t} == helix ]] || ln -s "$d" "$TMP/config/"; done
-cp -R "$ROOT/config/.config/helix" "$TMP/config/helix"
-sed -i.orig "s|\$HOME/.local/bin/opencode-send|$ROOT/config/.local/bin/opencode-send|g" "$TMP/config/helix/config.toml"
-grep -q "$ROOT/config/.local/bin/opencode-send" "$TMP/config/helix/config.toml" || fail "could not point + a at this checkout"
+# This checkout's config, with Helix's `+ a` calling this checkout's
+# opencode-send, and the Yazi packages you installed (`ya pkg`).
+sandbox_config helix yazi tuicr fzf git ade
+for d in "$SANDBOX_REAL_HOME"/.config/yazi/{plugins,flavors}/*.yazi(N/); do
+  mkdir -p "$XDG_CONFIG_HOME/yazi/${d:h:t}"
+  [[ -e $XDG_CONFIG_HOME/yazi/${d:h:t}/${d:t} ]] || cp -R "$d" "$XDG_CONFIG_HOME/yazi/${d:h:t}/"
+done
+sed -i.orig "s|\$HOME/.local/bin/opencode-send|$ROOT/config/.local/bin/opencode-send|g" "$XDG_CONFIG_HOME/helix/config.toml"
+grep -q "$ROOT/config/.local/bin/opencode-send" "$XDG_CONFIG_HOME/helix/config.toml" || fail "could not point + a at this checkout"
 
 # A clone whose branch has a commit (a.txt changed, c.txt added) and an
 # uncommitted new file (b.txt).
@@ -120,19 +105,12 @@ layout {
 }
 EOF
 
-# A headless client in a pseudo-terminal; text appended to $TMP/keys becomes
-# keystrokes. Started in the repository: a floating pane starts in the
-# session's directory, so that is where Yazi opens.
-: > "$TMP/keys"
-cmd="stty rows 50 cols 200; exec zellij --config-dir '$TMP/zj' --session '$S' --new-session-with-layout '$TMP/layout.kdl'"
-if script --version 2>/dev/null | grep -q util-linux; then
-  (cd "$R" && tail -n 0 -f "$TMP/keys" | env TERM=xterm-256color XDG_CONFIG_HOME="$TMP/config" \
-    XDG_CACHE_HOME="$TMP/cache" script -qfc "$cmd" /dev/null >"$TMP/client.log" 2>&1 &)
-else
-  (cd "$R" && tail -n 0 -f "$TMP/keys" | env TERM=xterm-256color XDG_CONFIG_HOME="$TMP/config" \
-    XDG_CACHE_HOME="$TMP/cache" script -q /dev/null zsh -fc "$cmd" >"$TMP/client.log" 2>&1 &)
-fi
+# A headless client; text appended to $TMP/keys becomes keystrokes. Started in
+# the repository: a floating pane starts in the session's directory, so that is
+# where Yazi opens.
+sandbox_client "$R" --config-dir "$TMP/zj" --session "$S" --new-session-with-layout "$TMP/layout.kdl"
 wait_for 60 session_running || fail "the test session did not start"
+sandbox_dismiss_welcome "$S"
 wait_for 30 has_pane opencode || fail "no OpenCode stand-in pane"
 sleep 2
 
