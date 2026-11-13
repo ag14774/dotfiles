@@ -26,9 +26,9 @@ S=ade$$
 source "$ROOT/tests/lib/zellij-sandbox.zsh"
 sandbox_init "$TMP/zj"
 REAL=$SANDBOX_REAL_HOME
-mkdir -p "$TMP"/{A,B,C,zj/layouts,src/plugins} "$TMP"/oc/{data/opencode,state/opencode,cache,config}
+mkdir -p "$TMP"/{A,B,C,src/plugins} "$TMP"/oc/{data/opencode,state/opencode,cache,config}
 : > "$TMP/zj/config.kdl"
-cp "$ROOT/config/.config/zellij/layouts/dev.kdl" "$TMP/zj/layouts/"
+sandbox_layout
 for f in A/notes B/notes A/other A/bg A/two C/none; do print "I am $f" > "$TMP/$f.md"; done
 
 watch= # the OpenCode pane the current step works with

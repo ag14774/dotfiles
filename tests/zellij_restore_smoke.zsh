@@ -40,8 +40,7 @@ cleanup() {
 trap cleanup EXIT
 
 # This checkout's config, saving every second and using this checkout's hook.
-mkdir -p "$cfg/layouts"
-cp "$ROOT/config/.config/zellij/layouts/dev.kdl" "$cfg/layouts/"
+sandbox_layout
 sed "s|\$HOME/.config/zellij/resurrect-command.sh|$ROOT/config/.config/zellij/resurrect-command.sh|" \
   "$ROOT/config/.config/zellij/config.kdl" > "$cfg/config.kdl"
 grep -q "$ROOT/config/.config/zellij/resurrect-command.sh" "$cfg/config.kdl" \
@@ -114,6 +113,12 @@ saved_layout() { # the saved session's folder is named by an ID (by its name bef
   return 1
 }
 saved_has() { local f; f=$(saved_layout) && grep -q -- "$1" "$f"; }
+saved_command() { # $1=program $2=its first argument: a pane saved to run them
+  # Zellij 0.46 saves `pane command="PROGRAM" ... {` and then `args "ARG" ...`.
+  local f
+  f=$(saved_layout) && PROGRAM=$1 ARG=$2 perl -0ne \
+    'exit !/command="(?:[^"]*\/)?\Q$ENV{PROGRAM}\E"[^{\n]*\{\s*args "\Q$ENV{ARG}\E"/' "$f"
+}
 saved_resumes() { # $1=count: OpenCode panes saved to resume their conversation
   local f
   f=$(saved_layout) && (( $(grep -o -- '"--resume"' "$f" | wc -l) >= $1 ))
@@ -149,7 +154,7 @@ step "the saved layout restores Helix and OpenCode, not the shell's command"
 wait_for 60 saved_has notes.md || fail "the session was not saved with the editor's file"
 wait_for 90 saved_resumes 2 \
   || fail "the OpenCode panes were not saved as opencode-pane --resume:"$'\n'"$(saved_opencode)"
-saved_has 'sleep 9131' && fail "the shell's long command was saved to be rerun"
+saved_command sleep 9131 && fail "the shell's long command was saved to be rerun"
 
 step "kill and restore the session"
 zellij kill-session "$session" >/dev/null 2>&1

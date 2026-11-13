@@ -21,6 +21,9 @@
 #   source "$ROOT/tests/lib/zellij-sandbox.zsh"
 #   sandbox_init ZELLIJ_CONFIG_DIR   before any zellij command; the real HOME
 #                                    stays in $SANDBOX_REAL_HOME
+#   sandbox_layout                   this checkout's layouts/dev.kdl, in the test's
+#                                    Zellij config, its bar loaded from the test
+#                                    cache (below)
 #   sandbox_config NAME...           this checkout's config/.config/NAME, copied
 #                                    to ~/.config
 #   sandbox_opencode [VAR=VALUE...]  start a private OpenCode service (with
@@ -39,9 +42,33 @@
 
 SANDBOX_ROOT=${${(%):-%x}:A:h:h:h}
 
+# dev.kdl's bar, downloaded once per release into a cache of the tests' own
+# (Zellij keeps no downloaded plugins, so a new HOME would fetch it every run);
+# sets SANDBOX_BAR_URL (dev.kdl's) and SANDBOX_BAR (the local file).
+sandbox_bar() {
+  local cache tmp
+  SANDBOX_BAR_URL=$(sed -n 's/.*plugin location="\(https:[^"]*\)".*/\1/p' "$SANDBOX_ROOT/config/.config/zellij/layouts/dev.kdl" | head -n 1)
+  [[ -n $SANDBOX_BAR_URL ]] || { print -u2 "sandbox_bar: no bar URL in dev.kdl"; exit 1; }
+  cache=${XDG_CACHE_HOME:-$HOME/.cache}/dotfiles-tests/zellij-plugins
+  SANDBOX_BAR=$cache/${${SANDBOX_BAR_URL#https://}//\//_}
+  [[ -s $SANDBOX_BAR ]] && return 0
+  mkdir -p "$cache"
+  tmp=$(mktemp "$cache/download.XXXXXX")
+  print -u2 "sandbox_bar: downloading $SANDBOX_BAR_URL (once, into $cache)"
+  if curl -fsSL -o "$tmp" "$SANDBOX_BAR_URL" && [[ $(head -c 4 "$tmp" | od -An -tx1 | tr -d ' \n') == 0061736d ]]; then
+    mv "$tmp" "$SANDBOX_BAR"
+  else
+    rm -f "$tmp"
+    print -u2 "sandbox_bar: could not download the bar (a WebAssembly file) from $SANDBOX_BAR_URL"
+    exit 1
+  fi
+}
+
 sandbox_init() { # $1 = the test's Zellij config folder (becomes ~/.config/zellij)
-  local home bin url p
+  local home bin p
   [[ -n ${TMP:-} && -d $TMP && -n ${1:-} ]] || { print -u2 "sandbox_init: needs \$TMP and a config folder"; exit 1; }
+  SANDBOX_ZELLIJ_CONFIG=$1
+  sandbox_bar
   # Never inherit the session, or the OpenCode, this test is started from.
   unset ZELLIJ ZELLIJ_SESSION_NAME ZELLIJ_PANE_ID ZELLIJ_CONFIG_DIR ZELLIJ_CONFIG_FILE ZDOTDIR
   unset -m 'OPENCODE*'
@@ -56,12 +83,10 @@ sandbox_init() { # $1 = the test's Zellij config folder (becomes ~/.config/zelli
   : > "$home/.zshrc"
   ln -s "$1" "$home/.config/zellij"
   for p in "$SANDBOX_ROOT"/config/.local/bin/*(N); do ln -s "$p" "$home/.local/bin/"; done
-  url=$(sed -n 's/.*plugin location="\(https:[^"]*\)".*/\1/p' "$SANDBOX_ROOT/config/.config/zellij/layouts/dev.kdl" | head -n 1)
-  [[ -n $url ]] || { print -u2 "sandbox_init: no bar URL in dev.kdl"; exit 1; }
   # Zellij's cache folder on macOS, and on Linux.
   for p in "$home/Library/Caches/org.Zellij-Contributors.Zellij" "$home/.cache/zellij"; do
     mkdir -p "$p"
-    print -r -- "\"$url\" {
+    print -r -- "\"file:$SANDBOX_BAR\" {
     ReadApplicationState
     ChangeApplicationState
     RunCommands
@@ -99,6 +124,14 @@ EOF
     OPENCODE_DISABLE_AUTOUPDATE=true
   [[ ${commands[zellij]} == "$bin/zellij" ]] || { print -u2 "sandbox_init: the zellij guard is not first on PATH"; exit 1; }
   : > "$TMP/keys"
+}
+
+sandbox_layout() {
+  mkdir -p "$SANDBOX_ZELLIJ_CONFIG/layouts"
+  sed "s|plugin location=\"$SANDBOX_BAR_URL\"|plugin location=\"file:$SANDBOX_BAR\"|" \
+    "$SANDBOX_ROOT/config/.config/zellij/layouts/dev.kdl" > "$SANDBOX_ZELLIJ_CONFIG/layouts/dev.kdl"
+  grep -qF "file:$SANDBOX_BAR" "$SANDBOX_ZELLIJ_CONFIG/layouts/dev.kdl" \
+    || { print -u2 "sandbox_layout: could not point dev.kdl's bar at $SANDBOX_BAR"; exit 1; }
 }
 
 sandbox_config() { # $@ = folders of this checkout's config/.config

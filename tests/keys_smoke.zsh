@@ -63,8 +63,7 @@ press() { print -rn -- "$1" >> "$TMP/keys"; } # through the client: Zellij's own
 
 # This checkout's Zellij config, its keys pointing at this checkout's scripts
 # (Alt-t's dev layout must exist for the config to load).
-mkdir -p "$TMP/zj/layouts"
-cp "$ROOT/config/.config/zellij/layouts/dev.kdl" "$TMP/zj/layouts/"
+sandbox_layout
 sed "s|\$HOME/.config/zellij/|$ROOT/config/.config/zellij/|g" "$ROOT/config/.config/zellij/config.kdl" > "$TMP/zj/config.kdl"
 grep -q "$ROOT/config/.config/zellij/review.sh" "$TMP/zj/config.kdl" || fail "could not point Alt-v at this checkout"
 grep -q "$ROOT/config/.config/zellij/yazi-picker.sh" "$TMP/zj/config.kdl" || fail "could not point Alt-y at this checkout"
