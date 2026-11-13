@@ -9,7 +9,7 @@ import { makeKit, run } from "../src/kit.ts"
 import type { Config, Kit, Pane } from "../src/types.ts"
 import { worktreeCommand } from "../src/worktree-cli.ts"
 import type { Io } from "../src/worktrees.ts"
-import { clone, convert, Failed, globIn, layoutFor, list, open, parseLanding, prune, records, remove, repositoryOf, seedsFor, worktreeFor } from "../src/worktrees.ts"
+import { clone, convert, Failed, globIn, layoutFor, list, open, parseLanding, prune, query, records, remove, repositoryOf, seedsFor, worktreeFor } from "../src/worktrees.ts"
 
 const temp = realpathSync(mkdtempSync(join(tmpdir(), "ade-worktrees-")))
 const git = (cwd: string, ...args: string[]) =>
@@ -378,4 +378,11 @@ test("convert into sibling or inside: worktrees move where the layout puts them;
   assert.equal(git(i1, "status", "--porcelain"), "")
   // A bare repository was converted already.
   await assert.rejects(convert(kitLaid({ layout: "sibling" }), ioIn(join(project, "main")).io, ["-y"]), new Failed(`ade worktree convert: ${project} is a bare repository (already converted?)`))
+})
+
+test("query: git's output in English, as it is parsed", async () => {
+  const seen: (Record<string, string | undefined> | undefined)[] = []
+  const recording = makeKit({ config: structuredClone(DEFAULTS), run: async (_argv, o) => (seen.push(o?.env), { ok: true, stdout: "x\n", stderr: "" }) })
+  assert.equal(await query(recording, ioIn("/", { LANG: "de_DE.UTF-8", KEEP: "1" }).io, ["status"]), "x\n")
+  assert.deepEqual([seen[0]?.LC_ALL, seen[0]?.LANG, seen[0]?.KEEP], ["C", "de_DE.UTF-8", "1"])
 })

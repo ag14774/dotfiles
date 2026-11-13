@@ -31,10 +31,10 @@ export const COMMAND = {
 // has been shown already when the message is empty.
 export class Failed extends Error {}
 
-// A git query: its output, or undefined when it fails. No timeout: a status
-// in a big repository can be slow.
+// A git query: its output, or undefined when it fails. In English, as it is
+// parsed ("[gone]"). No timeout: a status in a big repository can be slow.
 export async function query(kit: Kit, io: Io, args: string[], cwd = io.cwd) {
-  const result = await kit.run(["git", ...args], { cwd, env: io.env, timeout: 0 })
+  const result = await kit.run(["git", ...args], { cwd, env: { ...io.env, LC_ALL: "C" }, timeout: 0 })
   return result.ok ? result.stdout : undefined
 }
 export const line = (text: string | undefined) => text?.replace(/\n$/, "")

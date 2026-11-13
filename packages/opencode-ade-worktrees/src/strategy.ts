@@ -39,9 +39,11 @@ const isDirectory = (path: string) => statSync(path, { throwIfNoEntry: false })?
 // in) are removed through this one too.
 export function strategy(o: StrategyOptions): Strategy {
   // OpenCode's service has no multiplexer of its own (it may have inherited
-  // a pane's variables): no tabs are opened or closed from here.
-  const kit = () => makeKit({ env: o.env, config: { ...readConfig(o.env), multiplexer: "none" } })
-  const io = (cwd: string, said: string[]) => ({ env: o.env, cwd, say: (line: string) => void said.push(line), passthrough: false })
+  // a pane's variables): no tabs are opened or closed from here. Git speaks
+  // English, as remove reads its messages.
+  const env = { ...o.env, LC_ALL: "C" }
+  const kit = () => makeKit({ env, config: { ...readConfig(o.env), multiplexer: "none" } })
+  const io = (cwd: string, said: string[]) => ({ env, cwd, say: (line: string) => void said.push(line), passthrough: false })
   const why = (said: string[], error: Failed) => [...said, error.message].filter(Boolean).join("\n")
   return {
     id: "git",
