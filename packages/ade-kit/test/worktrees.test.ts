@@ -9,7 +9,7 @@ import { makeKit, run } from "../src/kit.ts"
 import type { Config, Kit, Pane } from "../src/types.ts"
 import { worktreeCommand } from "../src/worktree-cli.ts"
 import type { Io } from "../src/worktrees.ts"
-import { Failed, globIn, list, open, parseLanding, records, repositoryOf, seedsFor } from "../src/worktrees.ts"
+import { Failed, globIn, list, open, parseLanding, prune, records, remove, repositoryOf, seedsFor, worktreeFor } from "../src/worktrees.ts"
 
 const temp = realpathSync(mkdtempSync(join(tmpdir(), "ade-worktrees-")))
 const git = (cwd: string, ...args: string[]) =>
@@ -197,4 +197,47 @@ test("open: a new branch from origin/HEAD, seeded, reused; git's output as messa
   assert.deepEqual(await open(kitWith(), r.io, ["-t", "topic/one"]), { dir: join(project, "topic-one"), cd: true })
   assert.deepEqual(r.said, ["wt: no multiplexer is configured; changing directory instead of opening a tab"])
   await assert.rejects(open(kitWith(), ioIn(main).io, ["-p", "go", "never"]), new Failed("wt: -p/--session start OpenCode in a new tab; no multiplexer is configured"))
+})
+
+test("worktreeFor: by branch, by folder name or by path; a name both ways is ambiguous", async () => {
+  const repo = { common: join(project, ".bare"), root: project }
+  const io = ioIn(join(project, "main")).io
+  assert.equal(await worktreeFor(kitWith(), io, repo, "topic/one"), join(project, "topic-one"))
+  assert.equal(await worktreeFor(kitWith(), io, repo, "topic-one"), join(project, "topic-one"))
+  assert.equal(await worktreeFor(kitWith(), io, repo, join(project, "feat")), join(project, "feat"))
+  assert.equal(await worktreeFor(kitWith(), io, repo, join(project, "nope")), undefined)
+  git(project, "worktree", "add", "-q", "-b", "clash", "elsewhere", "main")
+  git(project, "worktree", "add", "-q", "-b", "other", "clash", "main")
+  assert.equal(await worktreeFor(kitWith(), io, repo, "clash"), "ambiguous")
+  assert.equal(await worktreeFor(kitWith(), io, repo, "nothing"), undefined)
+})
+
+test("remove and prune: the worktree goes, with the messages wt gives", async () => {
+  const main = join(project, "main")
+  let r = ioIn(main)
+  await remove(kitWith(), r.io, [join(project, "clash")])
+  assert.deepEqual(r.said, ["removed clash"])
+  r = ioIn(main)
+  await remove(kitWith(), r.io, ["clash"]) // now only a branch's name: its worktree is elsewhere
+  assert.deepEqual(r.said, ["removed elsewhere"])
+  await assert.rejects(remove(kitWith(), ioIn(main).io, ["clash"]), new Failed("wtrm: no worktree found for 'clash'"))
+  await assert.rejects(remove(kitWith(), ioIn(main).io, []), new Failed("usage: wtrm [-f|--force] <branch|worktree>"))
+  // A pushed branch whose remote branch was deleted.
+  git(project, "worktree", "add", "-q", "-b", "done", "done", "main")
+  git(join(project, "done"), "push", "-q", "-u", "origin", "done")
+  git(origin, "branch", "-q", "-D", "done")
+  r = ioIn(main)
+  await assert.rejects(prune(kitWith(), r.io, []), new Failed("wtprune: no terminal to confirm; rerun with -y"))
+  assert.deepEqual(r.said.filter((said) => said.startsWith("wtprune:") || said.startsWith(" ")), [
+    "wtprune: git fetch --all --prune ...",
+    "wtprune: worktrees to remove:",
+    `  ${"done".padEnd(38)} (remote branch deleted)`,
+  ])
+  r = ioIn(main)
+  await prune(kitWith(), { ...r.io, confirm: async () => true }, ["-n"])
+  assert.equal(r.said.at(-1), "removed done")
+  r = ioIn(main)
+  await prune(kitWith(), r.io, ["-n", "-y"])
+  assert.deepEqual(r.said, ["wtprune: nothing to remove."])
+  await assert.rejects(prune(kitWith(), ioIn(main).io, ["-x"]), new Failed("usage: wtprune [-y] [-n|--no-fetch] [-m|--merged]"))
 })

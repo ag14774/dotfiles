@@ -17,12 +17,9 @@
 # result (a worktree path, or `ls`/`help` output), so callers can capture it.
 
 typeset -g _WT_CWD_FILE= _WT_RESULT=
-# The ade command (packages/ade-kit), next to this script, for the tabs: it
-# works before it is stowed too.
+# The ade command (packages/ade-kit), next to this script, which runs the
+# ported commands: it works before it is stowed too.
 typeset -g _WT_ADE=${0:A:h}/ade
-
-# Tabs exist only inside Zellij; ade acts on its session by name.
-_wt_in_zellij() { [[ -n ${ZELLIJ:-} && -n ${ZELLIJ_SESSION_NAME:-} ]]; }
 
 # cd here (so later messages see the new $PWD) and report the destination: to
 # the wrapper through --cwd-file, otherwise as the result on stdout.
@@ -33,29 +30,6 @@ _wt_chdir() {
   else
     _WT_RESULT=$PWD
   fi
-}
-
-# Set reply to "ID:sure" or "ID:unsure" for each tab working in worktree $1
-# (`ade tabs`): a tab with a live pane inside the worktree and no pane known to
-# be elsewhere, found by directories, which survive renamed tabs and restored
-# sessions. A live pane that reports no directory (OpenCode starting, Zellij
-# busy) could be anywhere: its tab is "unsure".
-_wt_tabs_in() { # $1=worktree
-  emulate -L zsh
-  reply=()
-  _wt_in_zellij || return 1
-  reply=(${(f)"$("$_WT_ADE" tabs "${1:A}" 2>/dev/null)"})
-  (( $#reply ))
-}
-
-# Close the tabs of removed worktree $1 that _wt_tabs_in found before it was
-# removed (`ade close-tabs`), except the caller's and those not certainly
-# inside it. OpenCode runs an agent's commands outside its pane (they carry
-# OPENCODE_TERMINAL=1) with a pane ID passed along by OpenCode, so for them,
-# and when the caller's tab ($ZELLIJ_PANE_ID's) is unknown, close nothing.
-_wt_tabs_close() { # $1=worktree, then its ID:sure|ID:unsure entries
-  "$_WT_ADE" close-tabs "$@"
-  return 0
 }
 
 # --- internal helpers (shared by wtclone + wtconvert so the two can't drift) ---
@@ -88,209 +62,6 @@ wtclone() {
   git -C "$dir" fetch origin || { print -u2 "wtclone: fetch failed"; return 1; }
   _wt_finish_bare "$dir"
   print "worktree repo ready → cd ${dir} && wt <branch>"
-}
-
-# Set REPLY to the registered worktree path for a local branch, or empty.
-_wt_worktree_for_branch() { # $1=project root $2=branch
-  emulate -L zsh
-  local proj=$1 branch=$2 line wtpath=
-  REPLY=
-  for line in ${(f)"$(git -C "$proj" worktree list --porcelain 2>/dev/null)"}; do
-    case $line in
-      ("worktree "*) wtpath=${line#worktree } ;;
-      ("branch refs/heads/$branch") REPLY=$wtpath; return 0 ;;
-    esac
-  done
-  return 1
-}
-
-# Set REPLY to a registered worktree selected by branch or directory basename.
-_wt_worktree_for_arg() { # $1=project root $2=branch-or-name
-  emulate -L zsh
-  local proj=$1 arg=$2 line wtpath= branch_path= name_path=
-  if [[ $arg == /* ]]; then
-    for line in ${(f)"$(git -C "$proj" worktree list --porcelain 2>/dev/null)"}; do
-      [[ $line == "worktree "* && ${line#worktree } == $arg ]] \
-        && { REPLY=$arg; return 0; }
-    done
-    REPLY=
-    return 1
-  fi
-  _wt_worktree_for_branch "$proj" "$arg" && branch_path=$REPLY
-  for line in ${(f)"$(git -C "$proj" worktree list --porcelain 2>/dev/null)"}; do
-    [[ $line == "worktree "* ]] || continue
-    wtpath=${line#worktree }
-    [[ $wtpath != $proj && ${wtpath:t} == $arg ]] && name_path=$wtpath
-  done
-  if [[ -n $branch_path && -n $name_path && $branch_path != $name_path ]]; then
-    REPLY=
-    return 2
-  fi
-  [[ -n $branch_path ]] && { REPLY=$branch_path; return 0; }
-  [[ -n $name_path ]] && { REPLY=$name_path; return 0; }
-  REPLY="$proj/${arg//\//-}"
-  [[ -d $REPLY ]]
-}
-
-# remove a worktree
-wtrm() {
-  emulate -L zsh
-  local force=0
-  [[ $1 == (-f|--force) ]] && { force=1; shift; }
-  local arg="$1"
-  [[ -z "$arg" ]] && { print -u2 "usage: wtrm [-f|--force] <branch|worktree>"; return 1; }
-  local common proj target
-  common=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null) \
-    || { print -u2 "wtrm: not inside a git repo"; return 1; }
-  proj=${common:h}
-  _wt_worktree_for_arg "$proj" "$arg"
-  local found=$?
-  if (( found == 2 )); then
-    print -u2 "wtrm: '$arg' matches both a branch and a worktree directory; use the absolute path"
-    return 1
-  elif (( found != 0 )); then
-    print -u2 "wtrm: no worktree found for '$arg'"
-    return 1
-  fi
-  target=$REPLY
-  # Tabs working in the worktree are left with shells in a deleted directory.
-  # Found now: once it is removed, their panes' directories are gone.
-  local -a tabs
-  _wt_tabs_in "$target" && tabs=("${reply[@]}")
-  local -a opts
-  (( force )) && opts+=(--force)
-  git -C "$proj" worktree remove $opts "$target" || return 1
-  print "removed ${target:t}"
-  (( ! $#tabs )) || _wt_tabs_close "$target" "${tabs[@]}"
-}
-
-# Is <branch> merged? Used by `wtprune --merged`. Sets $REPLY to a short reason.
-# GITHUB ONLY: asks gh for a MERGED PR whose merged commit (headRefOid) EQUALS the
-# branch tip. The exact-SHA match matters for two reasons:
-#   - name reuse: a recycled branch name must not match an OLD merged PR; and
-#   - we deliberately do NOT use ancestry (`git branch --merged` / is-ancestor of
-#     origin/HEAD). A brand-new branch with no commits is trivially an ancestor of
-#     origin/HEAD, so ancestry can't tell an empty new branch from a merged one and
-#     would delete fresh work. A merged PR matched by SHA is the only safe signal.
-_wtprune_merged() { # $1=proj  $2=gh_ok  $3=branch
-  emulate -L zsh
-  local proj=$1 gh_ok=$2 b=$3 tip pr
-  (( gh_ok )) || return 1
-  tip=$(git -C "$proj" rev-parse "refs/heads/$b" 2>/dev/null) || return 1
-  pr=$(cd "$proj" && gh pr list --head "$b" --state merged --json number,headRefOid \
-    --jq ".[] | select(.headRefOid==\"$tip\") | .number" 2>/dev/null | head -1)
-  [[ -n $pr ]] && { REPLY="merged PR #$pr"; return 0; }
-  return 1
-}
-
-# Remove worktrees you're done with. By DEFAULT that means the branch's upstream
-# was DELETED on the remote ("gone"): you were tracking origin/<b> and it's now
-# gone. Branches that never recorded an upstream are LEFT ALONE (they may be new
-# local work you haven't pushed). Runs `git fetch --prune` first (skip -n) so the
-# gone status is fresh, lists the matches, then confirms before removing.
-#
-# With -m/--merged it ALSO removes worktrees whose branch was MERGED via a PR.
-# Detection is GitHub-only and matches the exact PR head SHA; no ancestry check
-# is used because a new empty branch is trivially an ancestor of the default
-# branch.
-#   wtprune              remove worktrees whose tracked remote branch was deleted
-#   wtprune -m|--merged  ALSO remove worktrees whose branch has been merged
-#   wtprune -y           don't prompt
-#   wtprune -n           skip the fetch --prune
-wtprune() {
-  emulate -L zsh
-  local yes=0 fetch=1 merged=0 arg
-  for arg in "$@"; do
-    case $arg in
-      -y|--yes) yes=1 ;;
-      -n|--no-fetch) fetch=0 ;;
-      -m|--merged) merged=1 ;;
-      *) print -u2 "usage: wtprune [-y] [-n|--no-fetch] [-m|--merged]"; return 1 ;;
-    esac
-  done
-
-  local common proj
-  common=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null) \
-    || { print -u2 "wtprune: not inside a git repo"; return 1; }
-  proj=${common:h}
-
-  if (( fetch )); then
-    print "wtprune: git fetch --all --prune ..."
-    git -C "$proj" fetch --all --prune --quiet \
-      || print -u2 "wtprune: fetch failed; continuing with cached remote-tracking refs"
-  fi
-
-  # Default branch (origin/HEAD short name): never a removal candidate itself.
-  local def
-  def=$(git -C "$proj" symbolic-ref --quiet refs/remotes/origin/HEAD 2>/dev/null)
-  def=${def#refs/remotes/origin/}
-
-  # Branches whose upstream is configured but now gone (remote branch deleted).
-  # Skips branches with no upstream ($up empty) -- those never had a remote.
-  local -A gone
-  local line br rest up track
-  for line in ${(f)"$(git -C "$proj" for-each-ref \
-    --format='%(refname:short)%09%(upstream)%09%(upstream:track)' refs/heads 2>/dev/null)"}; do
-    br=${line%%$'\t'*}; rest=${line#*$'\t'}
-    up=${rest%%$'\t'*}; track=${rest#*$'\t'}
-    [[ -n $up && $track == *gone* ]] && gone[$br]=1
-  done
-
-  # --merged needs gh for the squash-merged/deleted case (GitHub only).
-  local gh_ok=0
-  if (( merged )); then
-    if (( $+commands[gh] )); then
-      gh_ok=1
-    else
-      print -u2 "wtprune: --merged needs gh (GitHub CLI); without it, only deleted-remote branches are removed"
-    fi
-  fi
-
-  # Walk the worktrees. A worktree is a target if its branch is gone, or (with
-  # --merged) merged. Skip the default branch and the one we're standing in.
-  local curwt; curwt=$(git rev-parse --show-toplevel 2>/dev/null)
-  local -a targets
-  local -A why
-  local wtpath= b=
-  for line in ${(f)"$(git -C "$proj" worktree list --porcelain 2>/dev/null)"}; do
-    case $line in
-      ("worktree "*) wtpath=${line#worktree }; b= ;;
-      ("branch refs/heads/"*)
-        b=${line#branch refs/heads/}
-        [[ $b == $def ]] && continue
-        if [[ -n $curwt && $wtpath == $curwt ]]; then
-          [[ -n ${gone[$b]} ]] && print -u2 "wtprune: skipping current worktree '$b' -- cd elsewhere and rerun"
-          continue
-        fi
-        if [[ -n ${gone[$b]} ]]; then
-          targets+=$wtpath
-          why[$wtpath]="remote branch deleted"
-        elif (( merged )) && _wtprune_merged "$proj" "$gh_ok" "$b"; then
-          targets+=$wtpath
-          why[$wtpath]=$REPLY
-        fi
-        ;;
-    esac
-  done
-
-  if (( ! $#targets )); then
-    print "wtprune: nothing to remove."
-    return 0
-  fi
-
-  print "wtprune: worktrees to remove:"
-  local t
-  for t in $targets; do printf '  %-38s (%s)\n' "${t:t}" "${why[$t]}"; done
-  if (( ! yes )); then
-    [[ -t 0 ]] || { print -u2 "wtprune: no terminal to confirm; rerun with -y"; return 1; }
-    print -n "remove them? [y/N] "
-    local reply; read -r reply
-    [[ $reply == [yY]* ]] || { print "aborted"; return 1; }
-  fi
-
-  local failed=0
-  for t in $targets; do wtrm "$t" || failed=1; done
-  return $failed
 }
 
 # convert a NORMAL clone (in the CWD) into the bare + worktree layout `wtclone` makes.
@@ -428,11 +199,9 @@ cmd=${1:-help}
 typeset -a cwd_file=()
 [[ -n $_WT_CWD_FILE ]] && cwd_file=(--cwd-file "$_WT_CWD_FILE")
 case $cmd in
-  ls | open) exec "$_WT_ADE" worktree "${cwd_file[@]}" "$cmd" "$@" ;;
+  ls | open | rm | prune) exec "$_WT_ADE" worktree "${cwd_file[@]}" "$cmd" "$@" ;;
   help | -h | --help) _wt_core_usage; exit ;;
   clone) fn=wtclone ;;
-  rm) fn=wtrm ;;
-  prune) fn=wtprune ;;
   convert) fn=wtconvert ;;
   *)
     print -u2 "wt-core: unknown command '$cmd' (see: wt-core help)"

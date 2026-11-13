@@ -5,10 +5,12 @@
 import { spawn } from "node:child_process"
 import { accessSync, constants, cpSync, existsSync, mkdirSync, readdirSync, readFileSync } from "node:fs"
 import { basename, dirname, join } from "node:path"
-import { tabs, workspace } from "./actions.ts"
+import type { TabIn } from "./actions.ts"
+import { closeTabs, tabs, workspace } from "./actions.ts"
+import { onPath } from "./editor.ts"
 import { labelOf, loadAgent, loadMultiplexer } from "./load.ts"
 import type { Kit, MultiplexerAdapter, Where } from "./types.ts"
-import { isDirectory } from "./workspace.ts"
+import { isDirectory, realPath } from "./workspace.ts"
 
 type Env = Record<string, string | undefined>
 
@@ -325,6 +327,126 @@ export async function open(kit: Kit, io: Io, args: string[]): Promise<Landed> {
     seed(io, from, dir, seeds)
   }
   return land(kit, io, dir, "wt", landing)
+}
+
+// The worktree `arg` names: a branch's, a folder's (by its name), or an
+// absolute path. "ambiguous" when it is a branch of one worktree and the
+// folder of another.
+export async function worktreeFor(kit: Kit, io: Io, repo: Repository, arg: string): Promise<string | "ambiguous" | undefined> {
+  const found = await worktreeRecords(kit, io, repo.root)
+  if (arg.startsWith("/")) return found.some((r) => r.path === arg) ? arg : undefined
+  const byBranch = found.find((r) => r.branch === arg)?.path
+  const byName = found.filter((r) => r.path !== repo.root && basename(r.path) === arg).at(-1)?.path
+  if (byBranch && byName && byBranch !== byName) return "ambiguous"
+  if (byBranch ?? byName) return byBranch ?? byName
+  const guess = join(repo.root, arg.replaceAll("/", "-"))
+  return isDirectory(guess) ? guess : undefined
+}
+
+// The tabs working in worktree `dir` (none outside a multiplexer).
+async function tabsOf(kit: Kit, io: Io, dir: string) {
+  if (!(await multiplexerOf(kit, io.env).catch(() => undefined))?.where) return []
+  const path = realPath(dir)
+  return (await tabs(kit, [path], { env: io.env, cwd: io.cwd }).catch(() => ({}) as Record<string, TabIn[]>))[path] ?? []
+}
+
+// wtrm: remove a worktree (-f: even with changes), then close the tabs working
+// in it, except yours (see actions.closeTabs).
+export async function remove(kit: Kit, io: Io, args: string[]) {
+  const force = args[0] === "-f" || args[0] === "--force"
+  const arg = args[force ? 1 : 0]
+  if (!arg) throw new Failed("usage: wtrm [-f|--force] <branch|worktree>")
+  const repo = await repositoryOf(kit, io)
+  if (!repo) throw new Failed("wtrm: not inside a git repo")
+  const target = await worktreeFor(kit, io, repo, arg)
+  if (target === "ambiguous") throw new Failed(`wtrm: '${arg}' matches both a branch and a worktree directory; use the absolute path`)
+  if (!target) throw new Failed(`wtrm: no worktree found for '${arg}'`)
+  // Their shells would be left in a deleted folder. Found now: once it is
+  // removed, their panes' folders are gone.
+  const found = await tabsOf(kit, io, target)
+  if (!(await loud(kit, io, ["worktree", "remove", ...(force ? ["--force"] : []), target], repo.root))) throw new Failed()
+  io.say(`removed ${basename(target)}`)
+  if (found.length)
+    await closeTabs(kit, target, found, { env: io.env, cwd: io.cwd }, io.say).catch((error) => io.say(`wtrm: ${message(error)}`))
+}
+
+// Whether `branch` was merged through a GitHub PR: one whose head is exactly
+// its tip. Not ancestry: a new branch without commits is an ancestor of the
+// default branch too, and a reused name must not match an old PR.
+async function mergedPr(kit: Kit, io: Io, repo: Repository, branch: string) {
+  const tip = line(await query(kit, io, ["rev-parse", `refs/heads/${branch}`], repo.root))
+  if (!tip) return undefined
+  const jq = `.[] | select(.headRefOid=="${tip}") | .number`
+  const args = ["pr", "list", "--head", branch, "--state", "merged", "--json", "number,headRefOid", "--jq", jq]
+  const result = await kit.run(["gh", ...args], { cwd: repo.root, env: io.env, timeout: 0 })
+  const pr = result.ok ? result.stdout.split("\n")[0] : ""
+  return pr ? `merged PR #${pr}` : undefined
+}
+
+// wtprune: remove the worktrees whose branch's remote branch was deleted (its
+// upstream is "gone"; branches that never had one are new work and stay), and
+// with -m those merged through a PR (GitHub only); never the default branch's
+// or the one you are in. Fetches with --prune first (-n: not), lists them,
+// then asks (-y: doesn't).
+export const PRUNE_USAGE = "usage: wtprune [-y] [-n|--no-fetch] [-m|--merged]"
+export async function prune(kit: Kit, io: Io, args: string[]) {
+  let yes = false
+  let fetch = true
+  let merged = false
+  for (const arg of args) {
+    if (arg === "-y" || arg === "--yes") yes = true
+    else if (arg === "-n" || arg === "--no-fetch") fetch = false
+    else if (arg === "-m" || arg === "--merged") merged = true
+    else throw new Failed(PRUNE_USAGE)
+  }
+  const repo = await repositoryOf(kit, io)
+  if (!repo) throw new Failed("wtprune: not inside a git repo")
+  if (fetch) {
+    io.say("wtprune: git fetch --all --prune ...")
+    if (!(await loud(kit, io, ["fetch", "--all", "--prune", "--quiet"], repo.root)))
+      io.say("wtprune: fetch failed; continuing with cached remote-tracking refs")
+  }
+  const head = line(await query(kit, io, ["symbolic-ref", "--quiet", "refs/remotes/origin/HEAD"], repo.root))
+  const defaultBranch = head?.replace(/^refs\/remotes\/origin\//, "")
+  const refs = (await query(kit, io, ["for-each-ref", "--format=%(refname:short)%09%(upstream)%09%(upstream:track)", "refs/heads"], repo.root)) ?? ""
+  const gone = new Set(
+    refs
+      .split("\n")
+      .map((row) => row.split("\t"))
+      .filter(([, upstream, track]) => upstream && track?.includes("gone"))
+      .map(([branch]) => branch),
+  )
+  const gh = merged && onPath(["gh"], io.env.PATH ?? "")
+  if (merged && !gh) io.say("wtprune: --merged needs gh (GitHub CLI); without it, only deleted-remote branches are removed")
+  const here = line(await query(kit, io, ["rev-parse", "--show-toplevel"]))
+  const targets: { path: string; why: string }[] = []
+  for (const { path, branch } of await worktreeRecords(kit, io, repo.root)) {
+    if (!branch || branch === defaultBranch) continue
+    if (here && path === here) {
+      if (gone.has(branch)) io.say(`wtprune: skipping current worktree '${branch}' -- cd elsewhere and rerun`)
+      continue
+    }
+    const why = gone.has(branch) ? "remote branch deleted" : gh ? await mergedPr(kit, io, repo, branch) : undefined
+    if (why) targets.push({ path, why })
+  }
+  if (!targets.length) return io.say("wtprune: nothing to remove.")
+  io.say("wtprune: worktrees to remove:")
+  for (const { path, why } of targets) io.say(`  ${basename(path).padEnd(38)} (${why})`)
+  if (!yes) {
+    if (!io.confirm) throw new Failed("wtprune: no terminal to confirm; rerun with -y")
+    if (!(await io.confirm("remove them? [y/N] "))) {
+      io.say("aborted")
+      throw new Failed()
+    }
+  }
+  let failed = false
+  for (const { path } of targets)
+    await remove(kit, io, [path]).catch((error) => {
+      if (!(error instanceof Failed)) throw error
+      if (error.message) io.say(error.message)
+      failed = true
+    })
+  if (failed) throw new Failed()
 }
 
 export type Listed = {

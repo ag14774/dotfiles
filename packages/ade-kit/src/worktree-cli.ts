@@ -7,7 +7,7 @@ import { writeFileSync } from "node:fs"
 import type { Kit } from "./types.ts"
 import type { Io } from "./worktrees.ts"
 import type { Landed } from "./worktrees.ts"
-import { Failed, list, open } from "./worktrees.ts"
+import { Failed, list, open, prune, remove } from "./worktrees.ts"
 
 export type CommandIo = Io & { out(text: string): void }
 
@@ -16,7 +16,10 @@ export const USAGE = `usage: ade worktree [--cwd-file FILE] <command> [args]
 commands (interactive shell equivalent in parentheses):
   open [LAND] <branch> [base]
                             create/reuse the worktree for <branch> (wt)
+  rm [-f] <name>            remove a worktree by branch or directory, closing
+                            its tabs, except the tab of the caller (wtrm)
   ls [--json]               list worktrees (wtls); --json for programs
+  prune [-y] [-n] [-m]      remove deleted-remote/merged worktrees (wtprune)
   help                      show this help
 
 LAND (open) chooses what happens after the worktree exists:
@@ -31,6 +34,8 @@ LAND (open) chooses what happens after the worktree exists:
   The tab of a worktree is any tab whose panes are all inside the worktree.
   Outside a multiplexer, -t and -b fall back to changing directory and staying;
   -p fails.
+
+prune without -y needs a terminal to confirm and fails otherwise.
 
 output:
   stdout                    only the result: the worktree path for open, the list
@@ -78,8 +83,14 @@ export async function worktreeCommand(kit: Kit, argv: string[], io: CommandIo): 
     switch (command) {
       case "open":
         return report(await open(kit, io, rest))
+      case "rm":
+        await remove(kit, io, rest)
+        return 0
       case "ls":
         return await ls(kit, rest, io)
+      case "prune":
+        await prune(kit, io, rest)
+        return 0
       case "help":
       case "-h":
       case "--help":
