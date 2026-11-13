@@ -158,7 +158,11 @@ worktree tabs sit together:
   tabs included, so tab numbers follow the bar.
 - In tab mode (`Ctrl-g`, `t`), `g` collapses or expands the current tab's
   group and `G` all groups (clicking a group's name does too); like `h`/`l`,
-  they stay in tab mode (`Esc` or `Enter` leaves).
+  they stay in tab mode (`Esc` or `Enter` leaves). All of a session's tabs show
+  the same collapsed groups, which survive a restart of Zellij (the bar keeps
+  them per session name in its cache folder); a new bar release starts with
+  every group at its default. With two clients attached, `g` and `G` also act
+  in the other client's tab, as Zellij doesn't say which client pressed them.
 
 The bar of the tab you are on draws all the tabs, and a tab keeps the bar it
 was opened or resurrected with (its URL and options are part of the saved
