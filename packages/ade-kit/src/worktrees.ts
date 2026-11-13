@@ -7,6 +7,7 @@ import { accessSync, constants, cpSync, existsSync, mkdirSync, readdirSync, read
 import { basename, dirname, join, resolve } from "node:path"
 import type { TabIn } from "./actions.ts"
 import { closeTabs, tabs, workspace } from "./actions.ts"
+import { builtins } from "./builtins.ts"
 import { onPath } from "./editor.ts"
 import { labelOf, loadAgent, loadLayout, loadMultiplexer } from "./load.ts"
 import type { Kit, Layout, MultiplexerAdapter, Repository, Where, WorktreeIo } from "./types.ts"
@@ -297,7 +298,6 @@ export async function land(kit: Kit, io: Io, dir: string, name: string, landing:
 }
 
 // --- Layouts: where a repository's worktrees go (layouts/).
-const LAYOUTS = ["bare", "sibling", "inside"]
 
 // A repository's layout, first match: the one recorded in its git config
 // (ade.layout, set by you or by ade when it made the repository's first
@@ -311,7 +311,7 @@ export async function layoutFor(kit: Kit, io: Io, repo: Repository) {
   const configured = kit.config.worktrees.layout
   const worktrees = (await worktreeRecords(kit, io, repo.root)).slice(1).filter((r) => !r.bare && r.branch)
   let best = { choice: configured, explains: 0 }
-  for (const choice of [configured, ...LAYOUTS.filter((name) => name !== configured)]) {
+  for (const choice of [configured, ...Object.keys(builtins("layout")).filter((name) => name !== configured)]) {
     const layout = await loadLayout(kit, choice)
     const explains = worktrees.filter((r) => realPath(layout.path(repo, (r.branch ?? "").replaceAll("/", "-"))) === realPath(r.path)).length
     if (explains > best.explains) best = { choice, explains }
