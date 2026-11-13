@@ -127,20 +127,23 @@ wait_for 60 session_running || fail "the test session did not start: $(client_lo
 sandbox_dismiss_welcome "$session"
 wait_for 60 running 0 opencode || fail "the new session did not start OpenCode"
 
-step "open a worktree tab, a file in Helix, and a long command in a shell"
+step "open a worktree tab, a long command in a shell, and a file in Helix"
 out=$(cd "$main" && in_session "$ROOT/config/.local/bin/wt-core" open -b feat 2>&1) || fail "wt -b failed: $out"
 feat_tab=$(value_of 30 tab_in "$TMP/proj/feat") \
   || fail "wt -b did not open a tab in the worktree ($out): $(panes | jq -c '[.[] | {tab_id, title, pane_cwd}]')"
 tab_info() { zj list-tabs --json 2>/dev/null | jq -r --argjson t "$feat_tab" '.[] | select(.tab_id == $t) | [.name, .active] | join(" ")'; }
 [[ $(tab_info) == "feat false" ]] || fail "wt -b should open a background tab named feat: $(tab_info)"
 main_pane=$(value_of 30 pane_field 0 main '.id') || fail "no main pane in tab 0"
+# The command first: Zellij saves only changes, so the save that records the
+# editor's file (waited for below) is one that saw the command running.
+zj write-chars --pane-id "terminal_$main_pane" 'sleep 9131'
+zj write --pane-id "terminal_$main_pane" 13
+wait_for 10 pgrep -fx 'sleep 9131' || fail "the shell did not start the long command"
 (cd "$main" && in_session env ZELLIJ_PANE_ID="$main_pane" "$ROOT/config/.local/bin/hx-open" notes.md) \
   || fail "hx-open could not open a file"
 wait_for 30 running 0 editor || fail "hx-open did not start Helix"
 wait_for 10 editor_on_top 0 \
   || fail "the new editor pane is not above main: $(panes | jq -c '[.[] | select(.is_plugin == false and .tab_id == 0) | {title, pane_y}]')"
-zj write-chars --pane-id "terminal_$main_pane" 'sleep 9131'
-zj write --pane-id "terminal_$main_pane" 13
 
 step "the saved layout restores Helix and OpenCode, not the shell's command"
 wait_for 60 saved_has notes.md || fail "the session was not saved with the editor's file"
