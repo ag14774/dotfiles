@@ -29,7 +29,7 @@ everything.
 | `ade open FILE[:LINE[:COLUMN]]...` | Open files in the editor pane of the caller's tab, starting the editor if needed. Never switches you to another tab: in a tab you are not on, it only uses an editor that is already there. Refuses when the caller's pane no longer exists. |
 | `ade send FILE [START [END [LANGUAGE]]] [< SELECTION]` | Paste a reference (`FILE:START-END`) and the selection, as a fenced block, into the tab's agent prompt and focus it. Nothing is submitted. |
 | `ade send --text [--submit] < TEXT` | Paste text as it is; `--submit` also sends it. |
-| `ade review` | Review the worktree of the pane you were in with the reviewer (a floating pane in Zellij), then give the agent your comments (`review.deliver`). One review per tab. |
+| `ade review` | Review the worktree of the pane you were in with the reviewer, in the terminal it runs in (a key can start it in a floating pane), then give the agent your comments (`review.deliver`). One review per tab: a second one shows the open review. |
 | `ade review --scope` | What a review here covers: `-r BASE..HEAD` for the commits since `worktrees.base`, `-w` for uncommitted changes. |
 | `ade workspace DIR [--background] [--session ID] [--prompt TEXT]` | Go to the tab working in `DIR`, or open one with the configured layout; a new tab's agent can start on a conversation or a prompt. Prints the tab's ID. |
 | `ade tabs DIR` / `ade tabs --json DIR...` | The tabs working in a worktree: all their running panes are inside it (`ID:sure`), or one pane didn't say where it is (`ID:unsure`). Found by folders, never by tab names. |
