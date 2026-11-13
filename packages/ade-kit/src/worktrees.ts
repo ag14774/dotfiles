@@ -355,7 +355,7 @@ export async function open(kit: Kit, io: Io, args: string[]): Promise<Landed> {
 // folder of another.
 export async function worktreeFor(kit: Kit, io: Io, repo: Repository, arg: string): Promise<string | "ambiguous" | undefined> {
   const found = await worktreeRecords(kit, io, repo.root)
-  if (arg.startsWith("/")) return found.some((r) => r.path === arg) ? arg : undefined
+  if (arg.startsWith("/")) return found.find((r) => r.path === arg || realPath(r.path) === realPath(arg))?.path
   const byBranch = found.find((r) => r.branch === arg)?.path
   const byName = found.filter((r) => r.path !== repo.root && basename(r.path) === arg).at(-1)?.path
   if (byBranch && byName && byBranch !== byName) return "ambiguous"

@@ -1,0 +1,11 @@
+{
+  "name": "opencode-ade-worktrees",
+  "version": "0.0.0",
+  "private": true,
+  "description": "OpenCode plugin: OpenCode's worktree strategy through ade-kit (the repository's layout, real branches, seeded files, wtrm's checks)",
+  "type": "module",
+  "exports": {
+    ".": "./src/server.ts"
+  },
+  "scripts": { "test": "node --test test/*.test.ts" }
+}
