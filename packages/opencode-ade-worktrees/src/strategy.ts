@@ -4,12 +4,10 @@
 // config's worktree.directory says otherwise; the name is the one you typed
 // (or a random one), so the worktree is `ade worktree open -s NAME [START]`
 // from the checkout OpenCode starts from. Its `branch` is the ref to start from.
+import { statSync } from "node:fs"
 import { homedir } from "node:os"
 import { basename, dirname, isAbsolute, join, relative } from "node:path"
-import { readConfig } from "../../ade-kit/src/config.ts"
-import { makeKit } from "../../ade-kit/src/kit.ts"
-import { isDirectory } from "../../ade-kit/src/workspace.ts"
-import { Failed, open, remove, worktreeRecords } from "../../ade-kit/src/worktrees.ts"
+import { Failed, makeKit, openWorktree, readConfig, removeWorktree, worktreeRecords } from "../../ade-kit/src/index.ts"
 
 type Env = Record<string, string | undefined>
 export type StrategyOptions = {
@@ -34,6 +32,8 @@ export function nameIn(directory: string, env: Env, projectID: string) {
   return rel && !rel.startsWith("..") && !isAbsolute(rel) ? rel : basename(directory)
 }
 
+const isDirectory = (path: string) => statSync(path, { throwIfNoEntry: false })?.isDirectory() ?? false
+
 // Registered under OpenCode's name for its own Git strategy, so that
 // worktrees it recorded with that owner (every folder a conversation opened
 // in) are removed through this one too.
@@ -49,7 +49,7 @@ export function strategy(o: StrategyOptions): Strategy {
       const said: string[] = []
       const args = ["-s", "--", nameIn(directory, o.env, o.projectID), ...(branch ? [branch] : [])]
       try {
-        return { directory: (await open(kit(), io(sourceDirectory, said), args)).dir }
+        return { directory: (await openWorktree(kit(), io(sourceDirectory, said), args)).dir }
       } catch (error) {
         throw error instanceof Failed ? new Error(why(said, error)) : error
       }
@@ -58,7 +58,7 @@ export function strategy(o: StrategyOptions): Strategy {
       const said: string[] = []
       try {
         const cwd = isDirectory(directory) ? directory : dirname(directory)
-        await remove(kit(), io(cwd, said), [...(force ? ["-f"] : []), directory])
+        await removeWorktree(kit(), io(cwd, said), [...(force ? ["-f"] : []), directory])
       } catch (error) {
         if (!(error instanceof Failed)) throw error
         const message = why(said, error)

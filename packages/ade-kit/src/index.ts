@@ -1,0 +1,15 @@
+// ade-kit's public surface: what the OpenCode plugins, and code of your own,
+// import. The rest of src/ is internal.
+export type { Caller, Sending, TabIn, Terminal, WorkspaceOptions } from "./actions.ts"
+export { closeTabs, open, review, send, tabs, workspace } from "./actions.ts"
+export { configPath, DEFAULTS, readConfig } from "./config.ts"
+export { makeKit } from "./kit.ts"
+export { labelOf, loadAgent, loadEditor, loadLayout, loadMultiplexer, loadReviewer } from "./load.ts"
+export { scopeOf } from "./review.ts"
+export type * from "./types.ts"
+export type { Located } from "./workspace.ts"
+export { callerWorkspace, located, workspaceOf } from "./workspace.ts"
+export type { CommandIo } from "./worktree-cli.ts"
+export { worktreeCommand } from "./worktree-cli.ts"
+export type { Listed, WorktreeRecord } from "./worktrees.ts"
+export { Failed, list as listWorktrees, open as openWorktree, remove as removeWorktree, worktreeRecords } from "./worktrees.ts"
