@@ -35,7 +35,10 @@ if [[ $1 == pr && $2 == view ]]; then
     print -r -- "$GH_PR_NUMBER"
   fi
 elif [[ $1 == pr && $2 == list ]]; then
-  [[ $GH_PR_STATE == MERGED ]] && print -r -- "$GH_PR_NUMBER"
+  # With GH_MERGED_OID set, only the branch whose tip it is matches (like the
+  # --jq filter on the exact head SHA).
+  [[ $GH_PR_STATE == MERGED && ( -z ${GH_MERGED_OID:-} || " $* " == *"$GH_MERGED_OID"* ) ]] \
+    && print -r -- "$GH_PR_NUMBER"
 elif [[ $1 == api && $2 == user ]]; then
   print -r -- reviewer
 else
@@ -283,6 +286,76 @@ wtprune -n -m -y >/dev/null
 [[ ! -d $project/review-pr-8 ]] || fail "wtprune --merged should remove a clean merged review worktree"
 git -C "$project" show-ref -q --verify refs/wt-review/pr-8/head \
   && fail "review refs should be deleted with the worktree"
+
+# --- wtprune on branches ---
+# A pushed branch whose remote branch was deleted is "gone" and removed; a
+# branch that never had an upstream is new work and stays, and so does one
+# whose upstream is still there. -m also removes a branch whose exact tip is a
+# merged PR's head (gh); a branch whose tip differs (a reused name) stays.
+export GH_PR_STATE=OPEN
+git -C "$project" config user.name Test
+git -C "$project" config user.email test@example.com
+pushed() { # $1 = branch: a worktree on a new branch with a commit, pushed with an upstream
+  wt -s "$1" >/dev/null 2>&1
+  print "$1" > "$project/$1/$1.txt"
+  git -C "$project/$1" add "$1.txt"
+  git -C "$project/$1" commit -qm "$1"
+  git -C "$project/$1" push -q -u origin "$1" 2>/dev/null
+}
+row() { printf '  %-38s (%s)' "$1" "$2"; } # a line of wtprune's list
+cd "$project/main"
+pushed gone-branch
+pushed kept-branch
+wt -s local-only >/dev/null 2>&1
+git --git-dir="$remote" update-ref -d refs/heads/gone-branch
+# Without a terminal to confirm (as for an agent), wtprune refuses to prompt.
+out=$(wtprune </dev/null 2>&1) && fail "wtprune without -y should need a terminal"
+assert_eq "$out" $'wtprune: git fetch --all --prune ...\nwtprune: worktrees to remove:\n'"$(row gone-branch 'remote branch deleted')"$'\nwtprune: no terminal to confirm; rerun with -y'
+[[ -d $project/gone-branch ]] || fail "an unconfirmed wtprune should remove nothing"
+out=$(wtprune -n -y 2>&1)
+assert_eq "$out" $'wtprune: worktrees to remove:\n'"$(row gone-branch 'remote branch deleted')"$'\nremoved gone-branch'
+[[ ! -d $project/gone-branch ]] || fail "wtprune should remove a worktree whose remote branch was deleted"
+[[ -d $project/kept-branch && -d $project/local-only && -d $project/main ]] \
+  || fail "wtprune should keep branches with an upstream, without one, and the default branch"
+# Not the worktree you are in.
+pushed here-gone
+git --git-dir="$remote" update-ref -d refs/heads/here-gone
+cd "$project/here-gone"
+out=$(wtprune -y 2>&1)
+assert_eq "$out" $'wtprune: git fetch --all --prune ...\nwtprune: skipping current worktree \'here-gone\' -- cd elsewhere and rerun\nwtprune: nothing to remove.'
+cd "$project/main"
+wtprune -n -y >/dev/null 2>&1
+[[ ! -d $project/here-gone ]] || fail "wtprune should remove the gone worktree once you left it"
+# -m: merged through a PR, by the exact tip.
+pushed merged-branch
+pushed reused-name
+export GH_PR_NUMBER=11 GH_PR_STATE=MERGED GH_MERGED_OID=$(git -C "$project" rev-parse merged-branch)
+out=$(wtprune -n -m -y 2>&1)
+assert_eq "$out" $'wtprune: worktrees to remove:\n'"$(row merged-branch 'merged PR #11')"$'\nremoved merged-branch'
+[[ -d $project/reused-name && -d $project/kept-branch ]] || fail "wtprune -m should keep branches whose tip is no merged PR's head"
+unset GH_MERGED_OID
+export GH_PR_STATE=OPEN
+for name in kept-branch local-only reused-name; do wtrm "$name" >/dev/null 2>&1; done
+
+# ggpush and ggpull use the configured upstream (here a contributor's fork),
+# even when its tracking ref was pruned, and refuse a detached HEAD.
+fork="$TMP/contributor/topic.git"
+git init -q --bare "$fork"
+git -C "$seed" push -q "$fork" HEAD:refs/heads/fork-topic
+git -C "$project" remote add fork "$fork"
+git -C "$project" fetch -q fork
+git -C "$project" worktree add -q --track -b fork-topic "$project/forked" fork/fork-topic
+git --git-dir="$fork" update-ref -d refs/heads/fork-topic
+git -C "$project" update-ref -d refs/remotes/fork/fork-topic
+cd "$project/forked"
+ggpush >/dev/null 2>&1 || fail "ggpush to the fork failed"
+git --git-dir="$fork" show-ref -q --verify refs/heads/fork-topic || fail "ggpush should push to the configured fork"
+git --git-dir="$remote" show-ref -q --verify refs/heads/fork-topic && fail "ggpush should not fall back to origin"
+git switch -q --detach
+if ggpush >/dev/null 2>&1; then fail "ggpush should refuse a detached HEAD"; fi
+if ggpull >/dev/null 2>&1; then fail "ggpull should refuse a detached HEAD"; fi
+cd "$project/main"
+wtrm forked >/dev/null 2>&1
 
 # --- Zellij tabs, against the fake zellij: the caller is pane 1 in tab 1. ---
 export ZJ_STATE=$TMP/zj ZELLIJ=0 ZELLIJ_SESSION_NAME=test ZELLIJ_PANE_ID=1
