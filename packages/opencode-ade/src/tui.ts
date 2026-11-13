@@ -7,7 +7,7 @@
 // packages/opencode-ade-status.)
 import { Plugin } from "@opencode/plugin/tui"
 import { createEffect, createMemo, createRoot } from "solid-js"
-import { located, makeKit, open, worktreeCommand } from "../../ade-kit/src/index.ts"
+import { located, makeKit, open, worktreeCommand } from "ade-kit"
 import { serverDigest } from "./digest.ts"
 import { environmentFor } from "./environment.ts"
 import { Ade } from "./rpc.ts"

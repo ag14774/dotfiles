@@ -4,6 +4,7 @@
   "private": true,
   "description": "OpenCode plugin: show_file, delegate and status, carried out by the OpenCode app in the pane showing the conversation",
   "type": "module",
+  "dependencies": { "ade-kit": "*" },
   "exports": {
     ".": "./src/server.ts",
     "./tui": "./src/tui.ts",

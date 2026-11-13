@@ -131,11 +131,13 @@ cp "$REAL/.local/share/opencode/auth.json" "$TMP/oc/data/opencode/" 2>/dev/null
 cp "$REAL/.local/state/opencode/model.json" "$TMP/oc/state/opencode/" 2>/dev/null
 cp -RL "$REAL/.config/opencode" "$TMP/oc/config/opencode" 2>/dev/null
 config=$TMP/oc/config/opencode
-rm -rf "$config"/{service.json,node_modules,plugins/ade,plugins/ade-status}
-mkdir -p "$config/plugins"
+rm -rf "$config"/{service.json,node_modules,plugins/ade,plugins/ade-status,plugins/ade-worktrees}
+mkdir -p "$config/plugins" "$TMP/src/node_modules"
 cp -R "$ROOT/packages" "$TMP/src/"
+ln -s ../packages/ade-kit "$TMP/src/node_modules/ade-kit"
 ln -s "$TMP/src/packages/opencode-ade" "$config/plugins/ade"
 ln -s "$TMP/src/packages/opencode-ade-status" "$config/plugins/ade-status"
+ln -s "$TMP/src/packages/opencode-ade-worktrees" "$config/plugins/ade-worktrees"
 # This checkout's ADE config (OpenCode through opencode-pane); the sandbox has
 # this checkout's ade and opencode-pane first on PATH, as installed.
 mkdir -p "$TMP/oc/config/ade"

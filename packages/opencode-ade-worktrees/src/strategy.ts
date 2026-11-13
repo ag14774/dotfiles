@@ -7,7 +7,7 @@
 import { statSync } from "node:fs"
 import { homedir } from "node:os"
 import { basename, dirname, isAbsolute, join, relative } from "node:path"
-import { Failed, makeKit, openWorktree, readConfig, removeWorktree, worktreeRecords } from "../../ade-kit/src/index.ts"
+import { Failed, makeKit, openWorktree, readConfig, removeWorktree, worktreeRecords } from "ade-kit"
 
 type Env = Record<string, string | undefined>
 export type StrategyOptions = {

@@ -39,8 +39,11 @@ oc() {
 }
 api() { oc api "$@" 2>&1; } # the response body (and HTTP status line on errors)
 
-# This checkout's packages (the plugin imports ade-kit beside it) and ADE config.
+# This checkout's packages, linked as npm workspaces link them (the plugin
+# imports ade-kit), and ADE config.
 cp -R "$ROOT/packages" "$TMP/src/"
+mkdir -p "$TMP/src/node_modules"
+ln -s ../packages/ade-kit "$TMP/src/node_modules/ade-kit"
 ln -s "$TMP/src/packages/opencode-ade-worktrees" "$XDG_CONFIG_HOME/opencode/plugins/ade-worktrees"
 cp "$ROOT/config/.config/ade/config.json" "$XDG_CONFIG_HOME/ade/"
 ade=$TMP/src/packages/ade-kit/src/cli.ts

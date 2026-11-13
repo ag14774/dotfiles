@@ -137,6 +137,10 @@ mkdir -p "$HOME/.config"
 # Restow, so links to files the repository no longer has go too.
 stow --no-folding --restow -d "$DOTFILES" -t "$HOME" config
 
+echo "==> Link the packages in packages/ for the OpenCode plugins (npm workspaces)"
+# Makes node_modules/ade-kit a link to packages/ade-kit; downloads nothing.
+(cd "$DOTFILES" && npm install --omit=dev --no-audit --no-fund >/dev/null)
+
 echo "==> Yazi flavor (catppuccin-mocha, from package.toml)"
 if ! YAZI_PACKAGE_OUTPUT="$(ya pkg install 2>&1)"; then
   # Yazi 26.9.1 cannot migrate package caches containing real Git symlinks (upstream #4319).

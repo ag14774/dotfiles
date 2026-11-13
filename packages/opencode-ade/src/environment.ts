@@ -1,8 +1,8 @@
 // The instructions an OpenCode pane attaches to each conversation it shows
 // (entry ade.environment), naming the multiplexer and editor of the ADE
 // config.
-import type { Kit } from "../../ade-kit/src/index.ts"
-import { labelOf, loadEditor, loadMultiplexer } from "../../ade-kit/src/index.ts"
+import type { Kit } from "ade-kit"
+import { labelOf, loadEditor, loadMultiplexer } from "ade-kit"
 
 const article = (word: string) => (/^[aeiou]/i.test(word) ? "an" : "a")
 

@@ -4,6 +4,7 @@
   "private": true,
   "description": "OpenCode plugin: OpenCode's worktree strategy through ade-kit (the repository's layout, real branches, seeded files, wtrm's checks)",
   "type": "module",
+  "dependencies": { "ade-kit": "*" },
   "exports": {
     ".": "./src/server.ts"
   },
