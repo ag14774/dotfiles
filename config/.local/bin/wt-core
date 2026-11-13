@@ -368,48 +368,6 @@ wtrm() {
   (( ! $#tabs )) || _wt_tabs_close "$target" "${tabs[@]}"
 }
 
-# list worktrees
-# list worktrees; --json: one object per worktree (for the OpenCode plugin):
-# path, branch (null when detached), changed (files with uncommitted changes),
-# ahead/behind (commits relative to origin/HEAD, null without it) and tab
-# ("sure", "unsure" or null: see _wt_tabs_in; null outside Zellij).
-wtls() {
-  [[ ${1-} == --json ]] || { git worktree list; return; }
-  emulate -L zsh
-  local line wtpath= branch= base counts tabs='{}' i
-  local -a paths branches items
-  git rev-parse --git-dir >/dev/null 2>&1 || { print -u2 "wtls: not inside a git repo"; return 1; }
-  base=$(git rev-parse --verify --quiet origin/HEAD 2>/dev/null)
-  _wt_ls_add() { # the worktree read so far, if any
-    [[ -n $wtpath && -d $wtpath ]] || return 0
-    paths+=("$wtpath")
-    branches+=("$branch")
-  }
-  for line in ${(f)"$(git worktree list --porcelain 2>/dev/null)"}; do
-    case $line in
-      ("worktree "*) _wt_ls_add; wtpath=${line#worktree } branch= ;;
-      ("branch refs/heads/"*) branch=${line#branch refs/heads/} ;;
-      ("bare") wtpath= ;;
-    esac
-  done
-  _wt_ls_add
-  # The tabs of all the worktrees at once (see _wt_tabs_in).
-  if _wt_in_zellij && (( $#paths )); then
-    tabs=$("$_WT_ADE" tabs --json "${paths[@]}" 2>/dev/null) && [[ -n $tabs ]] || tabs='{}'
-  fi
-  for (( i = 1; i <= $#paths; i++ )); do
-    counts=
-    [[ -n $base ]] && counts=$(git -C "$paths[i]" rev-list --left-right --count "$base...HEAD" 2>/dev/null)
-    items+=("$(jq -cn --arg path "$paths[i]" --arg branch "$branches[i]" --arg counts "$counts" \
-      --argjson tabs "$tabs" --argjson changed "$(git -C "$paths[i]" status --porcelain 2>/dev/null | wc -l)" \
-      'def opt: if . == "" then null else . end;
-       ($counts | opt | if . then split("\t") | map(tonumber) else [null, null] end) as [$behind, $ahead]
-       | {path: $path, branch: ($branch | opt), changed: $changed, ahead: $ahead, behind: $behind,
-          tab: ($tabs[$path][0] // null | if . == null then null elif .sure then "sure" else "unsure" end)}')")
-  done
-  print -r -- "[${(j:,:)items}]"
-}
-
 # Is <branch> merged? Used by `wtprune --merged`. Sets $REPLY to a short reason.
 # GITHUB ONLY: asks gh for a MERGED PR whose merged commit (headRefOid) EQUALS the
 # branch tip. The exact-SHA match matters for two reasons:
@@ -671,7 +629,7 @@ fi
 cmd=${1:-help}
 (( $# )) && shift
 case $cmd in
-  ls) wtls "$@"; exit ;;
+  ls) exec "$_WT_ADE" worktree ls "$@" ;;
   help | -h | --help) _wt_core_usage; exit ;;
   clone) fn=wtclone ;;
   open) fn=wt ;;

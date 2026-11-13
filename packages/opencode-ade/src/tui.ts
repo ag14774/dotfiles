@@ -2,15 +2,16 @@
 // multiplexer pane, so its environment names that pane for certain. It carries
 // out the server part's requests for the conversation this pane shows,
 // including those of its subagents (they act for their parent): show_file
-// here, through ade-kit's open; delegate and status through wt-core. (The
-// agent statuses on the tabs come from the status plugin,
-// packages/opencode-ade-status.)
+// through ade-kit's open, status through `ade worktree` (in-process), delegate
+// through wt-core. (The agent statuses on the tabs come from the status
+// plugin, packages/opencode-ade-status.)
 import { execFile } from "node:child_process"
 import { Plugin } from "@opencode/plugin/tui"
 import { createEffect, createMemo, createRoot } from "solid-js"
 import { open } from "../../ade-kit/src/actions.ts"
 import { makeKit } from "../../ade-kit/src/kit.ts"
 import { located } from "../../ade-kit/src/workspace.ts"
+import { worktreeCommand } from "../../ade-kit/src/worktree-cli.ts"
 import { serverDigest } from "./digest.ts"
 import { environmentFor } from "./environment.ts"
 import { Ade } from "./rpc.ts"
@@ -27,8 +28,10 @@ type Request = {
 }
 type Result = { ok: boolean; stdout: string; stderr: string }
 
-// The only command a request may run, by action (show_file runs none).
-const COMMANDS: Record<string, string> = { delegate: "wt-core", status: "wt-core" }
+// The only command a request may run, by action (show_file and status run
+// none: they are carried out in-process).
+const COMMANDS: Record<string, string> = { delegate: "wt-core" }
+const IN_PROCESS = new Set(["show_file", "status"])
 
 export default Plugin.define({
   id: "local.ade",
@@ -125,15 +128,31 @@ export default Plugin.define({
       return { ok: true, stdout: "", stderr: "" }
     }
 
+    // `ade worktree ARGS`, as the command would answer.
+    const worktree = async (request: Request): Promise<Result> => {
+      let stdout = ""
+      const stderr: string[] = []
+      const io = {
+        env,
+        cwd: request.cwd,
+        say: (line: string) => void stderr.push(line),
+        out: (text: string) => void (stdout += text),
+        passthrough: false,
+      }
+      const code = await worktreeCommand(kit(), request.args, io)
+      return { ok: code === 0, stdout, stderr: stderr.join("\n") }
+    }
+
     const handle = async (request: Request) => {
       const command = COMMANDS[request.action]
-      if ((!command && request.action !== "show_file") || !(await shows(request.sessionID))) return
+      if ((!command && !IN_PROCESS.has(request.action)) || !(await shows(request.sessionID))) return
       const { granted } = (await ade.claim({ id: request.id })) as { granted: boolean }
       if (!granted) return
       let result: Result = { ok: false, stdout: "", stderr: "" }
       try {
-        if (!command) result = await showFile(request)
-        else result = request.copy ? await runOnCopy(command, request, request.copy) : await run(command, request)
+        if (request.action === "show_file") result = await showFile(request)
+        else if (request.action === "status") result = await worktree(request)
+        else if (command) result = request.copy ? await runOnCopy(command, request, request.copy) : await run(command, request)
       } catch (error) {
         result.stderr = (error as { message?: string })?.message ?? JSON.stringify(error)
       }

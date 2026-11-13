@@ -8,12 +8,14 @@ import { spawn } from "node:child_process"
 import { once } from "node:events"
 import { appendFileSync } from "node:fs"
 import { homedir } from "node:os"
+import { createInterface } from "node:readline"
 import type { Terminal, WorkspaceOptions } from "./actions.ts"
 import { closeTabs, open, review, send, tabs, workspace } from "./actions.ts"
 import { makeKit, run } from "./kit.ts"
 import { scopeOf, scopeWords } from "./review.ts"
 import type { RunOptions } from "./types.ts"
 import { workspaceOf } from "./workspace.ts"
+import { worktreeCommand } from "./worktree-cli.ts"
 
 const USAGE = `usage: ade open FILE[:LINE[:COLUMN]]...
          open files in this tab's editor
@@ -35,7 +37,9 @@ const USAGE = `usage: ade open FILE[:LINE[:COLUMN]]...
          the same for each DIR, as JSON: {"DIR": [{"tab": "ID", "sure": true}, ...], ...}
        ade close-tabs DIR [ID:sure|ID:unsure...]
          close the tabs of the removed worktree DIR (those ade tabs found before it was
-         removed, else its tabs now), except yours and the unsure ones; none when an agent runs it`
+         removed, else its tabs now), except yours and the unsure ones; none when an agent runs it
+       ade worktree [--cwd-file FILE] COMMAND [ARGS...]
+         the worktree commands behind the wt shell functions (see: ade worktree help)`
 
 class UsageError extends Error {}
 
@@ -71,6 +75,18 @@ const terminal: Terminal = {
 
 // What an action tells you, as it happens.
 const say = (message: string) => void process.stderr.write(`${message}\n`)
+
+// A yes/no question on the terminal (no answer, as at the end of input: no).
+const confirm = (question: string) =>
+  new Promise<boolean>((done) => {
+    process.stderr.write(question)
+    const lines = createInterface({ input: process.stdin })
+    lines.once("line", (answer) => {
+      lines.close()
+      done(/^[yY]/.test(answer))
+    })
+    lines.once("close", () => done(false))
+  })
 
 const traced = (log: string) => async (argv: string[], o?: RunOptions) => {
   const result = await run(argv, o)
@@ -156,6 +172,17 @@ async function main(command: string | undefined, args: string[]) {
         return { tab, sure: state === "sure" }
       })
       return closeTabs(kit(), dir, listed.length ? found : undefined, caller, say)
+    }
+    case "worktree": {
+      const io = {
+        ...caller,
+        say,
+        out: (text: string) => void process.stdout.write(text),
+        passthrough: true,
+        ...(process.stdin.isTTY ? { confirm } : {}),
+      }
+      process.exitCode = await worktreeCommand(kit(), args, io)
+      return
     }
     case "help":
     case "--help":
