@@ -149,9 +149,10 @@ its options. A bar left at that prompt doesn't notice a later grant, and while
 one waits Zellij holds every `zellij pipe` (it returns once the tab closes or
 Zellij restarts).
 
-The bar groups tabs: a tab named `prefix: name` belongs to the group `prefix`,
-shown once two tabs share it (see ade-zjstatus's FORK.md), so each project's
-worktree tabs sit together:
+The bar groups tabs: a tab named `prefix: name` belongs to the group `prefix`
+(see ade-zjstatus's FORK.md), so each project's worktree tabs sit together
+under the project's name, also when it has only one (a group of one tab never
+collapses):
 
 - `config/.config/ade/config.json` sets `"zellij": { "tabName": "{project}:
   {worktree}" }` (ade's default is `"{worktree}"`): tabs that `wt -t/-b/-p`

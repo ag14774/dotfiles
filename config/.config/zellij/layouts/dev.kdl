@@ -4,7 +4,7 @@ layout {
     pane_template name="zjbar" borderless=true {
         // ade-zjstatus (github.com/ag14774/ade-zjstatus, needs Zellij 0.46): zjstatus
         // with agent statuses, see its FORK.md.
-        plugin location="https://github.com/ag14774/ade-zjstatus/releases/download/v0.25.0-ade.4/zjstatus.wasm" {
+        plugin location="https://github.com/ag14774/ade-zjstatus/releases/download/v0.25.0-ade.5/zjstatus.wasm" {
             // No mode ({mode}): the bottom bar shows it, with its keys.
             format_left   "{tabs}#[fg=#585b70]  +⌥t "
             format_center ""
@@ -37,8 +37,9 @@ layout {
             attention_format          "{counts} "
 
             // Tab groups: a tab named "prefix: name" belongs to the group
-            // "prefix", shown once two tabs share it (ade names worktree tabs
-            // "project: worktree", see ~/.config/ade/config.json). The bar
+            // "prefix" (ade names worktree tabs "project: worktree", see
+            // ~/.config/ade/config.json); a lone one is a group of one, which
+            // never collapses, so a project always looks the same. The bar
             // keeps a group's tabs together, which needs the permission
             // "Execute actions as the user". Tab mode g/G collapse or expand.
             // Labels in mauve (a collapsed group: its tab count and statuses),
