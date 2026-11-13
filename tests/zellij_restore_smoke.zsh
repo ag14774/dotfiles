@@ -63,8 +63,8 @@ git -C "$TMP/seed" -c user.name=t -c user.email=t@t commit -qm init
 git -C "$TMP/seed" branch -M main
 git -C "$TMP/seed" push -q "$TMP/origin.git" main
 git --git-dir="$TMP/origin.git" symbolic-ref HEAD refs/heads/main
-(cd "$TMP" && "$ROOT/config/.local/bin/wt-core" clone "$TMP/origin.git" proj >/dev/null 2>&1)
-(cd "$TMP/proj" && "$ROOT/config/.local/bin/wt-core" open main >/dev/null 2>&1)
+(cd "$TMP" && "$ROOT/config/.local/bin/ade" worktree clone "$TMP/origin.git" proj >/dev/null 2>&1)
+(cd "$TMP/proj" && "$ROOT/config/.local/bin/ade" worktree open main >/dev/null 2>&1)
 main=$TMP/proj/main
 
 # A headless client; text appended to $TMP/keys becomes keystrokes.
@@ -133,7 +133,7 @@ sandbox_dismiss_welcome "$session"
 wait_for 60 running 0 opencode || fail "the new session did not start OpenCode"
 
 step "open a worktree tab, a long command in a shell, and a file in Helix"
-out=$(cd "$main" && in_session "$ROOT/config/.local/bin/wt-core" open -b feat 2>&1) || fail "wt -b failed: $out"
+out=$(cd "$main" && in_session "$ROOT/config/.local/bin/ade" worktree open -b feat 2>&1) || fail "wt -b failed: $out"
 feat_tab=$(value_of 30 tab_in "$TMP/proj/feat") \
   || fail "wt -b did not open a tab in the worktree ($out): $(panes | jq -c '[.[] | {tab_id, title, pane_cwd}]')"
 tab_info() { zj list-tabs --json 2>/dev/null | jq -r --argjson t "$feat_tab" '.[] | select(.tab_id == $t) | [.name, .active] | join(" ")'; }
@@ -175,7 +175,7 @@ wait_for 30 cwd_is 0 main "$main" || fail "the restored shell is not in its dire
 
 step "wt -t finds the restored worktree tab"
 before=$(tab_count)
-(cd "$main" && in_session "$ROOT/config/.local/bin/wt-core" open -t feat >/dev/null 2>&1) || fail "wt -t failed"
+(cd "$main" && in_session "$ROOT/config/.local/bin/ade" worktree open -t feat >/dev/null 2>&1) || fail "wt -t failed"
 [[ $(tab_count) == "$before" ]] || fail "wt -t opened a duplicate of the restored tab"
 
 step "Alt-t in the restored session opens a running dev tab"

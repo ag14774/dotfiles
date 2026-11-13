@@ -7,19 +7,21 @@ import { writeFileSync } from "node:fs"
 import type { Kit } from "./types.ts"
 import type { Io } from "./worktrees.ts"
 import type { Landed } from "./worktrees.ts"
-import { Failed, list, open, prune, remove } from "./worktrees.ts"
+import { clone, convert, Failed, list, open, prune, remove } from "./worktrees.ts"
 
 export type CommandIo = Io & { out(text: string): void }
 
 export const USAGE = `usage: ade worktree [--cwd-file FILE] <command> [args]
 
 commands (interactive shell equivalent in parentheses):
+  clone <url> [dir]         clone a repo laid out for worktrees (wtclone)
   open [LAND] <branch> [base]
                             create/reuse the worktree for <branch> (wt)
   rm [-f] <name>            remove a worktree by branch or directory, closing
                             its tabs, except the tab of the caller (wtrm)
   ls [--json]               list worktrees (wtls); --json for programs
   prune [-y] [-n] [-m]      remove deleted-remote/merged worktrees (wtprune)
+  convert [-y]              convert the normal clone in CWD (wtconvert)
   help                      show this help
 
 LAND (open) chooses what happens after the worktree exists:
@@ -35,11 +37,11 @@ LAND (open) chooses what happens after the worktree exists:
   Outside a multiplexer, -t and -b fall back to changing directory and staying;
   -p fails.
 
-prune without -y needs a terminal to confirm and fails otherwise.
+prune/convert without -y need a terminal to confirm and fail otherwise.
 
 output:
-  stdout                    only the result: the worktree path for open, the list
-                            for ls, or this help
+  stdout                    only the result: the worktree path for open and
+                            convert, the list for ls, or this help
   stderr                    progress, prompts and errors
   exit status               0 on success; non-zero on failure (nothing on stdout)
 
@@ -81,6 +83,9 @@ export async function worktreeCommand(kit: Kit, argv: string[], io: CommandIo): 
   }
   try {
     switch (command) {
+      case "clone":
+        await clone(kit, io, rest)
+        return 0
       case "open":
         return report(await open(kit, io, rest))
       case "rm":
@@ -91,6 +96,8 @@ export async function worktreeCommand(kit: Kit, argv: string[], io: CommandIo): 
       case "prune":
         await prune(kit, io, rest)
         return 0
+      case "convert":
+        return report(await convert(kit, io, rest))
       case "help":
       case "-h":
       case "--help":

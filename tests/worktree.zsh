@@ -19,8 +19,8 @@ assert_eq() {
   [[ $1 == $2 ]] || fail "expected '$2', got '$1'"
 }
 
-core() { # wt-core with these arguments: stdout in $out, stderr in $TMP/err
-  out=$("$ROOT/config/.local/bin/wt-core" "$@" 2>"$TMP/err")
+core() { # `ade worktree` with these arguments: stdout in $out, stderr in $TMP/err
+  out=$("$ROOT/config/.local/bin/ade" worktree "$@" 2>"$TMP/err")
 }
 said() { grep -qxF -- "$1" "$TMP/err" || fail "expected the message '$1', got: $(<"$TMP/err")"; }
 
@@ -40,7 +40,7 @@ fi
 EOF
 chmod +x "$TMP/bin/gh"
 
-# Stand-in for the `zellij action` calls wt-core makes. State lives in $ZJ_STATE:
+# Stand-in for the `zellij action` calls ade makes. State lives in $ZJ_STATE:
 # tabs (id, name), panes (id, tab, title, cwd, command[, "exited"]) and the
 # focused tab. An empty cwd is a pane for which Zellij reports no directory.
 # Each call is appended to $ZJ_STATE/log; ZJ_FAIL names a command that fails,
@@ -152,7 +152,7 @@ cd "$project"
 # Called directly, the engine prints only the worktree path on stdout (progress,
 # such as seeding .env, goes to stderr).
 cd "$project/main"
-out=$("$ROOT/config/.local/bin/wt-core" open direct 2>/dev/null)
+out=$("$ROOT/config/.local/bin/ade" worktree open direct 2>/dev/null)
 assert_eq "$out" "$project/direct"
 assert_eq "$PWD" "$project/main"
 wtrm direct >/dev/null 2>&1
@@ -435,11 +435,12 @@ said "wtconvert: no 'origin' remote found"
 (cd "$TMP/no-repo" && core convert -y) && fail "wtconvert should refuse a folder outside a clone"
 said "wtconvert: run this inside a normal (non-bare) git clone"
 
-# --- wt-core itself ---
-core help || fail "wt-core help failed"
-[[ $out == *"open [LAND] <branch> [base]"* ]] || fail "wt-core help should describe open: $out"
+# --- ade worktree itself, and wt-core, its old name ---
+core help || fail "ade worktree help failed"
+[[ $out == *"open [LAND] <branch> [base]"* ]] || fail "ade worktree help should describe open: $out"
+assert_eq "$("$ROOT/config/.local/bin/wt-core" help)" "$out"
 core bogus && fail "an unknown command should fail"
-said "wt-core: unknown command 'bogus' (see: wt-core help)"
+said "ade worktree: unknown command 'bogus' (see: ade worktree help)"
 core prune -x && fail "wtprune should reject unknown options"
 said "usage: wtprune [-y] [-n|--no-fetch] [-m|--merged]"
 cd "$project/main"
@@ -532,9 +533,9 @@ wtrm sessioned-quiet >/dev/null 2>&1
 
 # What wt says, on stderr (stdout carries only the path), and the tab it opens:
 # the dev layout in the worktree, named after it.
-engine() { # wt-core open with these arguments; stdout in $out, stderr in $TMP/err
+engine() { # `ade worktree open` with these arguments; stdout in $out, stderr in $TMP/err
   : > "$ZJ_STATE/log"
-  out=$("$ROOT/config/.local/bin/wt-core" open "$@" 2>"$TMP/err")
+  out=$("$ROOT/config/.local/bin/ade" worktree open "$@" 2>"$TMP/err")
 }
 called_with() { # $1=zellij command, then words one call of it must include
   local cmd=$1 line word found
@@ -588,7 +589,7 @@ assert_eq "${${pane#*|}#* }" '--prompt -x "quoted" prompt'
 assert_eq "${${${pane#*|}%% *}:A}" "$ROOT/config/.local/bin/opencode-pane"
 
 # Without the caller's pane ID (a script naming only the session), the same.
-env -u ZELLIJ_PANE_ID "$ROOT/config/.local/bin/wt-core" open -b nopane >/dev/null 2>&1 \
+env -u ZELLIJ_PANE_ID "$ROOT/config/.local/bin/ade" worktree open -b nopane >/dev/null 2>&1 \
   || fail "wt -b without ZELLIJ_PANE_ID failed"
 [[ -n $(tab_in "$project/nopane") ]] || fail "wt -b without ZELLIJ_PANE_ID should open a tab"
 
@@ -694,9 +695,9 @@ done
 
 # What wtrm says about each tab, on stderr after "removed" (stdout stays
 # empty); it closes nothing when the worktree can't be removed.
-rm_engine() { # wt-core rm with these arguments; stdout in $out, stderr in $TMP/err
+rm_engine() { # `ade worktree rm` with these arguments; stdout in $out, stderr in $TMP/err
   : > "$ZJ_STATE/log"
-  out=$("$ROOT/config/.local/bin/wt-core" rm "$@" 2>"$TMP/err")
+  out=$("$ROOT/config/.local/bin/ade" worktree rm "$@" 2>"$TMP/err")
 }
 has_tab() { grep -q "^$1	" "$ZJ_STATE/tabs"; }
 wt -b two >/dev/null 2>&1
@@ -744,19 +745,19 @@ zellij action close-tab-by-id "$paneless"
 # ls --json reports each worktree's branch, changes and tab, for the plugin.
 wt -b listed >/dev/null 2>&1
 print change > "$project/listed/notes.md"
-json=$("$ROOT/config/.local/bin/wt-core" ls --json)
+json=$("$ROOT/config/.local/bin/ade" worktree ls --json)
 entry() { jq -c --arg p "$project/$1" '.[] | select(.path == $p) | {branch, changed, ahead, behind, tab}' <<< "$json"; }
 assert_eq "$(entry listed)" '{"branch":"listed","changed":1,"ahead":0,"behind":0,"tab":"sure"}'
 assert_eq "$(entry main)" '{"branch":"main","changed":0,"ahead":0,"behind":0,"tab":null}'
 # Without the caller's pane the tabs are found all the same; outside Zellij
 # there are none. A live pane that reports no directory makes a tab "unsure".
-json=$(env -u ZELLIJ_PANE_ID "$ROOT/config/.local/bin/wt-core" ls --json)
+json=$(env -u ZELLIJ_PANE_ID "$ROOT/config/.local/bin/ade" worktree ls --json)
 assert_eq "$(entry listed | jq -r .tab)" sure
-json=$(env -u ZELLIJ "$ROOT/config/.local/bin/wt-core" ls --json)
+json=$(env -u ZELLIJ "$ROOT/config/.local/bin/ade" worktree ls --json)
 assert_eq "$(entry listed | jq -r .tab)" null
 listed_tab=$(tab_in "$project/listed")
 printf '62\t%s\tstarting\t\t-\n' "$listed_tab" >> "$ZJ_STATE/panes"
-json=$("$ROOT/config/.local/bin/wt-core" ls --json)
+json=$("$ROOT/config/.local/bin/ade" worktree ls --json)
 assert_eq "$(entry listed | jq -r .tab)" unsure
 assert_eq "$(entry main | jq -r .tab)" null
 wtrm -f listed >/dev/null 2>&1
@@ -769,7 +770,7 @@ cd "$TMP/plain"
 wt -b inner >/dev/null 2>&1
 inner_tab=$(tab_in "$TMP/plain/inner")
 [[ -n $inner_tab ]] || fail "wt -b should open a tab for the nested worktree"
-json=$("$ROOT/config/.local/bin/wt-core" ls --json)
+json=$("$ROOT/config/.local/bin/ade" worktree ls --json)
 assert_eq "$(jq -c '[.[] | {path, tab}]' <<< "$json")" \
   "$(jq -cn --arg p "$TMP/plain" '[{path: $p, tab: null}, {path: ($p + "/inner"), tab: "sure"}]')"
 zellij action go-to-tab-by-id 1

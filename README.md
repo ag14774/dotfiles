@@ -113,7 +113,8 @@ After changing `packages/`, run `node --test` in each of `packages/ade-kit`,
 runner, no dependencies), and
 `zsh tests/ade_open.zsh`, `zsh tests/ade_send.zsh` and
 `zsh tests/ade_review_scope.zsh`, which check `ade open` and `ade send` against a
-stand-in for Zellij, and what `ade review` covers.
+stand-in for Zellij, and what `ade review` covers; `zsh tests/worktree.zsh`
+checks the `wt*` commands (`ade worktree`), with a stand-in for Zellij too.
 After upgrading Zellij, Helix, Yazi or tuicr, or changing the scripts behind
 the keys, run `zsh tests/keys_smoke.zsh`: it checks `Alt-y`, Helix's `+ a` and
 the `Alt-v` review end to end in a throwaway session, with a stand-in for
@@ -201,10 +202,7 @@ Zellij.app and copy Zellij into a folder of its own.
 - `config/.config/{ghostty,zellij,helix,yazi,opencode}/` — stowed into `~/.config`
 - `config/.local/bin/` — reusable commands, stowed into `~/.local/bin` (on `PATH`
   for shells, Zellij, and programs started from them):
-  - `wt-core` — the worktree engine behind the `wt*` shell commands
-    (`wt-core help`); the shell functions are thin wrappers that `cd` for you.
-    For scripts and agents, stdout carries only the result (such as the
-    worktree path) and progress goes to stderr
+  - `wt-core` — the old name of `ade worktree` (below), kept for scripts
   - `zellij-sync-bars [--check | --restart | SESSION...]` — give saved Zellij
     sessions the top bar from `dev.kdl` (see "Upgrading Zellij")
   - `ade` — the ADE command, a link to `packages/ade-kit/src/cli.ts` (run by
@@ -240,11 +238,18 @@ Zellij.app and copy Zellij into a folder of its own.
       running panes are all inside it (`ID:sure`), or with a pane that didn't
       say where it is (`ID:unsure`). Found by directories, never by tab names;
       a tab in a nested worktree doesn't count for the outer one. `--json` takes
-      several folders (`wt-core` uses it for `wtrm` and `ls --json`)
+      several folders
     - `ade close-tabs DIR [ID:sure|ID:unsure...]` — close the tabs of a
       removed worktree (those `ade tabs` found before `wtrm` removed it),
       except yours and the unsure ones; none when run by an agent or when
       `$ZELLIJ_PANE_ID` no longer exists
+    - `ade worktree [--cwd-file FILE] COMMAND ...` — the worktree commands
+      behind the `wt*` shell functions (`ade worktree help`: `clone`, `open`,
+      `rm`, `ls [--json]`, `prune`, `convert`); the shell functions are thin
+      wrappers that `cd` for you. For scripts and agents, stdout carries only
+      the result (such as the worktree path) and progress goes to stderr.
+      Whether there is a multiplexer to open tabs in is the ADE config's
+      `multiplexer` (with `"none"`, `-t` changes directory and `-p` fails)
   - `opencode-pane [--session ID] [--prompt PROMPT] | --resume` — run OpenCode
     in a pane with your shell environment, optionally on a given conversation,
     in a way Zellij restores as `--resume`, which continues the directory's
@@ -330,8 +335,8 @@ including "no OpenCode pane in Zellij is showing this conversation".
   (`:reload-all`, which discards unsaved edits), and Helix refuses to save over
   a file changed on disk unless you use `:w!`.
 - `delegate` starts work in another worktree: say "delegate this", "do this in
-  a new worktree", or use `/delegate [what]`. It runs `wt-core open --prompt
-  BRIEF BRANCH` from the pane, so a background tab opens for the worktree and its
+  a new worktree", or use `/delegate [what]`. The pane runs `ade worktree open
+  --prompt BRIEF BRANCH` (in-process), so a background tab opens for the worktree and its
   OpenCode starts on a brief the agent writes. The calling conversation stays
   where it is and isn't told when the new one finishes. (In a plain clone, as
   with `wt`, the worktree goes inside the repository folder.) It works in the
@@ -339,15 +344,15 @@ including "no OpenCode pane in Zellij is showing this conversation".
   a worktree of ~/projects/x") and the agent passes a folder in it as
   `directory`, without moving the conversation.
   - Say "with the context" (or "with a summary") to carry this conversation
-    over: the pane first creates the worktree (`wt-core open --stay`), copies
+    over: the pane first creates the worktree (`ade worktree open --stay`), copies
     the conversation up to your request into it (compacting the copy for a
-    summary), and the same `wt-core open --prompt` runs with `--session COPY`.
+    summary), and the same `open --prompt` runs with `--session COPY`.
     The original conversation stays in its tab, unchanged.
   - OpenCode's own `worktree_create`/`worktree_list` tools are hidden from
     agents: they make detached worktrees elsewhere, without a tab.
 - `status` answers "how are the other worktrees doing?" from any tab: for each
   of the project's worktrees, its branch, uncommitted changes, commits ahead of
-  `origin/HEAD`, whether it has a tab (`wt-core ls --json`, run from the pane),
+  `origin/HEAD`, whether it has a tab (`ade worktree ls --json`, in the pane),
   and its latest conversation: working, waiting for you (a permission request
   or question), idle, failed or interrupted, with the start of its last answer.
   Read-only; a tab you only use to delegate and ask this acts as a coordinator.

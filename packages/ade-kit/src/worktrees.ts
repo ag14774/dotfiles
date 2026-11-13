@@ -8,23 +8,13 @@ import { basename, dirname, join } from "node:path"
 import type { TabIn } from "./actions.ts"
 import { closeTabs, tabs, workspace } from "./actions.ts"
 import { onPath } from "./editor.ts"
-import { labelOf, loadAgent, loadMultiplexer } from "./load.ts"
-import type { Kit, MultiplexerAdapter, Where } from "./types.ts"
+import { labelOf, loadAgent, loadLayout, loadMultiplexer } from "./load.ts"
+import type { Kit, MultiplexerAdapter, Repository, Where, WorktreeIo } from "./types.ts"
 import { isDirectory, realPath } from "./workspace.ts"
 
 type Env = Record<string, string | undefined>
 
-// Where a command runs, and how it talks to you.
-export type Io = {
-  env: Env
-  cwd: string
-  say(line: string): void // a message (the CLI: stderr)
-  // Git's own output (progress, "Preparing worktree ..."): straight to stderr
-  // as it runs (the CLI), or else line by line through say.
-  passthrough: boolean
-  // A yes/no question; absent when there is no terminal to ask in.
-  confirm?(question: string): Promise<boolean>
-}
+export type Io = WorktreeIo
 
 // A command failed; its message (if any) is the line to show. Git's own error
 // has been shown already when the message is empty.
@@ -36,7 +26,7 @@ export async function query(kit: Kit, io: Io, args: string[], cwd = io.cwd) {
   const result = await kit.run(["git", ...args], { cwd, env: io.env, timeout: 0 })
   return result.ok ? result.stdout : undefined
 }
-const line = (text: string | undefined) => text?.replace(/\n$/, "")
+export const line = (text: string | undefined) => text?.replace(/\n$/, "")
 
 // A git command whose own output you see. Never on stdout: callers capture
 // `wt -s`'s path, and a background job git starts must not hold it open.
@@ -52,13 +42,12 @@ export async function loud(kit: Kit, io: Io, args: string[], cwd = io.cwd): Prom
   return result.ok
 }
 
-// The repository the caller is in: its Git common folder (.bare, .git), and
-// the folder its worktrees go in (the common folder's parent: the project in
-// the bare layout, the clone itself otherwise).
-export type Repository = { common: string; root: string }
+// The repository the caller is in (see Repository).
 export async function repositoryOf(kit: Kit, io: Io, cwd = io.cwd): Promise<Repository | undefined> {
   const common = line(await query(kit, io, ["rev-parse", "--path-format=absolute", "--git-common-dir"], cwd))
-  return common ? { common, root: common.replace(/\/[^/]+$/, "") || "/" } : undefined
+  if (!common) return undefined
+  const bare = line(await query(kit, io, ["--git-dir", common, "config", "--bool", "core.bare"], cwd)) === "true"
+  return { common, root: dirname(common), bare }
 }
 
 // `git worktree list --porcelain`, record by record.
@@ -310,7 +299,8 @@ export async function open(kit: Kit, io: Io, args: string[]): Promise<Landed> {
   if (!repo) throw new Failed("wt: not inside a git repo")
   const existing = await worktreeOf(kit, io, repo, branch)
   if (existing) return land(kit, io, existing, "wt", landing)
-  const dir = join(repo.root, branch.replaceAll("/", "-"))
+  const layout = await loadLayout(kit)
+  const dir = layout.path(repo, branch.replaceAll("/", "-"))
   if (!isDirectory(dir)) {
     const seeds = seedsFor(repo, io.env)
     await loud(kit, io, ["fetch", "-q", "origin"], repo.root)
@@ -447,6 +437,23 @@ export async function prune(kit: Kit, io: Io, args: string[]) {
       failed = true
     })
   if (failed) throw new Failed()
+}
+
+// wtclone: a repository from `url`, laid out for worktrees.
+export async function clone(kit: Kit, io: Io, args: string[]) {
+  const [url, given] = args
+  if (!url) throw new Failed("usage: wtclone <url> [dir]")
+  const layout = await loadLayout(kit)
+  if (!layout.clone) throw new Failed(`wtclone: the ${labelOf(layout)} layout clones no repositories`)
+  await layout.clone(url, given || basename(url.replace(/\.git$/, "")), io)
+}
+
+// wtconvert: the normal clone you are in, laid out for worktrees (-y: without
+// asking first).
+export async function convert(kit: Kit, io: Io, args: string[]): Promise<Landed> {
+  const layout = await loadLayout(kit)
+  if (!layout.convert) throw new Failed(`wtconvert: the ${labelOf(layout)} layout converts no clones`)
+  return { dir: await layout.convert(io, { yes: args[0] === "-y" || args[0] === "--yes" }), cd: true }
 }
 
 export type Listed = {

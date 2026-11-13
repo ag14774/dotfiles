@@ -62,7 +62,7 @@ test("records: git's porcelain list, with branches and the bare repository", () 
 })
 
 test("repositoryOf: the common folder, and the folder worktrees go in", async () => {
-  assert.deepEqual(await repositoryOf(kitWith(), ioIn(join(project, "main")).io), { common: join(project, ".bare"), root: project })
+  assert.deepEqual(await repositoryOf(kitWith(), ioIn(join(project, "main")).io), { common: join(project, ".bare"), root: project, bare: true })
   assert.equal(await repositoryOf(kitWith(), ioIn(temp).io), undefined)
 })
 
@@ -146,7 +146,7 @@ test("globIn: names, classes, folders at any depth; no leading dots for wildcard
 test("seedsFor: WT_SEED_FILE, the repository's manifest, WT_SEED, the defaults", () => {
   const common = join(temp, "seeds")
   mkdirSync(common)
-  const repo = { common, root: temp }
+  const repo = { common, root: temp, bare: false }
   assert.deepEqual(seedsFor(repo, {}), { patterns: [".env", ".env.*", ".envrc", "pyrightconfig.json"], label: "default seed list" })
   assert.deepEqual(seedsFor(repo, { WT_SEED: "a\n\nb" }), { patterns: ["a", "b"], label: "WT_SEED" })
   assert.deepEqual(seedsFor(repo, { WT_SEED: "" }), { patterns: [], label: "WT_SEED" })
@@ -200,7 +200,7 @@ test("open: a new branch from origin/HEAD, seeded, reused; git's output as messa
 })
 
 test("worktreeFor: by branch, by folder name or by path; a name both ways is ambiguous", async () => {
-  const repo = { common: join(project, ".bare"), root: project }
+  const repo = { common: join(project, ".bare"), root: project, bare: true }
   const io = ioIn(join(project, "main")).io
   assert.equal(await worktreeFor(kitWith(), io, repo, "topic/one"), join(project, "topic-one"))
   assert.equal(await worktreeFor(kitWith(), io, repo, "topic-one"), join(project, "topic-one"))

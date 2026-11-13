@@ -143,6 +143,40 @@ export interface Reviewer {
   editorVariable?: string
 }
 
+// Where a worktree command runs, and how it talks to you (worktrees.ts).
+export type WorktreeIo = {
+  env: Record<string, string | undefined>
+  cwd: string
+  say(line: string): void // a message (the `ade` command: stderr)
+  // Git's own output (progress, "Preparing worktree ..."): straight to stderr
+  // as it runs (the `ade` command), or else line by line through say.
+  passthrough: boolean
+  confirm?(question: string): Promise<boolean> // a yes/no question; absent without a terminal
+}
+
+// A repository, as the worktree commands see it.
+export type Repository = {
+  common: string // its Git common folder (.bare, .git)
+  root: string // that folder's parent: the project in the bare layout, else the clone
+  bare: boolean // a bare repository with linked worktrees
+}
+
+// Where a repository's worktrees go, and how a repository is cloned or
+// converted to be laid out that way (layouts/).
+export interface Layout {
+  api: 1
+  name: string
+  label?: string
+  // The folder for the worktree `name` (a branch's name, with / as -).
+  path(repo: Repository, name: string): string
+  // Optional (wtclone): clone `url` into `dir`, laid out this way, without a
+  // worktree yet.
+  clone?(url: string, dir: string, io: WorktreeIo): Promise<void>
+  // Optional (wtconvert): turn the normal clone you are in into this layout;
+  // the folder to go to.
+  convert?(io: WorktreeIo, o: { yes: boolean }): Promise<string>
+}
+
 // The ADE config (config.ts): choices, and options sections for adapters.
 export type ZellijOptions = {
   layout: string
@@ -185,5 +219,10 @@ export type Kit = {
   typedEditor(o: TypedEditorOptions): Editor
   pasteAgent(o: PasteAgentOptions): Agent
   // The built-in adapters, to start from.
-  builtin: { editor(name: string): Editor; agent(name: string): Agent; reviewer(name: string): Reviewer }
+  builtin: {
+    editor(name: string): Editor
+    agent(name: string): Agent
+    reviewer(name: string): Reviewer
+    layout(name: string): Layout
+  }
 }

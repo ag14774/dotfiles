@@ -141,7 +141,7 @@ ln -s "$TMP/src/packages/opencode-ade-status" "$config/plugins/ade-status"
 jq '.plugins = ((.plugins // []) - ["./tui-plugins/ade"])' "$config/cli.json" \
   > "$config/cli.json.new" && mv "$config/cli.json.new" "$config/cli.json"
 # This checkout's ADE config (OpenCode through opencode-pane); the sandbox has
-# this checkout's wt-core and opencode-pane first on PATH, as installed.
+# this checkout's ade and opencode-pane first on PATH, as installed.
 mkdir -p "$TMP/oc/config/ade"
 cp "$ROOT/config/.config/ade/config.json" "$TMP/oc/config/ade/"
 export XDG_DATA_HOME=$TMP/oc/data XDG_STATE_HOME=$TMP/oc/state XDG_CACHE_HOME=$TMP/oc/cache \
@@ -160,12 +160,12 @@ for p in proj proj2; do
   git init -q "$TMP/seed-$p" && print seed > "$TMP/seed-$p/README"
   git -C "$TMP/seed-$p" add README && git -C "$TMP/seed-$p" -c user.name=t -c user.email=t@example.com commit -qm init
   git -C "$TMP/seed-$p" push -q "$TMP/$p.git" HEAD:main && git --git-dir="$TMP/$p.git" symbolic-ref HEAD refs/heads/main
-  (cd "$TMP" && wt-core clone "$TMP/$p.git" "$p" && cd "$p" && wt-core open --stay main) >/dev/null 2>&1
+  (cd "$TMP" && ade worktree clone "$TMP/$p.git" "$p" && cd "$p" && ade worktree open --stay main) >/dev/null 2>&1
   [[ -d $TMP/$p/main ]] || fail "could not set up the wt project $p"
 done
 
 # Zellij passes this environment (sandbox, private OpenCode, this checkout's
-# wt-core) on to its panes.
+# ade) on to its panes.
 sandbox_client "$TMP/A" --config-dir "$TMP/zj" attach --create --force-run-commands "$S"
 wait_for 60 session_running || fail "the test session did not start"
 sandbox_dismiss_welcome "$S"
@@ -256,7 +256,7 @@ history "$compacted" | jq -e '[.data // . | .[] | select(.type == "compaction")]
 wait_for 60 history_has "$compacted" "word compacted" || fail "the compacted copy did not get the brief"
 
 step "status shows the project's worktrees, their tabs and conversations"
-(cd "$TMP/proj/main" && wt-core open --stay quiet >/dev/null 2>&1) || fail "could not add a worktree without a tab"
+(cd "$TMP/proj/main" && ade worktree open --stay quiet >/dev/null 2>&1) || fail "could not add a worktree without a tab"
 status_of() { rpc_raw status "$TMP/proj/main" "{\"sessionID\":\"$sid_p\"}"; }
 worktree() { jq -c --arg p "$TMP/proj/$1" '.output.worktrees[] | select(.path == $p)' <<< "$2"; }
 settled() { worktree feat-full "$(status_of)" | jq -e '.conversation.state == "idle" and (.conversation.last // "" | test("copied"; "i"))' >/dev/null; }

@@ -14,15 +14,16 @@
 #   wtconvert [-y]        convert a normal clone (CWD) into this bare/worktree layout
 #   wthelp                show help for these commands
 #
-# The layout and implementation live in config/.local/bin/wt-core, which stow
-# also puts on PATH for scripts, Zellij and agents. These functions are thin
-# wrappers: they run this checkout's copy of the engine, forward the seed
-# settings, and perform any `cd` the engine reports in your shell.
+# The implementation is `ade worktree` (packages/ade-kit/src/worktree-cli.ts),
+# which stow also puts on PATH for scripts, Zellij and agents. These functions
+# are thin wrappers: they run this checkout's copy of it, forward the seed
+# settings, and perform any `cd` it reports in your shell.
 
-typeset -g _WT_CORE=${${(%):-%x}:A:h:h}/config/.local/bin/wt-core
+typeset -g _WT_ADE=${${(%):-%x}:A:h:h}/config/.local/bin/ade
 
-# Run a wt-core command. WT_SEED may be a zsh array (not exportable), so it is
-# passed newline-separated; WT_SEED_FILE may be an unexported shell variable.
+# Run an `ade worktree` command. WT_SEED may be a zsh array (not exportable),
+# so it is passed newline-separated; WT_SEED_FILE may be an unexported shell
+# variable.
 _wt_core() {
   emulate -L zsh
   local cwd_file dir rc
@@ -31,7 +32,7 @@ _wt_core() {
   (( ${+WT_SEED_FILE} )) && env_args+=("WT_SEED_FILE=$WT_SEED_FILE")
   cwd_file=$(mktemp "${TMPDIR:-/tmp}/wt-cwd.XXXXXX") || return 1
   {
-    command env "${env_args[@]}" "$_WT_CORE" --cwd-file "$cwd_file" "$@"
+    command env "${env_args[@]}" "$_WT_ADE" worktree --cwd-file "$cwd_file" "$@"
     rc=$?
     dir=$(<"$cwd_file")
   } always {
