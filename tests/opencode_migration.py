@@ -69,7 +69,9 @@ class MigrationTests(unittest.TestCase):
         self.assertFalse(result["attention"]["sound"])
         self.assertEqual(result["session"]["sidebar"], "hide")
         self.assertEqual(result["prompt"]["paste"], "full")
-        self.assertEqual(result["plugins"], ["-opencode.btw", "./tui-plugins/btw-v2"])
+        self.assertEqual(
+            result["plugins"], ["-opencode.btw", "./tui-plugins/btw-v2", "-opencode.notifications"]
+        )
         self.assertEqual(legacy.read_bytes(), before)
         self.assertTrue((self.config / "tui.json").is_symlink())
 
@@ -77,12 +79,14 @@ class MigrationTests(unittest.TestCase):
         (self.config / "tui.json").symlink_to(ROOT / "config/.config/opencode/tui.json")
         self.prepare()
         result = json.loads(self.output.read_text())
-        self.assertEqual(result["plugins"], ["-opencode.btw", "./tui-plugins/btw-v2"])
+        self.assertEqual(
+            result["plugins"], ["-opencode.btw", "./tui-plugins/btw-v2", "-opencode.notifications"]
+        )
 
     def test_existing_v2_settings_are_preserved_on_rerun(self):
         cli = self.config / "cli.json"
         cli.write_text(
-            '{"theme":{"name":"custom"},"tabs":{"mode":"off"},"plugins":["-opencode.btw","./tui-plugins/btw-v2"]}\n'
+            '{"theme":{"name":"custom"},"tabs":{"mode":"off"},"plugins":["-opencode.btw","./tui-plugins/btw-v2","-opencode.notifications"]}\n'
         )
         before = cli.read_bytes()
         self.prepare()
@@ -92,13 +96,15 @@ class MigrationTests(unittest.TestCase):
     def test_existing_v2_settings_lose_the_old_ade_app_part(self):
         cli = self.config / "cli.json"
         cli.write_text(
-            '{"theme":{"name":"custom"},"plugins":["-opencode.btw","./tui-plugins/btw-v2","./tui-plugins/ade"]}\n'
+            '{"theme":{"name":"custom"},"plugins":["-opencode.btw","./tui-plugins/btw-v2","./tui-plugins/ade","-opencode.notifications"]}\n'
         )
         before = cli.read_bytes()
         self.prepare()
         result = json.loads(self.output.read_text())
         self.assertEqual(result["theme"], {"name": "custom"})
-        self.assertEqual(result["plugins"], ["-opencode.btw", "./tui-plugins/btw-v2"])
+        self.assertEqual(
+            result["plugins"], ["-opencode.btw", "./tui-plugins/btw-v2", "-opencode.notifications"]
+        )
         self.assertEqual(cli.read_bytes(), before)
         cli.write_text(self.output.read_text())
         self.output.unlink()
@@ -123,11 +129,40 @@ class MigrationTests(unittest.TestCase):
                 self.assertEqual(result["theme"], {"name": "custom"})
                 self.assertEqual(
                     result["plugins"],
-                    ["-opencode.btw", "v2-plugin", "./tui-plugins/btw-v2"],
+                    ["-opencode.btw", "v2-plugin", "./tui-plugins/btw-v2", "-opencode.notifications"],
                 )
                 self.assertEqual(cli.read_bytes(), before)
                 cli.write_text(self.output.read_text())
                 self.output.unlink()
+                self.prepare()
+                self.assertFalse(self.output.exists())
+
+    def test_existing_v2_settings_get_the_status_plugin_sounds_once(self):
+        cli = self.config / "cli.json"
+        cli.write_text(
+            '{"theme":{"name":"custom"},"plugins":["-opencode.btw","./tui-plugins/btw-v2"]}\n'
+        )
+        before = cli.read_bytes()
+        self.prepare()
+        result = json.loads(self.output.read_text())
+        self.assertEqual(result["theme"], {"name": "custom"})
+        self.assertEqual(
+            result["plugins"],
+            ["-opencode.btw", "./tui-plugins/btw-v2", "-opencode.notifications"],
+        )
+        self.assertEqual(cli.read_bytes(), before)
+        cli.write_text(self.output.read_text())
+        self.output.unlink()
+        self.prepare()
+        self.assertFalse(self.output.exists())
+
+    def test_settings_that_bring_the_built_in_sounds_back_are_kept(self):
+        for entry in ("opencode.notifications", "opencode.notifications@2.2.5"):
+            with self.subTest(entry=entry):
+                cli = self.config / "cli.json"
+                cli.write_text(
+                    json.dumps({"plugins": ["-opencode.btw", "./tui-plugins/btw-v2", entry]})
+                )
                 self.prepare()
                 self.assertFalse(self.output.exists())
 
@@ -142,6 +177,7 @@ class MigrationTests(unittest.TestCase):
         result = json.loads(self.output.read_text())
         self.assertEqual(result["keybinds"]["command.palette.show"], "ctrl+p")
         self.assertIn("./tui-plugins/btw-v2", result["plugins"])
+        self.assertIn("-opencode.notifications", result["plugins"])
         self.assertNotIn("./tui-plugins/ade", result["plugins"])
         self.assertNotIn("./tui-plugins/btw.tsx", result["plugins"])
 

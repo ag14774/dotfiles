@@ -2,10 +2,12 @@
   "name": "opencode-ade-status",
   "version": "0.0.0",
   "private": true,
-  "description": "OpenCode plugin: reports to the terminal when an OpenCode pane's work is done or failed (OSC 7501), next to OpenCode's own working and waiting",
+  "description": "OpenCode plugin: reports to the terminal when an OpenCode pane's work is done or failed (OSC 7501), next to OpenCode's own working and waiting, and plays OpenCode's attention sounds only in the app showing the conversation",
   "type": "module",
   "exports": {
     "./tui": "./src/tui.ts"
   },
-  "scripts": { "test": "node --test test/*.test.ts" }
+  "scripts": {
+    "test": "node --test test/*.test.ts"
+  }
 }

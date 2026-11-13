@@ -17,6 +17,21 @@ import jsonschema
 # packages/opencode-ade) that loads both its parts by itself, so the entry goes.
 OLD_ADE_TUI_PLUGIN = "./tui-plugins/ade"
 
+# OpenCode's built-in attention plugin plays every conversation's sounds in
+# every OpenCode app on the service (one per tab); with it off, the status
+# plugin (plugins/ade-status) plays them only in the app showing the
+# conversation. Added once: an entry naming the plugin, with or without "-"
+# (`"opencode.notifications"` brings the built-in back), is left as it is.
+NOTIFICATIONS_OFF = "-opencode.notifications"
+
+
+def names_notifications(entry):
+    spec = entry.get("package") if isinstance(entry, dict) else entry
+    return (
+        isinstance(spec, str)
+        and re.fullmatch(r"-?opencode\.notifications(@.*)?", spec) is not None
+    )
+
 
 def read(path):
     return json5.loads(path.read_text()) if path.is_file() else {}
@@ -47,6 +62,11 @@ def prepare(config, state, schema_path, keybind_path, output):
             plugins = [item for item in plugins if item != OLD_ADE_TUI_PLUGIN]
             changes.append(
                 f"Removing the ADE plugin's old app part ({OLD_ADE_TUI_PLUGIN}); plugins/ade loads both parts now"
+            )
+        if not any(names_notifications(item) for item in plugins):
+            plugins.append(NOTIFICATIONS_OFF)
+            changes.append(
+                f"Adding {NOTIFICATIONS_OFF}: plugins/ade-status plays each conversation's sounds once, in the app showing it"
             )
         if changes:
             existing["plugins"] = plugins
@@ -155,8 +175,9 @@ def prepare(config, state, schema_path, keybind_path, output):
         )
     if "animations_enabled" in kv:
         result["animations"] = kv["animations_enabled"]
-    # The dotfiles' BTW plugin replaces the built-in one, as in cli.json.example.
-    result["plugins"] = ["-opencode.btw", "./tui-plugins/btw-v2"]
+    # The dotfiles' BTW plugin replaces the built-in one, and the status plugin
+    # plays the attention sounds, as in cli.json.example.
+    result["plugins"] = ["-opencode.btw", "./tui-plugins/btw-v2", NOTIFICATIONS_OFF]
     for entry in legacy.get("plugin", []):
         package = entry if isinstance(entry, str) else entry[0]
         if package != "./tui-plugins/btw.tsx":

@@ -7,5 +7,5 @@
   "diffs": { "view": "auto" },
   "mouse": true,
   "attention": { "notifications": true, "sound": true, "volume": 0.4 },
-  "plugins": ["-opencode.btw", "./tui-plugins/btw-v2"]
+  "plugins": ["-opencode.btw", "./tui-plugins/btw-v2", "-opencode.notifications"]
 }

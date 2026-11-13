@@ -4,8 +4,14 @@
 // Zellij 0.46 shows these statuses (ade-zjstatus draws them in the bar) and
 // clears "done" and "error" once you have seen the pane; any terminal that
 // understands OSC 7501 can use them.
+//
+// It also plays OpenCode's attention sounds for the conversations this app
+// shows, once the built-in plugin that plays them in every app is switched off
+// (attention.ts).
 import { Plugin } from "@opencode/plugin/tui"
 import { createEffect, createMemo, createRoot } from "solid-js"
+import { attend } from "./attention.ts"
+import { switchedOff } from "./cli-config.ts"
 import type { Activity, Conversation, Ending } from "./status.ts"
 import { follower, rootOf } from "./status.ts"
 
@@ -17,7 +23,6 @@ export default Plugin.define({
   id: "local.ade-status",
   setup(context) {
     const renderer = context.renderer
-    if (typeof renderer.setProgramStatus !== "function") return // an OpenCode without OSC 7501
     const session = context.data.session
 
     // As OpenCode works out its own report: a conversation with its subagents
@@ -64,12 +69,34 @@ export default Plugin.define({
         const shown = route.type === "session" && route.sessionID !== "dummy" ? [session.root(route.sessionID)] : []
         return [...new Set([...tabs, ...shown])]
       })
-      const follow = follower(conversation)
-      createEffect(() => {
-        const ending = follow(ids())
-        if (ending) report(ids, ending)
-      })
-      return dispose
+      const stops: (() => void)[] = []
+      if (typeof context.attention?.notify === "function" && typeof context.data.on === "function")
+        stops.push(
+          attend(
+            {
+              on: (type, listener) => context.data.on(type as never, listener as never),
+              session,
+              notify: (notice) => context.attention.notify(notice),
+              toast: (toast) => context.ui.toast.show(toast),
+            },
+            {
+              mine: (id) => ids().includes(session.root(id)),
+              active: () => switchedOff("opencode.notifications"),
+            },
+          ),
+        )
+      // An OpenCode without OSC 7501 has no statuses to add to.
+      if (typeof renderer.setProgramStatus === "function") {
+        const follow = follower(conversation)
+        createEffect(() => {
+          const ending = follow(ids())
+          if (ending) report(ids, ending)
+        })
+      }
+      return () => {
+        stops.forEach((stop) => stop())
+        dispose()
+      }
     })
   },
 })

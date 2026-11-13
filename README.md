@@ -108,8 +108,10 @@ After upgrading Zellij, Helix or OpenCode, run `zsh tests/zellij_restore_smoke.z
 It saves, kills and restores a throwaway session (never `main`) and checks that
 all of the above still holds. After upgrading OpenCode or changing the ADE
 plugin, also run `zsh tests/ade_plugin_smoke.zsh` (see "OpenCode agents and Zellij"),
-and after changing the worktree plugin or `ade worktree`,
-`zsh tests/opencode_worktrees_smoke.zsh` (a private OpenCode service, no Zellij).
+after changing the worktree plugin or `ade worktree`,
+`zsh tests/opencode_worktrees_smoke.zsh` (a private OpenCode service, no Zellij),
+and after upgrading OpenCode or changing the status plugin,
+`zsh tests/opencode_attention_smoke.zsh` (its sounds play once, in the right app).
 After changing `packages/`, run `node --test` in each of `packages/ade-kit`,
 `packages/opencode-ade`, `packages/opencode-ade-status` and
 `packages/opencode-ade-worktrees` (Node's own test
@@ -379,6 +381,17 @@ including "no OpenCode pane in Zellij is showing this conversation".
   there). Tab names are left alone. Stow links the plugin as
   `~/.config/opencode/plugins/ade-status` (a link committed under `config/`);
   it has only an app part, which each OpenCode app loads when it starts.
+- OpenCode's sounds (turn done, question, permission, error, subagent done)
+  and system notifications play once, in the tab showing the conversation.
+  OpenCode's own attention plugin plays every conversation's in every OpenCode
+  app connected to the service, so once per tab; `cli.json` switches it off
+  (`"-opencode.notifications"` in `plugins`, which the installer adds) and the
+  status plugin plays them instead, with the same sounds, volume and focus
+  rules (`attention.*` in `cli.json`), for the conversations its app shows and
+  their subagents. It reads `cli.json` as OpenCode does, and plays nothing
+  while the built-in plugin is on, so the two never both play;
+  `"opencode.notifications"` in `plugins` brings the built-in one back. The
+  live tests' OpenCode apps play no sounds.
 - Each conversation a pane in Zellij shows gets short instructions about this
   setup (tabs, `show_file`, `status`, delegating only when asked), as a per-conversation
   instruction entry rather than a global `AGENTS.md`, so OpenCode elsewhere
