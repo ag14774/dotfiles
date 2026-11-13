@@ -14,8 +14,8 @@
 # (tests/lib/zellij-sandbox.zsh): its own Zellij server, HOME and config, so it
 # never reaches your session and leaves nothing in your Zellij cache or tuicr's
 # records. A pane running `cat` stands in for OpenCode, so no model is called.
-# The sandbox's config is this checkout's (Helix's `+ a` calling this checkout's
-# opencode-send), with the Yazi plugins and flavor you installed.
+# The sandbox's config is this checkout's (Alt-v and Helix's `+ a` calling this
+# checkout's ade), with the Yazi plugins and flavor you installed.
 
 set -u
 
@@ -64,19 +64,20 @@ press() { print -rn -- "$1" >> "$TMP/keys"; } # through the client: Zellij's own
 # This checkout's Zellij config, its keys pointing at this checkout's scripts
 # (Alt-t's dev layout must exist for the config to load).
 sandbox_layout
-sed "s|\$HOME/.config/zellij/|$ROOT/config/.config/zellij/|g" "$ROOT/config/.config/zellij/config.kdl" > "$TMP/zj/config.kdl"
-grep -q "$ROOT/config/.config/zellij/review.sh" "$TMP/zj/config.kdl" || fail "could not point Alt-v at this checkout"
+sed -e "s|\$HOME/.config/zellij/|$ROOT/config/.config/zellij/|g" -e "s|\$HOME/.local/bin/ade |$ROOT/config/.local/bin/ade |g" \
+  "$ROOT/config/.config/zellij/config.kdl" > "$TMP/zj/config.kdl"
+grep -q "$ROOT/config/.local/bin/ade review" "$TMP/zj/config.kdl" || fail "could not point Alt-v at this checkout"
 grep -q "$ROOT/config/.config/zellij/yazi-picker.sh" "$TMP/zj/config.kdl" || fail "could not point Alt-y at this checkout"
 
-# This checkout's config, with Helix's `+ a` calling this checkout's
-# opencode-send, and the Yazi packages you installed (`ya pkg`).
+# This checkout's config, with Helix's `+ a` calling this checkout's ade, and
+# the Yazi packages you installed (`ya pkg`).
 sandbox_config helix yazi tuicr fzf git ade
 for d in "$SANDBOX_REAL_HOME"/.config/yazi/{plugins,flavors}/*.yazi(N/); do
   mkdir -p "$XDG_CONFIG_HOME/yazi/${d:h:t}"
   [[ -e $XDG_CONFIG_HOME/yazi/${d:h:t}/${d:t} ]] || cp -R "$d" "$XDG_CONFIG_HOME/yazi/${d:h:t}/"
 done
-sed -i.orig "s|\$HOME/.local/bin/opencode-send|$ROOT/config/.local/bin/opencode-send|g" "$XDG_CONFIG_HOME/helix/config.toml"
-grep -q "$ROOT/config/.local/bin/opencode-send" "$XDG_CONFIG_HOME/helix/config.toml" || fail "could not point + a at this checkout"
+sed -i.orig "s|\$HOME/.local/bin/ade |$ROOT/config/.local/bin/ade |g" "$XDG_CONFIG_HOME/helix/config.toml"
+grep -q "$ROOT/config/.local/bin/ade send" "$XDG_CONFIG_HOME/helix/config.toml" || fail "could not point + a at this checkout"
 
 # A clone whose branch has a commit (a.txt changed, c.txt added) and an
 # uncommitted new file (b.txt).

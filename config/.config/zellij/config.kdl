@@ -198,7 +198,7 @@ keybinds clear-defaults=true {
         // remote's default branch, committed or not. `y` sends your comments to
         // this tab's OpenCode; `e` opens a file in the editor pane.
         bind "Alt v" {
-            Run "bash" "-c" "$HOME/.config/zellij/review.sh" {
+            Run "bash" "-c" "$HOME/.local/bin/ade review" {
                 floating true
                 close_on_exit true
                 name "review"

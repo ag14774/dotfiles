@@ -144,9 +144,9 @@ main_pane=$(value_of 30 pane_field 0 main '.id') || fail "no main pane in tab 0"
 zj write-chars --pane-id "terminal_$main_pane" 'sleep 9131'
 zj write --pane-id "terminal_$main_pane" 13
 wait_for 10 pgrep -fx 'sleep 9131' || fail "the shell did not start the long command"
-(cd "$main" && in_session env ZELLIJ_PANE_ID="$main_pane" "$ROOT/config/.local/bin/hx-open" notes.md) \
-  || fail "hx-open could not open a file"
-wait_for 30 running 0 editor || fail "hx-open did not start Helix"
+(cd "$main" && in_session env ZELLIJ_PANE_ID="$main_pane" "$ROOT/config/.local/bin/ade" open notes.md) \
+  || fail "ade open could not open a file"
+wait_for 30 running 0 editor || fail "ade open did not start Helix"
 wait_for 10 editor_on_top 0 \
   || fail "the new editor pane is not above main: $(panes | jq -c '[.[] | select(.is_plugin == false and .tab_id == 0) | {title, pane_y}]')"
 
@@ -200,15 +200,15 @@ if [[ $(panes | jq --argjson id "$editor" '[.[] | select(.id == $id and .is_plug
 else
   print "  (the restored editor pane stayed open, stopped)"
 fi
-# Alt-y runs in the tab you are on, and Alt-t moved you to a new one (hx-open
+# Alt-y runs in the tab you are on, and Alt-t moved you to a new one (ade open
 # never switches you to another tab).
 zj go-to-tab-by-id 0
-(cd "$main" && in_session env ZELLIJ_PANE_ID="$main_pane" "$ROOT/config/.local/bin/hx-open" other.md) \
-  || fail "hx-open failed on a stopped editor pane"
+(cd "$main" && in_session env ZELLIJ_PANE_ID="$main_pane" "$ROOT/config/.local/bin/ade" open other.md) \
+  || fail "ade open failed on a stopped editor pane"
 wait_for 30 running 0 editor \
-  || fail "hx-open did not restart Helix in the editor pane: $(panes | jq -c '[.[] | select(.title == "editor") | {id, tab_id, exited, is_held, terminal_command}]')"
+  || fail "ade open did not restart Helix in the editor pane: $(panes | jq -c '[.[] | select(.title == "editor") | {id, tab_id, exited, is_held, terminal_command}]')"
 [[ $(panes | jq '[.[] | select(.is_plugin == false and .tab_id == 0 and .title == "editor")] | length') == 1 ]] \
-  || fail "hx-open left more than one editor pane"
+  || fail "ade open left more than one editor pane"
 pgrep -f "$main/other.md" >/dev/null || fail "the restarted Helix did not open the file"
 wait_for 10 editor_on_top 0 || fail "the restarted editor pane is not above main"
 

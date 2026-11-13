@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # ~/.config/zellij/yazi-picker.sh
 #
-# Alt-y summons this in a floating pane. Yazi runs as a chooser; hx-open routes
-# the picked file(s) into this tab's named "editor" (Helix) pane, or spawns one.
+# Alt-y summons this in a floating pane. Yazi runs as a chooser; `ade open`
+# routes the picked file(s) into this tab's named "editor" (Helix) pane, or
+# spawns one.
 #
 # Debug: `touch ~/.cache/yazi-picker/DEBUG` to log to last-run.log; `rm` to silence.
 set -u
@@ -14,9 +15,9 @@ set -u
 # shellcheck source=/dev/null
 [ -f "$HOME/.config/fzf/fzf.env" ] && . "$HOME/.config/fzf/fzf.env"
 
-# This checkout's hx-open (stowed to ~/.local/bin), found through the stow
+# This checkout's ade (stowed to ~/.local/bin), found through the stow
 # symlink so the picker keeps working before a new script is stowed.
-HX_OPEN="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/../../.local/bin/hx-open"
+ADE="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/../../.local/bin/ade"
 CACHE="${XDG_CACHE_HOME:-$HOME/.cache}/yazi-picker"
 mkdir -p "$CACHE"
 LOG="$CACHE/last-run.log"
@@ -38,7 +39,7 @@ log "=== picker start === session=${ZELLIJ_SESSION_NAME:-<unset>}"
 
 # The tab Alt-y was pressed in: the picker runs in a floating pane whose id is
 # $ZELLIJ_PANE_ID; look it up to get our tab_id (used for the project lookup
-# below; hx-open scopes the editor lookup the same way). Empty => any tab.
+# below; `ade open` scopes the editor lookup the same way). Empty => any tab.
 TAB="$(zellij action list-panes --json 2>>"$ERRTO" | jq -r --arg me "${ZELLIJ_PANE_ID:-}" '.[]|select(.is_plugin==false and (.id|tostring)==$me)|.tab_id' | head -n1)"
 log "current tab=[$TAB] (my pane_id=${ZELLIJ_PANE_ID:-<unset>})"
 
@@ -80,8 +81,8 @@ done <"$chooser"
 log "files: ${files[*]}"
 
 if [ "$DEBUG" = 1 ]; then
-  HX_OPEN_LOG="$LOG" "$HX_OPEN" "${files[@]}"
+  ADE_LOG="$LOG" "$ADE" open "${files[@]}"
 else
-  "$HX_OPEN" "${files[@]}"
+  "$ADE" open "${files[@]}"
 fi
 log "=== done ==="

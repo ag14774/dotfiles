@@ -104,7 +104,7 @@ r = [
 # Give this tab's OpenCode the file and line (or the selection, with its line
 # range and text) and switch to it, to ask about it. Other selections are
 # dropped first, as only the primary one is sent.
-a = ["keep_primary_selection", ":pipe-to $HOME/.local/bin/opencode-send '%{buffer_name}' %{selection_line_start} %{selection_line_end} '%{language}'"]
+a = ["keep_primary_selection", ":pipe-to $HOME/.local/bin/ade send '%{buffer_name}' %{selection_line_start} %{selection_line_end} '%{language}'"]
 
 # "g u" -- go up to the overridden method in the parent class (Python).
 # Helix has no LSP type-hierarchy jump, so this shells out to a small Jedi
@@ -121,7 +121,7 @@ u = [
 ]
 
 [keys.select."+"]
-a = ["keep_primary_selection", ":pipe-to $HOME/.local/bin/opencode-send '%{buffer_name}' %{selection_line_start} %{selection_line_end} '%{language}'"] # as in normal mode: ask this tab's OpenCode about the selection
+a = ["keep_primary_selection", ":pipe-to $HOME/.local/bin/ade send '%{buffer_name}' %{selection_line_start} %{selection_line_end} '%{language}'"] # as in normal mode: ask this tab's OpenCode about the selection
 
 [keys.select]
 C-up = [
