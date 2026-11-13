@@ -20,7 +20,7 @@ type Action = "show_file" | "delegate" | "status"
 // `prepare` creates, and run the request's command on the copy (delegate).
 type Copy = { sessionID: string; before?: string; compact: boolean; prepare: string[] }
 type Task = { branch: string; brief: string; base?: string; context?: "none" | "full" | "compact"; directory?: string }
-// From `wt-core ls --json`, plus the worktree's latest conversation.
+// From `ade worktree ls --json`, plus the worktree's latest conversation.
 type Worktree = {
   path: string
   branch: string | null
@@ -197,7 +197,7 @@ export default Plugin.define({
             "You are not told when it finishes; the user follows it in that tab.",
         }
       if (!result.ran) return { ok: false, message: result.message }
-      return { ok: false, message: `Nothing was delegated: ${result.message || "wt-core failed."}` }
+      return { ok: false, message: `Nothing was delegated: ${result.message || "the worktree command failed."}` }
     }
 
     // The latest top-level conversation in `directory`: what it is doing, and
@@ -265,8 +265,9 @@ export default Plugin.define({
     }
 
     await ctx.tool.transform((editor) => {
-      // Worktrees come from wt, through delegate (OpenCode's make detached,
-      // tab-less worktrees elsewhere).
+      // Agents make worktrees with delegate, which also opens their tab
+      // (OpenCode's own make them without one; through
+      // packages/opencode-ade-worktrees, where wt would).
       editor.remove("opencode_worktree_create")
       editor.remove("opencode_worktree_list")
       editor.add({

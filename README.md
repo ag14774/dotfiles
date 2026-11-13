@@ -107,9 +107,12 @@ plain shell. `zreset` deletes the saved session for a clean start.
 After upgrading Zellij, Helix or OpenCode, run `zsh tests/zellij_restore_smoke.zsh`.
 It saves, kills and restores a throwaway session (never `main`) and checks that
 all of the above still holds. After upgrading OpenCode or changing the ADE
-plugin, also run `zsh tests/ade_plugin_smoke.zsh` (see "OpenCode agents and Zellij").
+plugin, also run `zsh tests/ade_plugin_smoke.zsh` (see "OpenCode agents and Zellij"),
+and after changing the worktree plugin or `ade worktree`,
+`zsh tests/opencode_worktrees_smoke.zsh` (a private OpenCode service, no Zellij).
 After changing `packages/`, run `node --test` in each of `packages/ade-kit`,
-`packages/opencode-ade` and `packages/opencode-ade-status` (Node's own test
+`packages/opencode-ade`, `packages/opencode-ade-status` and
+`packages/opencode-ade-worktrees` (Node's own test
 runner, no dependencies), and
 `zsh tests/ade_open.zsh`, `zsh tests/ade_send.zsh` and
 `zsh tests/ade_review_scope.zsh`, which check `ade open` and `ade send` against a
@@ -349,7 +352,15 @@ including "no OpenCode pane in Zellij is showing this conversation".
     summary), and the same `open --prompt` runs with `--session COPY`.
     The original conversation stays in its tab, unchanged.
   - OpenCode's own `worktree_create`/`worktree_list` tools are hidden from
-    agents: they make detached worktrees elsewhere, without a tab.
+    agents: they make worktrees without a tab. What OpenCode makes or removes
+    itself (Ctrl+P "Open" → a project → Right → Ctrl+N "New worktree", the
+    desktop app, the agents' `worktree_remove`) goes through the worktree plugin,
+    `packages/opencode-ade-worktrees` (an OpenCode worktree strategy on
+    `ade worktree`): the repository's layout, a real branch named as you typed,
+    seeded files, and `wtrm`'s checks (with changes, OpenCode asks before
+    forcing). It opens and closes no tabs. It replaces OpenCode's own Git
+    strategy by taking its name, `git`, so the worktrees OpenCode already
+    knows go through it too.
 - `status` answers "how are the other worktrees doing?" from any tab: for each
   of the project's worktrees, its branch, uncommitted changes, commits ahead of
   `origin/HEAD`, whether it has a tab (`ade worktree ls --json`, in the pane),
@@ -376,7 +387,9 @@ including "no OpenCode pane in Zellij is showing this conversation".
 - The plugin is `packages/opencode-ade`, which uses `ade-kit` (`show_file` runs
   `ade open`'s code in the app part). Stow links it as
   `~/.config/opencode/plugins/ade` (a link committed under `config/`), and
-  OpenCode loads both its parts from there.
+  OpenCode loads both its parts from there. The worktree plugin is linked the
+  same way, as `plugins/ade-worktrees`; it has only a server part, so a change
+  to it applies after `opencode service restart`.
 - The server part also removes the Zellij variables from the service's own
   environment. A conversation that
   never had a pane (a subagent, a fork not yet opened) would otherwise get the
