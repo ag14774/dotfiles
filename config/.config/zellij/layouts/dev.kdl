@@ -5,7 +5,8 @@ layout {
         // ade-zjstatus (github.com/ag14774/ade-zjstatus, needs Zellij 0.46): zjstatus
         // with agent statuses, see its FORK.md.
         plugin location="https://github.com/ag14774/ade-zjstatus/releases/download/v0.25.0-ade.4/zjstatus.wasm" {
-            format_left   "{mode}{tabs}#[fg=#585b70]  +⌥t "
+            // No mode ({mode}): the bottom bar shows it, with its keys.
+            format_left   "{tabs}#[fg=#585b70]  +⌥t "
             format_center ""
             // No session name (it is always main) and no clock: zjstatus redraws
             // only on Zellij events, so a clock went stale while the session idled.
@@ -16,21 +17,11 @@ layout {
             border_enabled             "false"
             hide_frame_for_single_pane "false"
 
-            mode_locked  "#[fg=#f38ba8,bold]  "
-            mode_normal  "#[fg=#f9e2af,bold]  "
-            mode_pane    "#[fg=#f9e2af,bold]  "
-            mode_tab     "#[fg=#f9e2af,bold]  "
-            mode_resize  "#[fg=#f9e2af,bold]  "
-            mode_move    "#[fg=#f9e2af,bold]  "
-            mode_scroll  "#[fg=#f9e2af,bold]  "
-            mode_search  "#[fg=#f9e2af,bold]  "
-            mode_session "#[fg=#f9e2af,bold]  "
-            mode_tmux    "#[fg=#f9e2af,bold]  "
-
-            // {attention}: the icon of the most urgent status in the tab.
-            tab_normal    "#[fg=#6C7086] {attention}{name} "
+            // {attention}: the icon of the most urgent status in the tab. A faint
+            // separator between tabs; groups get a bright one (below).
+            tab_normal    "#[fg=#6c7086] {attention}{name} "
             tab_active    "#[fg=#89b4fa,bold] {attention}{name} "
-            tab_separator "#[fg=#94e2d5,bold]⋮"
+            tab_separator "#[fg=#45475a]⋮"
 
             // What agents report to Zellij themselves (OSC 7501; the ADE status
             // plugin, packages/opencode-ade-status, adds done and failed for
@@ -42,7 +33,7 @@ layout {
             attention_failed          "#[fg=#f38ba8]\u{f057} "
             attention_done            "#[fg=#a6e3a1]\u{f00c} "
             attention_working         "#[fg=#f9e2af]\u{f051f} "
-            attention_count_separator "  "
+            attention_count_separator " "
             attention_format          "{counts} "
 
             // Tab groups: a tab named "prefix: name" belongs to the group
@@ -50,7 +41,15 @@ layout {
             // "project: worktree", see ~/.config/ade/config.json). The bar
             // keeps a group's tabs together, which needs the permission
             // "Execute actions as the user". Tab mode g/G collapse or expand.
-            tab_groups                "true"
+            // Labels in mauve (a collapsed group: its tab count and statuses),
+            // a bright separator next to each group. As in ade-zjstatus's
+            // examples/groups.kdl.
+            tab_groups                 "true"
+            tab_group_expanded         "#[fg=#cba6f7,bold] {name}:"
+            tab_group_collapsed        "#[fg=#cba6f7] {name} +{count} {attention_counts} "
+            tab_group_collapsed_active "#[fg=#cba6f7,bold] {name}:"
+            tab_group_hidden           "#[fg=#6c7086]+{count} {attention_counts} "
+            tab_group_separator        "#[fg=#94e2d5,bold]┃"
         }
     }
     // BOTTOM BAR: zellij keybinding hints.
