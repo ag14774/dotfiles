@@ -7,12 +7,15 @@
 # delegated tabs for it.
 #
 # OpenCode runs a private background service with temporary data and config
-# (your auth, model preferences and ~/.config/zsh/secrets.zsh are reused), in a
-# throwaway Zellij session, so it never touches `main` or your OpenCode service.
-# Most steps call the plugin's RPC methods directly; three have an agent use the
-# tools (show_file after /cd, delegate from plain English, also into another
-# repository). Delegated tabs answer their briefs, and one copy is compacted:
-# nine short model calls with your most recent model (or ADE_TEST_MODEL).
+# (your auth, Google credentials, model preferences and
+# ~/.config/zsh/secrets.zsh are reused), on a port of its own, in a throwaway
+# Zellij session in a sandbox (tests/lib/zellij-sandbox.zsh: its own Zellij
+# server and HOME), so it never touches `main`, your Zellij cache or your
+# OpenCode service. Most steps call the plugin's RPC methods directly; three
+# have an agent use the tools (show_file after /cd, delegate from plain English,
+# also into another repository). Delegated tabs answer their briefs, and one
+# copy is compacted: nine short model calls with your most recent model (or
+# ADE_TEST_MODEL).
 
 set -u
 
@@ -20,8 +23,10 @@ ROOT=${0:A:h:h}
 TMP=$(mktemp -d)
 TMP=${TMP:A}
 S=ade$$
-mkdir -p "$TMP"/{A,B,C,zj/layouts,bin,src/plugins} "$TMP"/oc/{data/opencode,state/opencode,cache,config}
-: > "$TMP/keys"
+source "$ROOT/tests/lib/zellij-sandbox.zsh"
+sandbox_init "$TMP/zj"
+REAL=$SANDBOX_REAL_HOME
+mkdir -p "$TMP"/{A,B,C,zj/layouts,src/plugins} "$TMP"/oc/{data/opencode,state/opencode,cache,config}
 : > "$TMP/zj/config.kdl"
 cp "$ROOT/config/.config/zellij/layouts/dev.kdl" "$TMP/zj/layouts/"
 for f in A/notes B/notes A/other A/bg A/two C/none; do print "I am $f" > "$TMP/$f.md"; done
@@ -96,24 +101,16 @@ start_conversation() { # $1 = OpenCode pane, $2 = directory: start one with a sh
   newest "$2"
 }
 cleanup() {
-  # Stop the private service by its pid (never `opencode service stop`, which
-  # stops yours if the environment is lost).
-  local service=$TMP/oc/state/opencode/service.json
-  [[ -f $service ]] && kill "$(jq -r '.pid' "$service")" 2>/dev/null
-  zellij kill-session "$S" >/dev/null 2>&1
-  pkill -f "tail -n 0 -f $TMP/keys" 2>/dev/null
-  pkill -f "force-run-commands $S" 2>/dev/null
-  sleep 1
-  zellij delete-session --force "$S" >/dev/null 2>&1
+  sandbox_cleanup "$S"
   rm -rf "$TMP"
 }
 trap cleanup EXIT
 
 # Private OpenCode: your config, with a copy of this checkout's plugins linked in
 # the way the installer links them (the stale-warning step edits the copy).
-cp ~/.local/share/opencode/auth.json "$TMP/oc/data/opencode/" 2>/dev/null
-cp ~/.local/state/opencode/model.json "$TMP/oc/state/opencode/" 2>/dev/null
-cp -RL ~/.config/opencode "$TMP/oc/config/opencode" 2>/dev/null
+cp "$REAL/.local/share/opencode/auth.json" "$TMP/oc/data/opencode/" 2>/dev/null
+cp "$REAL/.local/state/opencode/model.json" "$TMP/oc/state/opencode/" 2>/dev/null
+cp -RL "$REAL/.config/opencode" "$TMP/oc/config/opencode" 2>/dev/null
 config=$TMP/oc/config/opencode
 rm -rf "$config"/{service.json,node_modules,plugins/ade.ts,plugins/ade,plugins/ade-status,tui-plugins/ade}
 mkdir -p "$config/plugins"
@@ -124,22 +121,19 @@ ln -s "$TMP/src/packages/opencode-ade-status" "$config/plugins/ade-status"
 [[ -f $config/cli.json ]] || print '{}' > "$config/cli.json"
 jq '.plugins = ((.plugins // []) - ["./tui-plugins/ade"])' "$config/cli.json" \
   > "$config/cli.json.new" && mv "$config/cli.json.new" "$config/cli.json"
-ln -s "$ROOT/config/.local/bin/wt-core" "$TMP/bin/"
-# This checkout's ADE config (OpenCode through opencode-pane) and
-# opencode-pane, as installed.
+# This checkout's ADE config (OpenCode through opencode-pane); the sandbox has
+# this checkout's wt-core and opencode-pane first on PATH, as installed.
 mkdir -p "$TMP/oc/config/ade"
 cp "$ROOT/config/.config/ade/config.json" "$TMP/oc/config/ade/"
-ln -s "$ROOT/config/.local/bin/opencode-pane" "$TMP/bin/"
 export XDG_DATA_HOME=$TMP/oc/data XDG_STATE_HOME=$TMP/oc/state XDG_CACHE_HOME=$TMP/oc/cache \
-  XDG_CONFIG_HOME=$TMP/oc/config PATH="$TMP/bin:$PATH"
-unset OPENCODE_PASSWORD OPENCODE_SERVER_PASSWORD
-[[ -r ~/.config/zsh/secrets.zsh ]] && source ~/.config/zsh/secrets.zsh
-# The private service starts here, inside this caller's Zellij pane, so it
-# inherits that pane's Zellij variables (the plugin must remove them).
-# Its own port: the managed service's default port is the one yours uses.
-oc_cli service set port "$(python3 -c 'import socket; s = socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1])')" >/dev/null 2>&1
-oc_cli service start >"$TMP/service.log" 2>&1
-wait_for 30 test -f "$TMP/oc/state/opencode/service.json" || fail "the private OpenCode service did not start"
+  XDG_CONFIG_HOME=$TMP/oc/config
+[[ -r $REAL/.config/zsh/secrets.zsh ]] && source "$REAL/.config/zsh/secrets.zsh"
+# Google's credentials (for models on Vertex AI) are found through HOME.
+adc=$REAL/.config/gcloud/application_default_credentials.json
+[[ -z ${GOOGLE_APPLICATION_CREDENTIALS:-} && -r $adc ]] && export GOOGLE_APPLICATION_CREDENTIALS=$adc
+# The private service starts as if from a pane of the test's session, with its
+# Zellij variables (the plugin must remove them), on a port of its own.
+sandbox_opencode ZELLIJ=0 ZELLIJ_SESSION_NAME="$S" ZELLIJ_PANE_ID=0 || fail "the private OpenCode service did not start"
 
 # Two projects in wt's layout, for delegate: proj, and proj2 to reach from it.
 for p in proj proj2; do
@@ -151,12 +145,11 @@ for p in proj proj2; do
   [[ -d $TMP/$p/main ]] || fail "could not set up the wt project $p"
 done
 
-# Zellij passes this environment (private OpenCode, this checkout's wt-core) on
-# to its panes.
-(cd "$TMP/A" && tail -n 0 -f "$TMP/keys" | env -u ZELLIJ -u ZELLIJ_SESSION_NAME -u ZELLIJ_PANE_ID TERM=xterm-256color \
-  script -q /dev/null zsh -fc "stty rows 50 cols 200; exec zellij --config-dir '$TMP/zj' attach --create --force-run-commands $S" \
-  >"$TMP/client.log" 2>&1 &) >/dev/null 2>&1
+# Zellij passes this environment (sandbox, private OpenCode, this checkout's
+# wt-core) on to its panes.
+sandbox_client "$TMP/A" --config-dir "$TMP/zj" attach --create --force-run-commands "$S"
 wait_for 60 session_running || fail "the test session did not start"
+sandbox_dismiss_welcome "$S"
 
 tab=$(dev_tab "$TMP/A") || exit 1
 oc=$(pane opencode "$tab") ed=$(pane editor "$tab")
