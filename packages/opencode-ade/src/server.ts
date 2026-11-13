@@ -24,6 +24,7 @@ type Task = { branch: string; brief: string; base?: string; context?: "none" | "
 type Worktree = {
   path: string
   branch: string | null
+  base: string
   changed: number
   ahead: number | null
   behind: number | null
@@ -240,7 +241,7 @@ export default Plugin.define({
         worktree.branch ? `branch ${worktree.branch}` : "detached HEAD",
         worktree.changed ? `${worktree.changed} changed file${worktree.changed === 1 ? "" : "s"}` : "no changes",
       ]
-      if (worktree.ahead !== null) parts.push(`${worktree.ahead} ahead, ${worktree.behind} behind origin/HEAD`)
+      if (worktree.ahead !== null) parts.push(`${worktree.ahead} ahead, ${worktree.behind} behind ${worktree.base}`)
       parts.push(worktree.tab === "sure" ? "tab open" : worktree.tab === "unsure" ? "tab probably open" : "no tab")
       const conversation = worktree.conversation
       const talk = conversation

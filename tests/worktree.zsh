@@ -373,7 +373,7 @@ git -C "$TMP/local-only" commit -q --allow-empty -m one
 cd "$TMP/local-only"
 core ls --json
 cd "$project/main"
-assert_eq "$out" "[{\"path\":\"$TMP/local-only\",\"branch\":\"main\",\"changed\":0,\"ahead\":null,\"behind\":null,\"tab\":null}]"
+assert_eq "$out" "[{\"path\":\"$TMP/local-only\",\"branch\":\"main\",\"base\":\"origin/HEAD\",\"changed\":0,\"ahead\":null,\"behind\":null,\"tab\":null}]"
 (cd "$TMP/no-repo" && core ls --json) && fail "wtls outside a repository should fail"
 said "ade worktree ls: not inside a git repo"
 git -C "$project" worktree prune
@@ -749,9 +749,9 @@ zellij action close-tab-by-id "$paneless"
 wt -b listed >/dev/null 2>&1
 print change > "$project/listed/notes.md"
 json=$("$ROOT/config/.local/bin/ade" worktree ls --json)
-entry() { jq -c --arg p "$project/$1" '.[] | select(.path == $p) | {branch, changed, ahead, behind, tab}' <<< "$json"; }
-assert_eq "$(entry listed)" '{"branch":"listed","changed":1,"ahead":0,"behind":0,"tab":"sure"}'
-assert_eq "$(entry main)" '{"branch":"main","changed":0,"ahead":0,"behind":0,"tab":null}'
+entry() { jq -c --arg p "$project/$1" '.[] | select(.path == $p) | {branch, base, changed, ahead, behind, tab}' <<< "$json"; }
+assert_eq "$(entry listed)" '{"branch":"listed","base":"origin/HEAD","changed":1,"ahead":0,"behind":0,"tab":"sure"}'
+assert_eq "$(entry main)" '{"branch":"main","base":"origin/HEAD","changed":0,"ahead":0,"behind":0,"tab":null}'
 # Without the caller's pane the tabs are found all the same; outside Zellij
 # there are none. A live pane that reports no directory makes a tab "unsure".
 json=$(env -u ZELLIJ_PANE_ID "$ROOT/config/.local/bin/ade" worktree ls --json)

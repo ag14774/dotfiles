@@ -2,16 +2,17 @@
 import type { Kit, Reviewer, Scope } from "./types.ts"
 
 export async function scopeOf(kit: Kit, dir: string): Promise<Scope> {
+  const base = kit.config.worktrees.base
   const git = async (...args: string[]) => {
     const result = await kit.run(["git", "-C", dir, ...args])
     return result.ok ? result.stdout.trim() : ""
   }
-  const [head, base, changes] = await Promise.all([
+  const [head, start, changes] = await Promise.all([
     git("rev-parse", "--verify", "--quiet", "HEAD"),
-    git("merge-base", "origin/HEAD", "HEAD"),
+    git("merge-base", base, "HEAD"),
     git("status", "--porcelain"),
   ])
-  return { dir, ...(base ? { base } : {}), commits: base !== "" && base !== head, uncommitted: changes !== "" }
+  return { dir, ...(start ? { base: start } : {}), commits: start !== "" && start !== head, uncommitted: changes !== "" }
 }
 
 // The scope as `ade review --scope` prints it, in tuicr's notation: -r

@@ -559,7 +559,8 @@ export type Listed = {
   path: string
   branch: string | null
   changed: number // files with uncommitted changes
-  ahead: number | null // commits relative to origin/HEAD (null without it)
+  base: string // worktrees.base, which ahead and behind count from
+  ahead: number | null // commits relative to base (null when it doesn't resolve)
   behind: number | null
   tab: "sure" | "unsure" | null // see tabsIn; null outside a multiplexer
 }
@@ -568,7 +569,7 @@ export type Listed = {
 // for `ls --json` and the plugin's status.
 export async function list(kit: Kit, io: Io): Promise<Listed[]> {
   if ((await query(kit, io, ["rev-parse", "--git-dir"])) === undefined) throw new Failed(`${COMMAND.ls}: not inside a git repo`)
-  const base = line(await query(kit, io, ["rev-parse", "--verify", "--quiet", "origin/HEAD"]))
+  const base = line(await query(kit, io, ["rev-parse", "--verify", "--quiet", kit.config.worktrees.base]))
   const found = (await worktreeRecords(kit, io, io.cwd)).filter((r) => !r.bare && isDirectory(r.path))
   const paths = found.map((r) => r.path)
   let tabsOf: Record<string, { sure: boolean }[]> = {}
@@ -583,6 +584,7 @@ export async function list(kit: Kit, io: Io): Promise<Listed[]> {
       return {
         path,
         branch: branch || null,
+        base: kit.config.worktrees.base,
         changed: status.split("\n").length - 1,
         ahead,
         behind,

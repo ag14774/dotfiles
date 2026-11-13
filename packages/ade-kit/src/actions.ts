@@ -271,11 +271,12 @@ export async function review(kit: Kit, caller: Caller, terminal: Terminal) {
   if (!workspace) return terminal.pause(`Nothing to review: ${dir} is not in a Git repository.`)
   const scope = await scopeOf(kit, workspace.dir)
   if (!scope.commits && !scope.uncommitted) {
-    const remote = await kit.run(["git", "-C", workspace.dir, "rev-parse", "--verify", "--quiet", "origin/HEAD"])
+    const base = kit.config.worktrees.base
+    const known = await kit.run(["git", "-C", workspace.dir, "rev-parse", "--verify", "--quiet", base])
     return terminal.pause(
-      remote.ok
-        ? `Nothing to review in ${workspace.dir}: no commits since origin/HEAD and no uncommitted changes.`
-        : `Nothing to review in ${workspace.dir}: no uncommitted changes (and no origin/HEAD to compare commits with).`,
+      known.ok
+        ? `Nothing to review in ${workspace.dir}: no commits since ${base} and no uncommitted changes.`
+        : `Nothing to review in ${workspace.dir}: no uncommitted changes (and no ${base} to compare commits with).`,
     )
   }
   const reviewer = await loadReviewer(kit)

@@ -124,8 +124,8 @@ export type PasteAgentOptions = {
   start(o: { session?: string; prompt?: string }): string[]
 }
 
-// What a review covers: the commits since the merge base with origin/HEAD
-// (`base`), and uncommitted changes (new files included). With HEAD at the
+// What a review covers: the commits since the merge base with the configured
+// worktrees.base (`base`), and uncommitted changes (new files included). With HEAD at the
 // merge base (a branch's changes staged on a detached HEAD), only
 // `uncommitted` is set.
 export type Scope = { dir: string; base?: string; commits: boolean; uncommitted: boolean }

@@ -83,12 +83,18 @@ test("list: each worktree's branch, changes, commits and tab", async () => {
     })`,
   )
   const entry = (path: string, branch: string | null, changed: number, ahead: number, tab: string | null) =>
-    ({ path: join(project, path), branch, changed, ahead, behind: 0, tab })
+    ({ path: join(project, path), branch, base: "origin/HEAD", changed, ahead, behind: 0, tab })
   assert.deepEqual(await list(kitWith(fake), ioIn(join(project, "main"), { FAKE: "1" }).io), [
     entry("detached", null, 0, 0, "unsure"),
     entry("feat", "feat", 1, 1, "sure"),
     entry("main", "main", 0, 0, null),
   ])
+  // Counted from worktrees.base.
+  const fromFeat = makeKit({ config: { ...structuredClone(DEFAULTS), multiplexer: "none", worktrees: { ...DEFAULTS.worktrees, base: "feat" } } as Config, run })
+  assert.deepEqual(
+    (await list(fromFeat, ioIn(join(project, "main")).io)).map((w) => [w.base, w.ahead, w.behind]),
+    [["feat", 0, 1], ["feat", 0, 0], ["feat", 0, 1]],
+  )
   // Outside the multiplexer, no tabs.
   assert.deepEqual((await list(kitWith(fake), ioIn(join(project, "main")).io)).map((w) => w.tab), [null, null, null])
   // Without origin/HEAD, no counts.
@@ -96,7 +102,7 @@ test("list: each worktree's branch, changes, commits and tab", async () => {
   mkdirSync(local)
   git(local, "init", "-q", "-b", "main")
   git(local, "commit", "-q", "--allow-empty", "-m", "one")
-  assert.deepEqual(await list(kitWith(), ioIn(local).io), [{ path: local, branch: "main", changed: 0, ahead: null, behind: null, tab: null }])
+  assert.deepEqual(await list(kitWith(), ioIn(local).io), [{ path: local, branch: "main", base: "origin/HEAD", changed: 0, ahead: null, behind: null, tab: null }])
   await assert.rejects(list(kitWith(), ioIn(temp).io), new Failed("ade worktree ls: not inside a git repo"))
 })
 

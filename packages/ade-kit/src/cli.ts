@@ -24,7 +24,8 @@ const USAGE = `usage: ade open FILE[:LINE[:COLUMN]]...
        ade send --text [--submit] < TEXT
          give it text as it is (with --submit, send it as a message)
        ade review
-         review this worktree's changes since origin/HEAD, then give the agent your comments
+         review this worktree's changes since worktrees.base (origin/HEAD), then give the agent
+         your comments
        ade review --scope
          what a review here covers: -r BASE..HEAD (commits), -w (uncommitted changes)
        ade workspace DIR [--background] [--session ID] [--prompt TEXT]
