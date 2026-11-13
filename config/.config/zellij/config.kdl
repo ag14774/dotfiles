@@ -480,6 +480,15 @@ attach_to_session true
 // fixed the old bug that saved the editor pane as a Helix language server.
 // `zreset` deletes the saved session as well.
 session_serialization true
+
+// Zellij 0.46's status tracking (attention): its defaults, except host_status.
+// With it on, Zellij reports the session's combined status (any pane working,
+// needing approval, done) to the outer terminal with OSC 7501, and iTerm2 3.7
+// alerts on each change: sounds from every tab's agents, mid-turn too. The
+// tabs' icons and totals in the bar come from Zellij's tracking, so they stay.
+attention {
+    host_status false
+}
  
 // Whether pane viewports are serialized along with the session, default is false
 // Options:

@@ -182,8 +182,10 @@ installer runs it), `zellij-sync-bars --check` lists those whose bars differ
 from `dev.kdl`, and `python3 tests/zellij_sync_bars.py` tests it. Each changed
 saved session keeps its previous layout as `session-layout.kdl.before-bar`.
 
-Zellij 0.46's own status features keep their defaults (`config.kdl` has no
-`attention` section). The bar shows only what agents report themselves
+Zellij 0.46's own status features keep their defaults, except `host_status`
+(`attention` in `config.kdl`): with it on, Zellij reports the session's combined
+status to the outer terminal (OSC 7501), and iTerm2 3.7 alerted on every change,
+from every tab's agents, mid-turn too. The bar shows only what agents report themselves
 (`attention_source "program_status"` in `dev.kdl`), not Zellij's guesses such
 as a long shell command that finished. Zellij's inbox is in the session manager
 (session mode `w`). A new session (not a resurrected one) starts with a welcome
