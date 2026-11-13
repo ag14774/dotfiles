@@ -19,6 +19,11 @@ assert_eq() {
   [[ $1 == $2 ]] || fail "expected '$2', got '$1'"
 }
 
+core() { # wt-core with these arguments: stdout in $out, stderr in $TMP/err
+  out=$("$ROOT/config/.local/bin/wt-core" "$@" 2>"$TMP/err")
+}
+said() { grep -qxF -- "$1" "$TMP/err" || fail "expected the message '$1', got: $(<"$TMP/err")"; }
+
 mkdir -p "$TMP/bin" "$TMP/acme"
 # Stand-in for gh: `gh pr list` (wtprune -m) answers with GH_PR_NUMBER when
 # GH_PR_STATE is MERGED.
@@ -254,6 +259,191 @@ if ggpull >/dev/null 2>&1; then fail "ggpull should refuse a detached HEAD"; fi
 cd "$project/main"
 wtrm forked >/dev/null 2>&1
 
+# --- wt: the worktree's folder and branch ---
+# A new branch starts at origin/HEAD without an upstream (the first push sets
+# one), or at the base given; a branch only on the remote, even one pushed
+# after the last fetch, tracks it; a local branch is used as it is. The folder
+# is <project>/<branch> with / as -. A branch that has a worktree anywhere is
+# reused, and so (as it is) is an existing folder of that name.
+cd "$project/main"
+core open -s fresh
+assert_eq "$out" "$project/fresh"
+assert_eq "$(git -C "$project/fresh" symbolic-ref --short HEAD)" fresh
+assert_eq "$(git -C "$project/fresh" rev-parse HEAD)" "$(git -C "$project" rev-parse origin/HEAD)"
+[[ -z $(git -C "$project" config --get branch.fresh.remote) ]] || fail "a new branch should have no upstream"
+git -C "$project/fresh" commit -q --allow-empty -m "on fresh"
+core open -s based fresh
+assert_eq "$(git -C "$project/based" rev-parse HEAD)" "$(git -C "$project" rev-parse fresh)"
+git -C "$seed" push -q origin main:refs/heads/remote-only
+core open -s remote-only
+assert_eq "$(git -C "$project" config --get branch.remote-only.remote) $(git -C "$project" config --get branch.remote-only.merge)" \
+  "origin refs/heads/remote-only"
+git -C "$project" branch local-branch fresh
+core open -s local-branch
+assert_eq "$(git -C "$project/local-branch" rev-parse HEAD)" "$(git -C "$project" rev-parse fresh)"
+core open -s feature/slashed
+assert_eq "$out" "$project/feature-slashed"
+assert_eq "$(git -C "$out" symbolic-ref --short HEAD)" feature/slashed
+git -C "$project" worktree add -q -b moved "$project/elsewhere" 2>/dev/null
+core open -s moved
+assert_eq "$out" "$project/elsewhere"
+mkdir "$project/plain-folder"
+core open -s plain-folder
+assert_eq "$out" "$project/plain-folder"
+git -C "$project" show-ref -q --verify refs/heads/plain-folder && fail "an existing folder should be used as it is"
+rmdir "$project/plain-folder"
+# Errors, and nothing on stdout.
+core open && fail "wt without a branch should fail"
+assert_eq "$out" ""
+said "usage: wt [-s|-t|-b] [-p PROMPT] [--session ID] <branch> [base]   (options before the branch)"
+core open a b c && fail "wt with three arguments should fail"
+mkdir "$TMP/no-repo"
+(cd "$TMP/no-repo" && core open x) && fail "wt outside a repository should fail"
+said "wt: not inside a git repo"
+
+# --- wt: seeding ---
+# Copied from the worktree you are in, or from the default branch's worktree
+# when you are in the project folder; a file already in the new worktree (here
+# a tracked one) stays as it is; globs match, folders are copied whole. A
+# repository's <common-dir>/wt-seed manifest (comments and blank lines allowed)
+# wins over WT_SEED; an unsafe pattern there, or an unreadable WT_SEED_FILE,
+# stops wt before it creates anything.
+core open -s seeded
+said "wt: seeded 1 local file(s) from main/ (default seed list)"
+assert_eq "$(<"$project/seeded/.env")" 'seeded secret'
+cd "$project"
+core open -s from-root
+said "wt: seeded 1 local file(s) from main/ (default seed list)"
+cd "$project/main"
+WT_SEED=app.txt core open -s tracked-seed
+grep -q '^wt: seeded' "$TMP/err" && fail "a file already in the worktree should not be seeded: $(<"$TMP/err")"
+print local > .env.local
+mkdir -p config.d/sub && print deep > config.d/sub/file
+WT_SEED=$'.env.*\nconfig.d' core open -s globbed
+said "wt: seeded 2 local file(s) from main/ (WT_SEED)"
+assert_eq "$(<"$project/globbed/.env.local")$(<"$project/globbed/config.d/sub/file")" localdeep
+rm -rf .env.local config.d
+print $'# local files\n\n  .env  ' > "$project/.bare/wt-seed"
+WT_SEED=app.txt core open -s manifest
+said "wt: seeded 1 local file(s) from main/ ($project/.bare/wt-seed)"
+print '../outside' > "$project/.bare/wt-seed"
+core open -s unsafe && fail "an unsafe seed pattern should stop wt"
+said "wt: unsafe seed pattern in $project/.bare/wt-seed: ../outside"
+rm "$project/.bare/wt-seed"
+WT_SEED_FILE=$TMP/missing core open -s unread && fail "an unreadable WT_SEED_FILE should stop wt"
+said "wt: WT_SEED_FILE is not readable: $TMP/missing"
+[[ ! -e $project/unsafe && ! -e $project/unread ]] || fail "wt should create nothing when seeding can't work"
+git -C "$project" show-ref -q --verify refs/heads/unsafe && fail "wt should create no branch when seeding can't work"
+
+# --- wtrm: which worktree ---
+# By branch or by folder name, or by absolute path; a name that is a branch of
+# one worktree and the folder of another is refused.
+core rm feature/slashed
+said "removed feature-slashed"
+git -C "$project" worktree add -q -b clash "$project/clash-branch" 2>/dev/null
+git -C "$project" worktree add -q -b other "$project/clash" 2>/dev/null
+core rm clash && fail "an ambiguous name should be refused"
+said "wtrm: 'clash' matches both a branch and a worktree directory; use the absolute path"
+core rm "$project/clash"
+said "removed clash"
+core rm nothing-here && fail "an unknown name should fail"
+said "wtrm: no worktree found for 'nothing-here'"
+core rm && fail "wtrm without a name should fail"
+said "usage: wtrm [-f|--force] <branch|worktree>"
+
+# --- wtls ---
+# Plain: git's list. --json: no bare entry, no folder deleted by hand, null for
+# a detached HEAD, and null counts without origin/HEAD.
+assert_eq "$(wtls)" "$(git worktree list)"
+rm -rf "$project/clash-branch"
+git -C "$project/based" switch -q --detach
+core ls --json
+[[ $(jq -r '.[].path' <<< "$out") != *".bare"* && $(jq -r '.[].path' <<< "$out") != *clash-branch* ]] \
+  || fail "ls --json should list neither the bare repository nor deleted folders: $out"
+assert_eq "$(jq -c --arg p "$project/based" '.[] | select(.path == $p) | .branch' <<< "$out")" null
+git init -q -b main "$TMP/local-only"
+git -C "$TMP/local-only" commit -q --allow-empty -m one
+cd "$TMP/local-only"
+core ls --json
+cd "$project/main"
+assert_eq "$out" "[{\"path\":\"$TMP/local-only\",\"branch\":\"main\",\"changed\":0,\"ahead\":null,\"behind\":null,\"tab\":null}]"
+(cd "$TMP/no-repo" && core ls --json) && fail "wtls outside a repository should fail"
+said "wtls: not inside a git repo"
+git -C "$project" worktree prune
+for name in fresh based remote-only local-branch elsewhere seeded from-root tracked-seed globbed manifest; do
+  core rm -f "$name" || fail "could not remove $name: $(<"$TMP/err")"
+done
+
+# --- wtclone ---
+# A bare repository in <dir>/.bare, a .git file pointing at it, origin's
+# branches as remote-tracking ones, origin/HEAD, and the bare HEAD on the
+# default branch; no worktree yet. The folder defaults to the URL's last part.
+cd "$TMP"
+core clone "$remote"
+assert_eq "$out" ""
+said "worktree repo ready → cd demo && wt <branch>"
+assert_eq "$(<"$TMP/demo/.git")" "gitdir: ./.bare"
+assert_eq "$(git --git-dir="$TMP/demo/.bare" config core.bare)" true
+assert_eq "$(git --git-dir="$TMP/demo/.bare" config remote.origin.fetch)" '+refs/heads/*:refs/remotes/origin/*'
+assert_eq "$(git --git-dir="$TMP/demo/.bare" symbolic-ref refs/remotes/origin/HEAD)" refs/remotes/origin/main
+assert_eq "$(git --git-dir="$TMP/demo/.bare" symbolic-ref HEAD)" refs/heads/main
+assert_eq "$(git -C "$TMP/demo" worktree list --porcelain | grep -c '^worktree ')" 1
+core clone && fail "wtclone without a URL should fail"
+said "usage: wtclone <url> [dir]"
+core clone "$TMP/acme/missing.git" broken && fail "wtclone of a missing repository should fail"
+said "wtclone: fetch failed"
+
+# --- wtconvert ---
+# A clean normal clone on a branch, with an origin, becomes the bare layout:
+# the branch's worktree in <repo>/<branch>, ignored files moved into it, the
+# rest of the top level gone, and your shell in the worktree. It asks first
+# (no terminal: it refuses), and refuses a dirty tree, a detached HEAD, no
+# origin, a converted repository and a folder outside a clone.
+git clone -q "$remote" "$TMP/convertme"
+cd "$TMP/convertme"
+print secret > .env
+print notes > scratch.txt
+core convert </dev/null && fail "wtconvert without -y should need a terminal"
+said "wtconvert: no terminal to confirm; rerun with -y"
+[[ -d .git ]] || fail "an unconfirmed wtconvert should change nothing"
+print dirty >> app.txt
+core convert -y && fail "wtconvert should refuse a dirty tree"
+said "wtconvert: working tree is dirty -- commit or stash changes first:"
+git checkout -q app.txt
+git switch -q --detach
+core convert -y && fail "wtconvert should refuse a detached HEAD"
+said "wtconvert: detached HEAD -- check out a branch first"
+git switch -q main
+wtconvert -y > "$TMP/convert.out" 2>&1 || fail "wtconvert failed: $(<"$TMP/convert.out")"
+out=$(grep -v -e "^'origin/HEAD' " -e '^Preparing worktree ' -e '^HEAD is now at ' "$TMP/convert.out")
+assert_eq "$out" "convert to worktree layout:
+  repo:   $TMP/convertme
+  branch: main  ->  $TMP/convertme/main
+  keep:   2 ignored path(s) -> moved into the worktree
+done -> $TMP/convertme/main   (try: wtls, or wt <other-branch>)"
+assert_eq "$PWD" "$TMP/convertme/main"
+assert_eq "$(print -l "$TMP/convertme"/*(DN:t))" $'.bare\n.git\nmain'
+assert_eq "$(<"$TMP/convertme/.git")" "gitdir: ./.bare"
+assert_eq "$(<.env)$(<scratch.txt)" secretnotes
+assert_eq "$(git status --porcelain)" ""
+core convert -y && fail "wtconvert should refuse a converted repository"
+said "wtconvert: $TMP/convertme/main/.git is not a repo dir (already converted?)"
+git init -q -b main "$TMP/no-origin"
+git -C "$TMP/no-origin" commit -q --allow-empty -m one
+(cd "$TMP/no-origin" && core convert -y) && fail "wtconvert should refuse a clone without origin"
+said "wtconvert: no 'origin' remote found"
+(cd "$TMP/no-repo" && core convert -y) && fail "wtconvert should refuse a folder outside a clone"
+said "wtconvert: run this inside a normal (non-bare) git clone"
+
+# --- wt-core itself ---
+core help || fail "wt-core help failed"
+[[ $out == *"open [LAND] <branch> [base]"* ]] || fail "wt-core help should describe open: $out"
+core bogus && fail "an unknown command should fail"
+said "wt-core: unknown command 'bogus' (see: wt-core help)"
+core prune -x && fail "wtprune should reject unknown options"
+said "usage: wtprune [-y] [-n|--no-fetch] [-m|--merged]"
+cd "$project/main"
+
 # --- Zellij tabs, against the fake zellij: the caller is pane 1 in tab 1. ---
 export ZJ_STATE=$TMP/zj ZELLIJ=0 ZELLIJ_SESSION_NAME=test ZELLIJ_PANE_ID=1
 mkdir -p "$ZJ_STATE"
@@ -346,7 +536,6 @@ engine() { # wt-core open with these arguments; stdout in $out, stderr in $TMP/e
   : > "$ZJ_STATE/log"
   out=$("$ROOT/config/.local/bin/wt-core" open "$@" 2>"$TMP/err")
 }
-said() { grep -qxF -- "$1" "$TMP/err" || fail "expected the message '$1', got: $(<"$TMP/err")"; }
 called_with() { # $1=zellij command, then words one call of it must include
   local cmd=$1 line word found
   shift
