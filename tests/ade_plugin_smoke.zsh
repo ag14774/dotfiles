@@ -131,15 +131,11 @@ cp "$REAL/.local/share/opencode/auth.json" "$TMP/oc/data/opencode/" 2>/dev/null
 cp "$REAL/.local/state/opencode/model.json" "$TMP/oc/state/opencode/" 2>/dev/null
 cp -RL "$REAL/.config/opencode" "$TMP/oc/config/opencode" 2>/dev/null
 config=$TMP/oc/config/opencode
-rm -rf "$config"/{service.json,node_modules,plugins/ade.ts,plugins/ade,plugins/ade-status,tui-plugins/ade}
+rm -rf "$config"/{service.json,node_modules,plugins/ade,plugins/ade-status}
 mkdir -p "$config/plugins"
 cp -R "$ROOT/packages" "$TMP/src/"
 ln -s "$TMP/src/packages/opencode-ade" "$config/plugins/ade"
 ln -s "$TMP/src/packages/opencode-ade-status" "$config/plugins/ade-status"
-# The plugin's old app part, which the installer removes from cli.json.
-[[ -f $config/cli.json ]] || print '{}' > "$config/cli.json"
-jq '.plugins = ((.plugins // []) - ["./tui-plugins/ade"])' "$config/cli.json" \
-  > "$config/cli.json.new" && mv "$config/cli.json.new" "$config/cli.json"
 # This checkout's ADE config (OpenCode through opencode-pane); the sandbox has
 # this checkout's ade and opencode-pane first on PATH, as installed.
 mkdir -p "$TMP/oc/config/ade"
