@@ -117,7 +117,7 @@ npm install --global --prefix "$HOME/.local" --allow-scripts=core-js \
   bash-language-server typescript typescript-language-server \
   yaml-language-server vscode-langservers-extracted >/dev/null
 
-echo "==> OpenCode 2 (official installer + V1 migration)"
+echo "==> OpenCode 2 (official installer and app settings)"
 export PATH="$HOME/.opencode/bin:$PATH"
 bash "$DOTFILES/install/opencode.sh"
 
@@ -134,7 +134,7 @@ cargo install jinja-lsp >/dev/null
 
 echo "==> Symlink config/ into ~/.config and ~/.local/bin (stow)"
 mkdir -p "$HOME/.config"
-# Restow, so links to files the repository no longer has go too.
+# Restow, so links to files removed from the repository go too.
 stow --no-folding --restow -d "$DOTFILES" -t "$HOME" config
 
 echo "==> Link the packages in packages/ for the OpenCode plugins (npm workspaces)"

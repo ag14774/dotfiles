@@ -7,7 +7,7 @@ PACKAGES=(
 
   # Shell and core terminal IDE stack
   zsh
-  starship                # prompt (we roll our own zsh setup, not oh-my-zsh)
+  starship                # prompt
   zsh-autosuggestions     # fish-style suggestions from history
   zsh-syntax-highlighting # command-line syntax colouring
   ghostty
