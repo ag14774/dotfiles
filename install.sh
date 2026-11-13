@@ -264,6 +264,6 @@ echo
 BAR_URL="$(grep -o 'https://[^"]*/zjstatus\.wasm' "$DOTFILES/config/.config/zellij/layouts/dev.kdl" | head -n 1)"
 echo "Once per top-bar release (ade-zjstatus; Zellij keeps plugin permissions per URL):"
 echo "  inside a zellij session, run this, press 'y' to grant, then close the pane:"
-echo "      zellij plugin -f -c tab_groups=true -- \"$BAR_URL\""
+echo "      zellij plugin -f -- \"$BAR_URL\""
 echo "  Then, when convenient, run zellij-sync-bars --restart there and open a"
 echo "  terminal, so the tabs that come back have this bar too."

@@ -4,7 +4,7 @@ layout {
     pane_template name="zjbar" borderless=true {
         // ade-zjstatus (github.com/ag14774/ade-zjstatus, needs Zellij 0.46): zjstatus
         // with agent statuses, see its FORK.md.
-        plugin location="https://github.com/ag14774/ade-zjstatus/releases/download/v0.25.0-ade.2/zjstatus.wasm" {
+        plugin location="https://github.com/ag14774/ade-zjstatus/releases/download/v0.25.0-ade.3/zjstatus.wasm" {
             format_left   "{mode}{tabs}#[fg=#585b70]  +⌥t "
             format_center ""
             // No session name (it is always main) and no clock: zjstatus redraws

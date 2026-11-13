@@ -128,11 +128,13 @@ redraws only on Zellij events, so a clock went stale while the session was
 idle. It is loaded by `dev.kdl` straight from its release URL, and Zellij
 keeps plugin permissions per URL, so the first time, and again after the URL
 changes to a new release, grant its permission once (the installer prints
-this): inside a zellij session run `zellij plugin -f -c tab_groups=true --
-"<bar-url>"`, press `y`, then close that pane. The bar itself can't ask (its
-prompt would sit in the one-row bar, where it can't be answered). Since
-ade-zjstatus v0.25.0-ade.2 every bar asks for the same permissions, including
-"Execute actions as the user" for tab groups, whatever its options.
+this): inside a zellij session run `zellij plugin -f -- "<bar-url>"`, press
+`y`, then close that pane. The bar itself can't ask (its prompt would sit in
+the one-row bar, where it can't be answered). Every bar asks for the same
+permissions, including "Execute actions as the user" for tab groups, whatever
+its options. A bar left at that prompt doesn't notice a later grant, and while
+one waits Zellij holds every `zellij pipe` (it returns once the tab closes or
+Zellij restarts).
 
 The bar groups tabs: a tab named `prefix: name` belongs to the group `prefix`,
 shown once two tabs share it (see ade-zjstatus's FORK.md), so each project's
@@ -144,11 +146,12 @@ worktree tabs sit together:
   folder holding the repository's `.bare` or `.git`). Tabs are still found by
   their panes' folders, never by name. Names already of the form `prefix:name`
   (no space needed) are grouped too.
-- `dev.kdl`'s bar has `tab_groups "true"`. It moves a group's tabs next to each
-  other (hence the extra permission), once the moved tab's bar runs.
+- `dev.kdl`'s bar has `tab_groups "true"`. The bar of the tab you are on moves
+  a group's tabs next to each other (hence the extra permission), background
+  tabs included, so tab numbers follow the bar.
 - In tab mode (`Ctrl-g`, `t`), `g` collapses or expands the current tab's
-  group and `G` all groups (clicking a group's name does too); both go back
-  to locked mode, which is also what makes the bar redraw.
+  group and `G` all groups (clicking a group's name does too); like `h`/`l`,
+  they stay in tab mode (`Esc` or `Enter` leaves).
 
 The bar of the tab you are on draws all the tabs, and a tab keeps the bar it
 was opened or resurrected with (its URL and options are part of the saved
