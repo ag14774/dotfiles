@@ -241,10 +241,6 @@ Zellij.app and copy Zellij into a folder of its own.
       removed worktree (those `ade tabs` found before `wtrm` removed it),
       except yours and the unsure ones; none when run by an agent or when
       `$ZELLIJ_PANE_ID` no longer exists
-  - `hx-open FILE...` and `opencode-send ...` — run `ade open` and `ade send`
-    (kept for their callers until they call `ade`; `HX_OPEN_LOG=FILE` traces
-    `hx-open`); `config/.config/zellij/review.sh`, which `Alt-v` runs, runs
-    `ade review`
   - `opencode-pane [--session ID] [--prompt PROMPT] | --resume` — run OpenCode
     in a pane with your shell environment, optionally on a given conversation,
     in a way Zellij restores as `--resume`, which continues the directory's
@@ -253,7 +249,7 @@ Zellij.app and copy Zellij into a folder of its own.
 
   The `wt*` functions, `ocreload` and the `Alt-y` picker call this checkout's
   copies directly. Rerun `install.sh` (or its stow step) to put new commands on
-  `PATH`.
+  `PATH`, and to remove the links of commands this checkout no longer has.
 - `shell/*.zsh` — sourced directly by the `.zshrc` block
 - `install/{apt,brew,pacman}.sh` — platform package installation backends
 - `Brewfile` — Homebrew package manifest

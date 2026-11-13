@@ -1,5 +1,0 @@
-#!/usr/bin/env bash
-# hx-open FILE... -- now `ade open` (packages/ade-kit): kept for its callers
-# (the Alt-y picker, tuicr's `e`, scripts) until they call ade. It finds ade
-# next to itself, so it works before ade is stowed; HX_OPEN_LOG still traces.
-ADE_LOG=${HX_OPEN_LOG:-${ADE_LOG:-}} exec "$(dirname "$(readlink -f "$0")")/ade" open "$@"

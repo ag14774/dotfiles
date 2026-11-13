@@ -3,8 +3,8 @@
 # in it, kept apart from yours.
 #   - Its own ZELLIJ_SOCKET_DIR (a short folder in /tmp: socket paths may be at
 #     most 103 bytes), exported before any zellij command: the test's zellij
-#     commands, and those of the programs in its panes (ade, hx-open, review.sh,
-#     yazi-picker.sh, wt-core), reach only the test's server.
+#     commands, and those of the programs in its panes (ade, yazi-picker.sh,
+#     wt-core), reach only the test's server.
 #   - Its own HOME, XDG_* folders and TMPDIR: Zellij's cache, permissions and
 #     log, tuicr's reviews, Helix's and Yazi's state stay in the test's folder.
 #     HOME is filled like an installed checkout: ~/.config/zellij is the test's

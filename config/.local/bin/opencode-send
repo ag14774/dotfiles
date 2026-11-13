@@ -1,5 +1,0 @@
-#!/usr/bin/env bash
-# opencode-send FILE [START [END [LANGUAGE]]] [< SELECTION], or --text < TEXT
-# -- now `ade send` (packages/ade-kit): kept for Helix's `+ a` until it calls
-# ade. It finds ade next to itself, so it works before ade is stowed.
-exec "$(dirname "$(readlink -f "$0")")/ade" send "$@"
