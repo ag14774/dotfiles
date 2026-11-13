@@ -205,7 +205,6 @@ Zellij.app and copy Zellij into a folder of its own.
 - `config/.config/{ghostty,zellij,helix,yazi,opencode}/` — stowed into `~/.config`
 - `config/.local/bin/` — reusable commands, stowed into `~/.local/bin` (on `PATH`
   for shells, Zellij, and programs started from them):
-  - `wt-core` — the old name of `ade worktree` (below), kept for scripts
   - `zellij-sync-bars [--check | --restart | SESSION...]` — give saved Zellij
     sessions the top bar from `dev.kdl` (see "Upgrading Zellij")
   - `ade` — the ADE command, a link to `packages/ade-kit/src/cli.ts` (run by

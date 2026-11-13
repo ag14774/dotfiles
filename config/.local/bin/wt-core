@@ -1,6 +1,0 @@
-#!/usr/bin/env zsh
-# wt-core: the worktree engine behind the wt* shell commands moved into ade-kit
-# as `ade worktree` (packages/ade-kit/src/worktree-cli.ts; same arguments,
-# results and messages). This name stays for scripts until every machine has
-# it; `wt-core help` shows the commands.
-exec "${0:A:h}/ade" worktree "$@"

@@ -442,10 +442,9 @@ said "wtconvert: no 'origin' remote found"
 (cd "$TMP/no-repo" && core convert -y) && fail "wtconvert should refuse a folder outside a clone"
 said "wtconvert: run this inside a normal (non-bare) git clone"
 
-# --- ade worktree itself, and wt-core, its old name ---
+# --- ade worktree itself ---
 core help || fail "ade worktree help failed"
 [[ $out == *"open [LAND] <branch> [base]"* ]] || fail "ade worktree help should describe open: $out"
-assert_eq "$("$ROOT/config/.local/bin/wt-core" help)" "$out"
 core bogus && fail "an unknown command should fail"
 said "ade worktree: unknown command 'bogus' (see: ade worktree help)"
 core prune -x && fail "wtprune should reject unknown options"
@@ -629,8 +628,8 @@ wtrm grouped >/dev/null 2>&1
 
 # Whether there is a multiplexer to open tabs in is the ADE config's (finding
 # 12): with none configured, even inside Zellij, -t changes directory, -b
-# stays and -p fails before creating anything. (wt-core went by Zellij's
-# variables, then failed in ade.)
+# stays and -p fails before creating anything. (Before ade-kit, wt went by
+# Zellij's variables, then failed in ade.)
 jq '.multiplexer = "none"' "$TMP/ade.json" > "$TMP/none.json"
 ADE_CONFIG=$TMP/none.json core open -t unmuxed || fail "wt -t without a multiplexer failed: $(<"$TMP/err")"
 assert_eq "$out" "$project/unmuxed"

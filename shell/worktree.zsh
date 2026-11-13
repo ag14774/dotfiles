@@ -24,7 +24,7 @@ typeset -g _WT_ADE=${${(%):-%x}:A:h:h}/config/.local/bin/ade
 # Run an `ade worktree` command. WT_SEED may be a zsh array (not exportable),
 # so it is passed newline-separated; WT_SEED_FILE may be an unexported shell
 # variable.
-_wt_core() {
+_wt_ade() {
   emulate -L zsh
   local cwd_file dir rc
   local -a env_args
@@ -44,12 +44,12 @@ _wt_core() {
   return rc
 }
 
-wtclone() { _wt_core clone "$@"; }
-wt() { _wt_core open "$@"; }
-wtrm() { _wt_core rm "$@"; }
-wtls() { _wt_core ls "$@"; }
-wtprune() { _wt_core prune "$@"; }
-wtconvert() { _wt_core convert "$@"; }
+wtclone() { _wt_ade clone "$@"; }
+wt() { _wt_ade open "$@"; }
+wtrm() { _wt_ade rm "$@"; }
+wtls() { _wt_ade ls "$@"; }
+wtprune() { _wt_ade prune "$@"; }
+wtconvert() { _wt_ade convert "$@"; }
 
 # show help for the worktree commands
 wthelp() {

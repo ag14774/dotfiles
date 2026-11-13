@@ -1,5 +1,5 @@
 // `ade worktree`: the engine behind the wt shell functions (shell/worktree.zsh),
-// with wt-core's arguments, results and messages. stdout carries only the
+// with their arguments, results and messages. stdout carries only the
 // result (a worktree's path, or the list); messages go through io.say. A
 // process can't change its caller's folder, so with --cwd-file the folder to
 // change to is written there instead (the shell function then cds).

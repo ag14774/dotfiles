@@ -383,7 +383,7 @@ const withTabs = (panes: Pane[], o: { agent?: boolean; fail?: "openTab" | "start
 writeFileSync(join(temp, "bin", "opencode-pane"), "#!/bin/sh\n")
 chmodSync(join(temp, "bin", "opencode-pane"), 0o755)
 const viaPane = { opencode: { command: ["opencode-pane"] } } as Partial<Config>
-// A script with only the session (wt-core's callers may not have a pane).
+// A script with only the session (ade worktree's callers may not have a pane).
 const scripted = { env: { FAKE_SESSION: "1", PATH: process.env.PATH }, cwd: temp }
 const told = () => {
   const messages: string[] = []
