@@ -16,6 +16,8 @@
 #   - Guards first on PATH: `zellij` runs only with this socket dir and HOME;
 #     `opencode` only in this HOME with a private service port set (the default
 #     port is the one your service uses). No OPENCODE_* variable is inherited.
+#   - OpenCode apps play no sounds and show no system notifications (their
+#     settings, even a copy of yours, get OPENCODE_CLI_CONFIG_CONTENT over them).
 #
 #   TMP=$(mktemp -d); TMP=${TMP:A}
 #   source "$ROOT/tests/lib/zellij-sandbox.zsh"
@@ -121,7 +123,8 @@ EOF
   export HOME=$home TMPDIR=$TMP/tmp PATH="$bin:$home/.local/bin:$PATH" \
     XDG_CONFIG_HOME=$home/.config XDG_CACHE_HOME=$home/.cache \
     XDG_DATA_HOME=$home/.local/share XDG_STATE_HOME=$home/.local/state \
-    OPENCODE_DISABLE_AUTOUPDATE=true
+    OPENCODE_DISABLE_AUTOUPDATE=true \
+    OPENCODE_CLI_CONFIG_CONTENT='{"attention":{"notifications":false,"sound":false}}'
   [[ ${commands[zellij]} == "$bin/zellij" ]] || { print -u2 "sandbox_init: the zellij guard is not first on PATH"; exit 1; }
   : > "$TMP/keys"
 }
