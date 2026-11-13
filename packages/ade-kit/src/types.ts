@@ -169,10 +169,10 @@ export interface Layout {
   label?: string
   // The folder for the worktree `name` (a branch's name, with / as -).
   path(repo: Repository, name: string): string
-  // Optional (wtclone): clone `url` into `dir`, laid out this way, without a
+  // Optional (ade worktree clone): clone `url` into `dir`, laid out this way, without a
   // worktree yet.
   clone?(url: string, dir: string, io: WorktreeIo): Promise<void>
-  // Optional (wtconvert): turn the normal clone you are in into this layout;
+  // Optional (ade worktree convert): turn the normal clone you are in into this layout;
   // the folder to go to.
   convert?(io: WorktreeIo, o: { yes: boolean }): Promise<string>
   // Optional: before the worktree `dir` is made (inside: keep .worktrees/ out

@@ -39,7 +39,7 @@ const USAGE = `usage: ade open FILE[:LINE[:COLUMN]]...
          close the tabs of the removed worktree DIR (those ade tabs found before it was
          removed, else its tabs now), except yours and the unsure ones; none when an agent runs it
        ade worktree [--cwd-file FILE] COMMAND [ARGS...]
-         the worktree commands behind the wt shell functions (see: ade worktree help)`
+         create, open, list and remove worktrees (see: ade worktree help)`
 
 class UsageError extends Error {}
 
@@ -95,8 +95,8 @@ const traced = (log: string) => async (argv: string[], o?: RunOptions) => {
   return result
 }
 
-// The caller's folder. When it is gone (wtrm run from inside the worktree it
-// removes), its path still resolves the arguments, and the commands ade runs
+// The caller's folder. When it is gone (ade worktree rm run from inside the
+// worktree it removes), its path still resolves the arguments, and the commands ade runs
 // start in the home folder.
 const callerFolder = () => {
   try {

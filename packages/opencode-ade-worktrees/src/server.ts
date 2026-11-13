@@ -2,8 +2,8 @@
 // itself makes or removes (the TUI's Open → a project → Worktrees → Ctrl+N,
 // the desktop app, the agents' worktree_remove, its API) follows the
 // repository's layout, gets a real branch and seeded files, and is removed
-// with wtrm's checks. Agents still make worktrees with the ADE plugin's
-// delegate, which also opens a tab.
+// with `ade worktree rm`'s checks. Agents still make worktrees with the ADE
+// plugin's delegate, which also opens a tab.
 import { Plugin, Worktree } from "@opencode/plugin"
 import { strategy } from "./strategy.ts"
 

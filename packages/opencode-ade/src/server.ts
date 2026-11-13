@@ -266,8 +266,7 @@ export default Plugin.define({
 
     await ctx.tool.transform((editor) => {
       // Agents make worktrees with delegate, which also opens their tab
-      // (OpenCode's own make them without one; through
-      // packages/opencode-ade-worktrees, where wt would).
+      // (OpenCode's own make them without one).
       editor.remove("opencode_worktree_create")
       editor.remove("opencode_worktree_list")
       editor.add({

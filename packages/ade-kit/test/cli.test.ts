@@ -30,7 +30,7 @@ test("the actions on tabs need a multiplexer session: exit status 1, saying so",
   assert.equal(result.stderr, "ade tabs: not inside Zellij\n")
 })
 
-test("ade works from a folder that is gone (wtrm run inside the worktree it removes)", () => {
+test("ade works from a folder that is gone (ade worktree rm run inside the worktree it removes)", () => {
   const gone = mkdtempSync(join(realpathSync(tmpdir()), "ade-gone-"))
   const result = spawnSync("sh", ["-c", 'cd "$1" && rmdir "$1" && exec "$2" "$3" tabs /x', "sh", gone, process.execPath, cli], {
     encoding: "utf8",

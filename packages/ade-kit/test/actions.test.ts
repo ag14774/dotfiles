@@ -302,7 +302,7 @@ test("review: comments that can't reach the agent are shown, and so is a reviewe
 })
 
 // For the actions on tabs: a plain clone with a worktree nested inside it, as
-// `wt` makes in a repository that isn't in the worktree layout.
+// `ade worktree open` makes in a repository that isn't in the worktree layout.
 git(temp, "clone", "-q", join(temp, "origin.git"), "outer")
 const outer = join(temp, "outer")
 git(outer, "worktree", "add", "-q", "-b", "inner", "inner")

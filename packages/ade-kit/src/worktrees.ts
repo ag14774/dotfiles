@@ -1,7 +1,7 @@
-// Worktrees: what the wt shell functions (shell/worktree.zsh) do, through
-// `ade worktree` (worktree-cli.ts), and in-process for the OpenCode plugin.
-// Messages are the wt commands' own ("wt: ..."). Nothing here changes the
-// process's folder or reads its environment: both come with the Io.
+// Worktrees: the `ade worktree` commands (worktree-cli.ts), which the OpenCode
+// plugins also run in-process. Messages name the command ("ade worktree open:
+// ..."). Nothing here changes the process's folder or reads its environment:
+// both come with the Io.
 import { spawn } from "node:child_process"
 import { accessSync, constants, cpSync, existsSync, mkdirSync, readdirSync, readFileSync } from "node:fs"
 import { basename, dirname, join, resolve } from "node:path"
@@ -16,6 +16,16 @@ type Env = Record<string, string | undefined>
 
 export type Io = WorktreeIo
 
+// Each command's name in its messages.
+export const COMMAND = {
+  open: "ade worktree open",
+  rm: "ade worktree rm",
+  ls: "ade worktree ls",
+  prune: "ade worktree prune",
+  clone: "ade worktree clone",
+  convert: "ade worktree convert",
+}
+
 // A command failed; its message (if any) is the line to show. Git's own error
 // has been shown already when the message is empty.
 export class Failed extends Error {}
@@ -29,7 +39,7 @@ export async function query(kit: Kit, io: Io, args: string[], cwd = io.cwd) {
 export const line = (text: string | undefined) => text?.replace(/\n$/, "")
 
 // A git command whose own output you see. Never on stdout: callers capture
-// `wt -s`'s path, and a background job git starts must not hold it open.
+// `open -s`'s path, and a background job git starts must not hold it open.
 export async function loud(kit: Kit, io: Io, args: string[], cwd = io.cwd): Promise<boolean> {
   if (io.passthrough)
     return new Promise((done) => {
@@ -90,8 +100,8 @@ export async function defaultWorktree(kit: Kit, io: Io, repo: Repository) {
 }
 
 // --- Seeding: untracked files (secrets, local config) that git won't carry
-// into a new worktree. WT_SEED_FILE names a manifest; else the repository's
-// <common-dir>/wt-seed; else WT_SEED (newline-separated); else the ADE
+// into a new worktree. ADE_SEED_FILE names a manifest; else the repository's
+// <common-dir>/ade-seed; else ADE_SEED (newline-separated); else the ADE
 // config's worktrees.seed. A manifest has one relative path or glob per line
 // (blank lines and comments allowed). Not .venv or node_modules: recreate
 // those.
@@ -106,11 +116,11 @@ const readable = (path: string) => {
   }
 }
 
-// The seed patterns; refuses an unreadable WT_SEED_FILE, or a manifest line
+// The seed patterns; refuses an unreadable ADE_SEED_FILE, or a manifest line
 // that leaves the worktree.
 export function seedsFor(repo: Repository, env: Env, defaults: string[]): Seeds {
-  const file = env.WT_SEED_FILE || join(repo.common, "wt-seed")
-  if (env.WT_SEED_FILE && !readable(file)) throw new Failed(`wt: WT_SEED_FILE is not readable: ${file}`)
+  const file = env.ADE_SEED_FILE || join(repo.common, "ade-seed")
+  if (env.ADE_SEED_FILE && !readable(file)) throw new Failed(`${COMMAND.open}: ADE_SEED_FILE is not readable: ${file}`)
   if (readable(file)) {
     let text = ""
     try {
@@ -122,12 +132,12 @@ export function seedsFor(repo: Repository, env: Env, defaults: string[]): Seeds 
     for (const raw of text.split("\n")) {
       const pattern = raw.replace(/\r$/, "").trim()
       if (!pattern || pattern.startsWith("#")) continue
-      if (/^\/|^\.\.(\/|$)|\/\.\.(\/|$)/.test(pattern)) throw new Failed(`wt: unsafe seed pattern in ${file}: ${pattern}`)
+      if (/^\/|^\.\.(\/|$)|\/\.\.(\/|$)/.test(pattern)) throw new Failed(`${COMMAND.open}: unsafe seed pattern in ${file}: ${pattern}`)
       patterns.push(pattern)
     }
     return { patterns, label: file }
   }
-  if (env.WT_SEED !== undefined) return { patterns: env.WT_SEED.split("\n").filter(Boolean), label: "WT_SEED" }
+  if (env.ADE_SEED !== undefined) return { patterns: env.ADE_SEED.split("\n").filter(Boolean), label: "ADE_SEED" }
   return { patterns: defaults, label: "default seed list" }
 }
 
@@ -202,10 +212,10 @@ export function seed(io: Io, from: string | undefined, to: string, seeds: Seeds)
         cpSync(join(from, rel), target, { recursive: true, verbatimSymlinks: true })
         copied++
       } catch (error) {
-        io.say(`wt: could not seed ${rel}: ${(error as Error).message}`)
+        io.say(`${COMMAND.open}: could not seed ${rel}: ${(error as Error).message}`)
       }
     }
-  if (copied) io.say(`wt: seeded ${copied} local file(s) from ${basename(from)}/ (${seeds.label})`)
+  if (copied) io.say(`${COMMAND.open}: seeded ${copied} local file(s) from ${basename(from)}/ (${seeds.label})`)
 }
 
 // --- Landing: what happens once the worktree exists. -s reports it; -t
@@ -314,20 +324,20 @@ export async function layoutFor(kit: Kit, io: Io, repo: Repository) {
 const record = (kit: Kit, io: Io, repo: Repository, choice: string) =>
   query(kit, io, ["--git-dir", repo.common, "config", "ade.layout", choice], repo.root)
 
-// wt: the worktree for a branch, created if needed (a local branch as it is;
+// open: the worktree for a branch, created if needed (a local branch as it is;
 // one only on origin, tracking it; else a new branch from `base`, default the
 // config's worktrees.base, origin/HEAD, without an upstream), where the
 // repository's layout puts it, seeded, then landed on.
-export const WT_USAGE = "usage: wt [-s|-t|-b] [-p PROMPT] [--session ID] <branch> [base]   (options before the branch)"
+const OPEN_USAGE = `usage: ${COMMAND.open} [-s|-t|-b] [-p PROMPT] [--session ID] <branch> [base]   (options before the branch)`
 export async function open(kit: Kit, io: Io, args: string[]): Promise<Landed> {
-  const { landing, rest } = parseLanding("wt", args)
-  await needsTab(kit, io, "wt", landing)
+  const { landing, rest } = parseLanding(COMMAND.open, args)
+  await needsTab(kit, io, COMMAND.open, landing)
   const [branch, given] = rest
-  if (!branch || rest.length > 2 || branch.startsWith("-") || given?.startsWith("-")) throw new Failed(WT_USAGE)
+  if (!branch || rest.length > 2 || branch.startsWith("-") || given?.startsWith("-")) throw new Failed(OPEN_USAGE)
   const repo = await repositoryOf(kit, io)
-  if (!repo) throw new Failed("wt: not inside a git repo")
+  if (!repo) throw new Failed(`${COMMAND.open}: not inside a git repo`)
   const existing = await worktreeOf(kit, io, repo, branch)
-  if (existing) return land(kit, io, existing, "wt", landing)
+  if (existing) return land(kit, io, existing, COMMAND.open, landing)
   const { layout, choice, recorded } = await layoutFor(kit, io, repo)
   const dir = layout.path(repo, branch.replaceAll("/", "-"))
   if (!isDirectory(dir)) {
@@ -347,7 +357,7 @@ export async function open(kit: Kit, io: Io, args: string[]): Promise<Landed> {
     if (from === dir) from = undefined
     seed(io, from, dir, seeds)
   }
-  return land(kit, io, dir, "wt", landing)
+  return land(kit, io, dir, COMMAND.open, landing)
 }
 
 // The worktree `arg` names: a branch's, a folder's (by its name), or an
@@ -371,24 +381,24 @@ async function tabsOf(kit: Kit, io: Io, dir: string) {
   return (await tabs(kit, [path], { env: io.env, cwd: io.cwd }).catch(() => ({}) as Record<string, TabIn[]>))[path] ?? []
 }
 
-// wtrm: remove a worktree (-f: even with changes), then close the tabs working
+// rm: remove a worktree (-f: even with changes), then close the tabs working
 // in it, except yours (see actions.closeTabs).
 export async function remove(kit: Kit, io: Io, args: string[]) {
   const force = args[0] === "-f" || args[0] === "--force"
   const arg = args[force ? 1 : 0]
-  if (!arg) throw new Failed("usage: wtrm [-f|--force] <branch|worktree>")
+  if (!arg) throw new Failed(`usage: ${COMMAND.rm} [-f|--force] <branch|worktree>`)
   const repo = await repositoryOf(kit, io)
-  if (!repo) throw new Failed("wtrm: not inside a git repo")
+  if (!repo) throw new Failed(`${COMMAND.rm}: not inside a git repo`)
   const target = await worktreeFor(kit, io, repo, arg)
-  if (target === "ambiguous") throw new Failed(`wtrm: '${arg}' matches both a branch and a worktree directory; use the absolute path`)
-  if (!target) throw new Failed(`wtrm: no worktree found for '${arg}'`)
+  if (target === "ambiguous") throw new Failed(`${COMMAND.rm}: '${arg}' matches both a branch and a worktree directory; use the absolute path`)
+  if (!target) throw new Failed(`${COMMAND.rm}: no worktree found for '${arg}'`)
   // Their shells would be left in a deleted folder. Found now: once it is
   // removed, their panes' folders are gone.
   const found = await tabsOf(kit, io, target)
   if (!(await loud(kit, io, ["worktree", "remove", ...(force ? ["--force"] : []), target], repo.root))) throw new Failed()
   io.say(`removed ${basename(target)}`)
   if (found.length)
-    await closeTabs(kit, target, found, { env: io.env, cwd: io.cwd }, io.say).catch((error) => io.say(`wtrm: ${message(error)}`))
+    await closeTabs(kit, target, found, { env: io.env, cwd: io.cwd }, io.say).catch((error) => io.say(`${COMMAND.rm}: ${message(error)}`))
 }
 
 // Whether `branch` was merged through a GitHub PR: one whose head is exactly
@@ -404,12 +414,12 @@ async function mergedPr(kit: Kit, io: Io, repo: Repository, branch: string) {
   return pr ? `merged PR #${pr}` : undefined
 }
 
-// wtprune: remove the worktrees whose branch's remote branch was deleted (its
+// prune: remove the worktrees whose branch's remote branch was deleted (its
 // upstream is "gone"; branches that never had one are new work and stay), and
 // with -m those merged through a PR (GitHub only); never the default branch's
 // or the one you are in. Fetches with --prune first (-n: not), lists them,
 // then asks (-y: doesn't).
-export const PRUNE_USAGE = "usage: wtprune [-y] [-n|--no-fetch] [-m|--merged]"
+const PRUNE_USAGE = `usage: ${COMMAND.prune} [-y] [-n|--no-fetch] [-m|--merged]`
 export async function prune(kit: Kit, io: Io, args: string[]) {
   let yes = false
   let fetch = true
@@ -421,11 +431,11 @@ export async function prune(kit: Kit, io: Io, args: string[]) {
     else throw new Failed(PRUNE_USAGE)
   }
   const repo = await repositoryOf(kit, io)
-  if (!repo) throw new Failed("wtprune: not inside a git repo")
+  if (!repo) throw new Failed(`${COMMAND.prune}: not inside a git repo`)
   if (fetch) {
-    io.say("wtprune: git fetch --all --prune ...")
+    io.say(`${COMMAND.prune}: git fetch --all --prune ...`)
     if (!(await loud(kit, io, ["fetch", "--all", "--prune", "--quiet"], repo.root)))
-      io.say("wtprune: fetch failed; continuing with cached remote-tracking refs")
+      io.say(`${COMMAND.prune}: fetch failed; continuing with cached remote-tracking refs`)
   }
   const head = line(await query(kit, io, ["symbolic-ref", "--quiet", "refs/remotes/origin/HEAD"], repo.root))
   const defaultBranch = head?.replace(/^refs\/remotes\/origin\//, "")
@@ -438,23 +448,23 @@ export async function prune(kit: Kit, io: Io, args: string[]) {
       .map(([branch]) => branch),
   )
   const gh = merged && onPath(["gh"], io.env.PATH ?? "")
-  if (merged && !gh) io.say("wtprune: --merged needs gh (GitHub CLI); without it, only deleted-remote branches are removed")
+  if (merged && !gh) io.say(`${COMMAND.prune}: --merged needs gh (GitHub CLI); without it, only deleted-remote branches are removed`)
   const here = line(await query(kit, io, ["rev-parse", "--show-toplevel"]))
   const targets: { path: string; why: string }[] = []
   for (const { path, branch } of await worktreeRecords(kit, io, repo.root)) {
     if (!branch || branch === defaultBranch) continue
     if (here && path === here) {
-      if (gone.has(branch)) io.say(`wtprune: skipping current worktree '${branch}' -- cd elsewhere and rerun`)
+      if (gone.has(branch)) io.say(`${COMMAND.prune}: skipping current worktree '${branch}' -- cd elsewhere and rerun`)
       continue
     }
     const why = gone.has(branch) ? "remote branch deleted" : gh ? await mergedPr(kit, io, repo, branch) : undefined
     if (why) targets.push({ path, why })
   }
-  if (!targets.length) return io.say("wtprune: nothing to remove.")
-  io.say("wtprune: worktrees to remove:")
+  if (!targets.length) return io.say(`${COMMAND.prune}: nothing to remove.`)
+  io.say(`${COMMAND.prune}: worktrees to remove:`)
   for (const { path, why } of targets) io.say(`  ${basename(path).padEnd(38)} (${why})`)
   if (!yes) {
-    if (!io.confirm) throw new Failed("wtprune: no terminal to confirm; rerun with -y")
+    if (!io.confirm) throw new Failed(`${COMMAND.prune}: no terminal to confirm; rerun with -y`)
     if (!(await io.confirm("remove them? [y/N] "))) {
       io.say("aborted")
       throw new Failed()
@@ -470,18 +480,18 @@ export async function prune(kit: Kit, io: Io, args: string[]) {
   if (failed) throw new Failed()
 }
 
-// wtclone: a repository from `url`, laid out for worktrees as the config
+// clone: a repository from `url`, laid out for worktrees as the config
 // says (a layout without a way of its own: a normal clone).
 export async function clone(kit: Kit, io: Io, args: string[]) {
   const [url, given] = args
-  if (!url) throw new Failed("usage: wtclone <url> [dir]")
+  if (!url) throw new Failed(`usage: ${COMMAND.clone} <url> [dir]`)
   const choice = kit.config.worktrees.layout
   const layout = await loadLayout(kit, choice)
   const dir = given || basename(url.replace(/\.git$/, ""))
   if (layout.clone) await layout.clone(url, dir, io)
   else {
     if (!(await loud(kit, io, ["clone", url, dir]))) throw new Failed()
-    io.say(`repo ready → cd ${dir} && wt <branch>`)
+    io.say(`repo ready → cd ${dir} && ${COMMAND.open} <branch>`)
   }
   const repo = await repositoryOf(kit, io, resolve(io.cwd, dir))
   if (repo) await record(kit, io, repo, choice)
@@ -494,11 +504,11 @@ export async function clone(kit: Kit, io: Io, args: string[]) {
 async function relayout(kit: Kit, io: Io, layout: Layout, choice: string, yes: boolean): Promise<Landed> {
   const repo = await repositoryOf(kit, io)
   if (!repo || line(await query(kit, io, ["rev-parse", "--is-inside-work-tree"])) !== "true")
-    throw new Failed("wtconvert: run this inside a normal (non-bare) git clone")
+    throw new Failed(`${COMMAND.convert}: run this inside a normal (non-bare) git clone`)
   const label = labelOf(layout)
-  if (repo.bare) throw new Failed(`wtconvert: ${repo.root} is a bare repository (already converted?)`)
+  if (repo.bare) throw new Failed(`${COMMAND.convert}: ${repo.root} is a bare repository (already converted?)`)
   if (line(await query(kit, io, ["--git-dir", repo.common, "config", "--get", "ade.layout"])) === choice)
-    throw new Failed(`wtconvert: ${repo.root} uses the ${label} layout already`)
+    throw new Failed(`${COMMAND.convert}: ${repo.root} uses the ${label} layout already`)
   const moves = (await worktreeRecords(kit, io, repo.root))
     .slice(1)
     .flatMap(({ path, branch }) => (branch ? [{ from: path, to: layout.path(repo, branch.replaceAll("/", "-")) }] : []))
@@ -507,7 +517,7 @@ async function relayout(kit: Kit, io: Io, layout: Layout, choice: string, yes: b
   io.say(`  repo:   ${repo.root}`)
   for (const { from, to } of moves) io.say(`  move:   ${from}  ->  ${to}`)
   if (!yes) {
-    if (!io.confirm) throw new Failed("wtconvert: no terminal to confirm; rerun with -y")
+    if (!io.confirm) throw new Failed(`${COMMAND.convert}: no terminal to confirm; rerun with -y`)
     if (!(await io.confirm("proceed? [y/N] "))) {
       io.say("aborted")
       throw new Failed()
@@ -517,7 +527,7 @@ async function relayout(kit: Kit, io: Io, layout: Layout, choice: string, yes: b
   let here = io.cwd
   for (const { from, to } of moves) {
     if (existsSync(to)) {
-      io.say(`wtconvert: ${to} exists; ${from} stays where it is`)
+      io.say(`${COMMAND.convert}: ${to} exists; ${from} stays where it is`)
       failed = true
       continue
     }
@@ -532,7 +542,7 @@ async function relayout(kit: Kit, io: Io, layout: Layout, choice: string, yes: b
   return { dir: here, cd: true }
 }
 
-// wtconvert: the normal clone you are in (one not set up for worktrees yet),
+// convert: the normal clone you are in (one not set up for worktrees yet),
 // into the configured layout (-y: without asking first).
 export async function convert(kit: Kit, io: Io, args: string[]): Promise<Landed> {
   const yes = args[0] === "-y" || args[0] === "--yes"
@@ -555,9 +565,9 @@ export type Listed = {
 }
 
 // The repository's worktrees (no bare repository, no folder deleted by hand),
-// for `wtls --json` and the plugin's status.
+// for `ls --json` and the plugin's status.
 export async function list(kit: Kit, io: Io): Promise<Listed[]> {
-  if ((await query(kit, io, ["rev-parse", "--git-dir"])) === undefined) throw new Failed("wtls: not inside a git repo")
+  if ((await query(kit, io, ["rev-parse", "--git-dir"])) === undefined) throw new Failed(`${COMMAND.ls}: not inside a git repo`)
   const base = line(await query(kit, io, ["rev-parse", "--verify", "--quiet", "origin/HEAD"]))
   const found = (await worktreeRecords(kit, io, io.cwd)).filter((r) => !r.bare && isDirectory(r.path))
   const paths = found.map((r) => r.path)

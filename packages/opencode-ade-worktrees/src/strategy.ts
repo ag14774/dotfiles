@@ -2,8 +2,8 @@
 // commands. OpenCode suggests a folder <parent>/<name>, its parent being
 // <data>/opencode/worktree/<the project ID's first 6 characters> unless its
 // config's worktree.directory says otherwise; the name is the one you typed
-// (or a random one), so the worktree is `wt -s NAME [START]` from the
-// checkout OpenCode starts from. Its `branch` is the ref to start from.
+// (or a random one), so the worktree is `ade worktree open -s NAME [START]`
+// from the checkout OpenCode starts from. Its `branch` is the ref to start from.
 import { homedir } from "node:os"
 import { basename, dirname, isAbsolute, join, relative } from "node:path"
 import { readConfig } from "../../ade-kit/src/config.ts"

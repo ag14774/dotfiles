@@ -1,35 +1,30 @@
 # worktree.zsh
-# Git worktree helpers for parallel development.
+# Git worktree helpers for parallel development: short names for
+# `ade worktree` (packages/ade-kit/src/worktree-cli.ts) that also `cd` where it
+# reports.
 #
-# Commands:
-#   wtclone <url> [dir]   set up a bare repo + worktree layout from a remote
-#   wt <branch> [base]    create/reuse a worktree for <branch> and cd into it
-#                         (seeds configured local files into new worktrees;
-#                         -s stays, -t/-b open its Zellij tab, -p prompts OpenCode)
-#   wtrm [-f] <name>      remove a worktree by branch or directory name (and the
-#                         tabs whose panes are all inside it)
-#   wtprune [-ynm]        wtrm worktrees whose remote branch was deleted ("gone");
-#                         -m also removes branches merged through a PR (via gh)
-#   wtls                  list worktrees
-#   wtconvert [-y]        convert a normal clone (CWD) to the configured layout
-#   wthelp                show help for these commands
+#   wtclone <url> [dir]   ade worktree clone
+#   wt <branch> [base]    ade worktree open (cds into the worktree; -s stays,
+#                         -t/-b open its tab, -p starts the agent on a prompt)
+#   wtrm [-f] <name>      ade worktree rm
+#   wtprune [-ynm]        ade worktree prune
+#   wtls                  ade worktree ls
+#   wtconvert [-y]        ade worktree convert
+#   wthelp                ade worktree help
 #
-# The implementation is `ade worktree` (packages/ade-kit/src/worktree-cli.ts),
-# which stow also puts on PATH for scripts, Zellij and agents. These functions
-# are thin wrappers: they run this checkout's copy of it, forward the seed
-# settings, and perform any `cd` it reports in your shell.
+# They run this checkout's ade. ADE_SEED may be a zsh array here.
 
 typeset -g _WT_ADE=${${(%):-%x}:A:h:h}/config/.local/bin/ade
 
-# Run an `ade worktree` command. WT_SEED may be a zsh array (not exportable),
-# so it is passed newline-separated; WT_SEED_FILE may be an unexported shell
-# variable.
+# Run an `ade worktree` command, then cd where it says. ADE_SEED may be a zsh
+# array (not exportable), so it is passed newline-separated; ADE_SEED_FILE may
+# be an unexported shell variable.
 _wt_ade() {
   emulate -L zsh
   local cwd_file dir rc
   local -a env_args
-  (( ${+WT_SEED} )) && env_args+=("WT_SEED=${(pj:\n:)WT_SEED}")
-  (( ${+WT_SEED_FILE} )) && env_args+=("WT_SEED_FILE=$WT_SEED_FILE")
+  (( ${+ADE_SEED} )) && env_args+=("ADE_SEED=${(pj:\n:)ADE_SEED}")
+  (( ${+ADE_SEED_FILE} )) && env_args+=("ADE_SEED_FILE=$ADE_SEED_FILE")
   cwd_file=$(mktemp "${TMPDIR:-/tmp}/wt-cwd.XXXXXX") || return 1
   {
     command env "${env_args[@]}" "$_WT_ADE" worktree --cwd-file "$cwd_file" "$@"
@@ -50,38 +45,11 @@ wtrm() { _wt_ade rm "$@"; }
 wtls() { _wt_ade ls "$@"; }
 wtprune() { _wt_ade prune "$@"; }
 wtconvert() { _wt_ade convert "$@"; }
-
-# show help for the worktree commands
 wthelp() {
-  emulate -L zsh
-  print -r -- 'worktree commands (bare repo + git worktrees):
-  wtclone <url> [dir]   bare-clone a repo and set it up for worktrees
-  wt <branch> [base]    create/reuse a worktree for <branch> and cd into it
-                        (base defaults to origin/HEAD; tab-completes branches;
-                         seeds local files configured by $WT_SEED, the common-dir
-                         wt-seed manifest, or $WT_SEED_FILE)
-     -s                 stay here instead and print the worktree path
-     -t                 focus its Zellij tab, opening one (with OpenCode) if needed
-     -b                 open its tab in the background; your focus stays here
-     -p PROMPT          start OpenCode in a new background tab with PROMPT
-     --session ID       like -p, on OpenCode conversation ID (with or without -p)
-                        (outside Zellij: -t changes directory, -b stays, -p fails)
-  wtrm [-f] <name>      remove by branch or worktree name (-f: even with
-                        uncommitted changes); also closes tabs whose panes are
-                        all inside the worktree (never the tab you run it from)
-  wtprune [-ynm]        remove worktrees whose remote branch was deleted ("gone");
-                        leaves branches that never had a remote. -n skips fetch --prune;
-                        -m/--merged also removes branches merged via a PR
-                        (GitHub only; exact head SHA);
-                        closes their tabs like wtrm; without -y it needs a terminal
-  wtls                  list worktrees
-  wtconvert [-y]        convert a normal clone (CWD) to the configured layout:
-                        bare (needs a clean tree; keeps ignored files, stashes
-                        and its other worktrees), or sibling/inside (moves
-                        its worktrees where they go); refused once converted
-  <common-dir>/wt-seed  one relative path/glob per line; replaces $WT_SEED
-  WT_SEED_FILE=<path>   use an explicit seed manifest for the next `wt`
-  wthelp                show this help'
+  print -r -- 'wtclone, wt, wtrm, wtls, wtprune and wtconvert run ade worktree clone, open,
+rm, ls, prune and convert, and cd where it reports (wt without -s/-t/-b/-p).
+'
+  "$_WT_ADE" worktree help
 }
 
 # ---- completions -------------------------------------------------------------

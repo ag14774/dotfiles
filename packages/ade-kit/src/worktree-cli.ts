@@ -1,32 +1,33 @@
-// `ade worktree`: the engine behind the wt shell functions (shell/worktree.zsh),
-// with their arguments, results and messages. stdout carries only the
-// result (a worktree's path, or the list); messages go through io.say. A
-// process can't change its caller's folder, so with --cwd-file the folder to
-// change to is written there instead (the shell function then cds).
+// `ade worktree`: create, open, list and remove worktrees. stdout carries
+// only the result (a worktree's path, or the list); messages go through
+// io.say. A process can't change its caller's folder, so with --cwd-file the
+// folder to change to is written there instead (a shell function then cds).
 import { writeFileSync } from "node:fs"
 import type { Kit } from "./types.ts"
-import type { Io } from "./worktrees.ts"
-import type { Landed } from "./worktrees.ts"
+import type { Io, Landed } from "./worktrees.ts"
 import { clone, convert, Failed, list, open, prune, remove } from "./worktrees.ts"
 
 export type CommandIo = Io & { out(text: string): void }
 
 export const USAGE = `usage: ade worktree [--cwd-file FILE] <command> [args]
 
-commands (interactive shell equivalent in parentheses):
-  clone <url> [dir]         clone a repo laid out for worktrees (wtclone)
+commands:
+  clone <url> [dir]         clone a repo laid out for worktrees (worktrees.layout)
   open [LAND] <branch> [base]
-                            create/reuse the worktree for <branch> (wt)
+                            create/reuse the worktree for <branch>; base defaults
+                            to worktrees.base (origin/HEAD)
   rm [-f] <name>            remove a worktree by branch or directory, closing
-                            its tabs, except the tab of the caller (wtrm)
-  ls [--json]               list worktrees (wtls); --json for programs
-  prune [-y] [-n] [-m]      remove deleted-remote/merged worktrees (wtprune)
+                            its tabs, except the tab of the caller
+  ls [--json]               list worktrees; --json for programs
+  prune [-y] [-n] [-m]      remove worktrees whose remote branch was deleted;
+                            -n: no fetch first, -m: also those merged via a
+                            GitHub PR (needs gh)
   convert [-y]              convert the normal clone in CWD to the configured
-                            layout (wtconvert)
+                            layout
   help                      show this help
 
 LAND (open) chooses what happens after the worktree exists:
-  (none)                    report it as the result (the wt functions cd there)
+  (none)                    report it as the result (for a caller to cd there)
   -s, --stay                report it as the result
   -t, --tab                 focus its tab, opening one if needed
   -b, --background          open its tab without moving focus
@@ -47,10 +48,13 @@ output:
   exit status               0 on success; non-zero on failure (nothing on stdout)
 
 --cwd-file FILE   write the directory to cd into to FILE instead of stdout
-WT_SEED           newline-separated seed patterns replacing the defaults (a
-                  WT_SEED array in ~/.zshrc reaches only the wt functions; a
-                  repo's <common-dir>/wt-seed manifest applies to every caller)
-WT_SEED_FILE      explicit seed manifest (see \`wthelp\` in an interactive shell)`
+
+seeds (untracked files copied into new worktrees), the first that is set:
+  ADE_SEED_FILE             a manifest: one relative path or glob per line
+  <common-dir>/ade-seed     the repository's manifest, same format
+  ADE_SEED                  newline-separated patterns
+  worktrees.seed            the ADE config's list (.env, .env.*, .envrc,
+                            pyrightconfig.json)`
 
 async function ls(kit: Kit, args: string[], io: CommandIo) {
   if (args[0] !== "--json") {
