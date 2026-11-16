@@ -13,7 +13,7 @@ import type { Config, Kit, Pane } from "../src/types.ts"
 const temp = realpathSync(mkdtempSync(join(tmpdir(), "ade-workspace-")))
 const repo = join(temp, "repo")
 mkdirSync(join(repo, "src"), { recursive: true })
-execFileSync("git", ["init", "-q", repo])
+execFileSync("git", ["init", "-q", "-b", "main", repo])
 const elsewhere = join(temp, "elsewhere")
 mkdirSync(elsewhere)
 

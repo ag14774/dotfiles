@@ -15,7 +15,7 @@ const git = (dir: string, ...args: string[]) =>
   execFileSync("git", ["-C", dir, "-c", "user.name=t", "-c", "user.email=t@t", ...args], { encoding: "utf8" }).trim()
 
 // A clone of a repository with one commit on main, and one without a remote.
-git(temp, "init", "-q", "--bare", "origin.git")
+git(temp, "init", "-q", "-b", "main", "--bare", "origin.git")
 git(temp, "init", "-q", "-b", "main", "seed")
 writeFileSync(join(temp, "seed", "a.txt"), "one\n")
 git(join(temp, "seed"), "add", "a.txt")
@@ -40,7 +40,7 @@ test("the scope: commits since the merge base with origin/HEAD (the default base
   assert.deepEqual(await scopeOf(kit, work), { dir: work, base, commits: false, uncommitted: true })
   const local = join(temp, "local")
   mkdirSync(local)
-  git(local, "init", "-q")
+  git(local, "init", "-q", "-b", "main")
   assert.deepEqual(await scopeOf(kit, local), { dir: local, commits: false, uncommitted: false })
 })
 

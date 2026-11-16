@@ -54,8 +54,8 @@ sandbox_config helix
 sandbox_opencode || fail "no private OpenCode service"
 
 # A repository in the worktree layout.
-git init -q --bare "$TMP/origin.git"
-git init -q "$TMP/seed"
+git init -q -b main --bare "$TMP/origin.git"
+git init -q -b main "$TMP/seed"
 print notes > "$TMP/seed/notes.md"
 print other > "$TMP/seed/other.md"
 git -C "$TMP/seed" add notes.md other.md

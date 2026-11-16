@@ -131,8 +131,8 @@ remote="$TMP/acme/demo.git"
 seed="$TMP/seed"
 project="$TMP/project"
 
-git init -q --bare "$remote"
-git init -q "$seed"
+git init -q -b main --bare "$remote"
+git init -q -b main "$seed"
 git -C "$seed" config user.name Test
 git -C "$seed" config user.email test@example.com
 print 'base' > "$seed/app.txt"
@@ -250,7 +250,7 @@ for name in kept-branch local-only reused-name; do wtrm "$name" >/dev/null 2>&1;
 # ggpush and ggpull use the configured upstream (here a contributor's fork),
 # even when its tracking ref was pruned, and refuse a detached HEAD.
 fork="$TMP/contributor/topic.git"
-git init -q --bare "$fork"
+git init -q -b main --bare "$fork"
 git -C "$seed" push -q "$fork" HEAD:refs/heads/fork-topic
 git -C "$project" remote add fork "$fork"
 git -C "$project" fetch -q fork

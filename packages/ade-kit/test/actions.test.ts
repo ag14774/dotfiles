@@ -252,7 +252,7 @@ test("send refuses, touching nothing, without text, an agent pane in the tab, or
 // review; tab 1's panes work in the first.
 const git = (cwd: string, ...args: string[]) =>
   execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@t", ...args], { cwd, encoding: "utf8" }).trim()
-git(temp, "init", "-q", "--bare", "origin.git")
+git(temp, "init", "-q", "-b", "main", "--bare", "origin.git")
 git(temp, "clone", "-q", join(temp, "origin.git"), "clean")
 const clean = join(temp, "clean")
 writeFileSync(join(clean, "a.txt"), "one\n")
