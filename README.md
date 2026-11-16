@@ -121,7 +121,8 @@ latest commit, and says if ade moved: ade's
 else that needs (often `opencode service restart`, which interrupts running
 conversations, then `ocreload` in each tab). After changing OpenCode's own
 configuration, `opencode reload` (it cancels the questions waiting in every
-tab; `ade forget-gone` first if it fails on folders that are gone).
+tab). It fails on a worktree deleted by hand rather than with `wtrm`, until
+`opencode service restart`.
 
 Pinned on purpose, bumped by hand: uv (`UV_VERSION` and its installer's
 SHA-256 in `install.sh`), the Debian downloads (versions and SHA-256s at the
