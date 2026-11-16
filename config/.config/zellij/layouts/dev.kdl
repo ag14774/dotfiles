@@ -9,7 +9,7 @@ layout {
             format_left   "{tabs}#[fg=#585b70]  +⌥t "
             format_center ""
             // No session name (it is always main) and no clock: zjstatus redraws
-            // only on Zellij events, so a clock went stale while the session idled.
+            // only on Zellij events, so a clock would go stale while the session idles.
             // Right: how many agents are waiting, failed, done or working.
             format_right  "{attention}"
             format_space  ""
