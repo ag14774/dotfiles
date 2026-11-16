@@ -5,6 +5,7 @@
 set -eu
 
 ROOT=${0:A:h:h}
+ADE=$ROOT/packages/ade-kit/src/cli.ts
 TMP=$(mktemp -d)
 TMP=${TMP:A}
 trap 'rm -rf "$TMP"' EXIT
@@ -37,7 +38,7 @@ send() { # $1 = caller pane, $2 = directory, $3 = selection, then ade send's arg
   local pane=$1 dir=$2 selection=$3
   shift 3
   : > "$FAKE_LOG"
-  (cd "$dir" && print -rn -- "$selection" | ZELLIJ_PANE_ID=$pane "$ROOT/config/.local/bin/ade" send "$@") 2>"$TMP/err"
+  (cd "$dir" && print -rn -- "$selection" | ZELLIJ_PANE_ID=$pane "$ADE" send "$@") 2>"$TMP/err"
 }
 expect() { # the zellij calls, one per line
   [[ $(<"$FAKE_LOG") == "$1" ]] || fail "expected:"$'\n'"$1"$'\n'"got:"$'\n'"$(<"$FAKE_LOG")"

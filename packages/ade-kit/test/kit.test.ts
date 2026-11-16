@@ -64,7 +64,7 @@ test("tabName: {worktree} is the worktree folder's name, {project} its repositor
     execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@t", ...args], { cwd, stdio: "ignore" })
   // A plain clone with a worktree inside it, and the worktree layout (.bare).
   mkdirSync(join(temp, "dotfiles"))
-  git(join(temp, "dotfiles"), "init", "-q")
+  git(join(temp, "dotfiles"), "init", "-q", "-b", "main")
   git(join(temp, "dotfiles"), "commit", "-q", "--allow-empty", "-m", "base")
   git(join(temp, "dotfiles"), "worktree", "add", "-q", "-b", "fix", "fix")
   git(temp, "clone", "-q", "--bare", join(temp, "dotfiles"), join(temp, "project", ".bare"))

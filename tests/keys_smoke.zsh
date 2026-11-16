@@ -81,7 +81,7 @@ grep -q "$ROOT/config/.local/bin/ade send" "$XDG_CONFIG_HOME/helix/config.toml" 
 
 # A clone whose branch has a commit (a.txt changed, c.txt added) and an
 # uncommitted new file (b.txt).
-git init -q --bare "$TMP/origin.git"
+git init -q -b main --bare "$TMP/origin.git"
 git init -q -b main "$TMP/seed"
 printf 'line1\nline2\n' > "$TMP/seed/a.txt"
 git -C "$TMP/seed" add a.txt

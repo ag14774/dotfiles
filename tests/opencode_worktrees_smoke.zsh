@@ -51,7 +51,7 @@ ade=$TMP/src/packages/ade-kit/src/cli.ts
 # A project in the bare layout: main (with a .env to seed) and feat-old, made
 # by wt, where a conversation will open (OpenCode then records it as its Git
 # strategy's).
-git init -q --bare "$TMP/origin.git"
+git init -q -b main --bare "$TMP/origin.git"
 git init -q -b main "$TMP/seed"
 print '.env' > "$TMP/seed/.gitignore"
 git -C "$TMP/seed" add .gitignore && git -C "$TMP/seed" commit -qm base

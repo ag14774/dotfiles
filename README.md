@@ -8,6 +8,9 @@ OpenCode and, once you open a file, Helix. Agents can open files in your
 editor, start work in a new worktree tab and report on the others, and the
 top bar shows what every tab's agents are doing. Catppuccin Mocha throughout.
 
+What changed and what to do after pulling: [CHANGELOG.md](CHANGELOG.md).
+Changing the code or forking it: [AGENTS.md](AGENTS.md).
+
 ## Install
 
 ```sh
@@ -37,15 +40,15 @@ needed.
   `zellij plugin -f -- "<bar-url>"` command the installer prints, press `y`,
   and close that pane.
 
-| Manager | Tools |
-| --- | --- |
-| Homebrew / Pacman | Node/npm, Ruff, Taplo, Marksman, ShellCheck, shfmt, GitHub CLI |
-| APT (`install/apt.sh`) | Node/npm (NodeSource, current LTS), ShellCheck, shfmt, GitHub CLI |
-| uv's installer (`~/.local/bin`) | uv |
-| `uv tool` | Pyright, plus Ruff on Debian |
-| npm (`~/.local`) | TypeScript, bash/yaml/json language servers |
-| OpenCode's installer (`~/.opencode/bin`) | OpenCode 2 |
-| rustup and Cargo (`~/.cargo`) | stable Rust, `jinja-lsp` |
+| Manager                                  | Tools                                                             |
+| ---------------------------------------- | ----------------------------------------------------------------- |
+| Homebrew / Pacman                        | Node/npm, Ruff, Taplo, Marksman, ShellCheck, shfmt, GitHub CLI    |
+| APT (`install/apt.sh`)                   | Node/npm (NodeSource, current LTS), ShellCheck, shfmt, GitHub CLI |
+| uv's installer (`~/.local/bin`)          | uv                                                                |
+| `uv tool`                                | Pyright, plus Ruff on Debian                                      |
+| npm (`~/.local`)                         | TypeScript, bash/yaml/json language servers                       |
+| OpenCode's installer (`~/.opencode/bin`) | OpenCode 2                                                        |
+| rustup and Cargo (`~/.cargo`)            | stable Rust, `jinja-lsp`                                          |
 
 ## Using it
 
@@ -55,22 +58,22 @@ panes (`Alt-t` a tab, `Alt-n` a pane); Ghostty's own are switched off. A tab
 belongs to one worktree: a shell pane, OpenCode on the right, and Helix above
 the shell once a file is opened.
 
-| | |
-| --- | --- |
-| `wt <branch>` | cd into the branch's worktree, creating it; `-s` stays and prints its path, `-t` goes to its tab, `-b` opens the tab in the background |
-| `wt -p "task" <branch>` | a background tab whose OpenCode starts on the task (`--session ID`: on an existing conversation) |
+|                                                        |                                                                                                                                                                                                                  |
+| ------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `wt <branch>`                                          | cd into the branch's worktree, creating it; `-s` stays and prints its path, `-t` goes to its tab, `-b` opens the tab in the background                                                                           |
+| `wt -p "task" <branch>`                                | a background tab whose OpenCode starts on the task (`--session ID`: on an existing conversation)                                                                                                                 |
 | `wtrm`, `wtprune [-m]`, `wtls`, `wtclone`, `wtconvert` | remove a worktree and close its tabs; remove the worktrees whose remote branch was deleted (`-m`: or merged); list them; clone a repository for worktrees; turn a normal clone into one (`wthelp`: every option) |
-| `Alt-y` | Yazi as a picker; files open in the tab's Helix |
-| Helix `+` `a` | ask the tab's OpenCode about the line or the selection |
-| `Alt-v` | review everything the worktree changed, committed or not, in tuicr; `y` hands your comments to OpenCode, `e` opens a file in Helix |
-| "delegate this", `/delegate` | OpenCode starts the work in a new worktree tab ("with the context" carries the conversation over) |
-| "how are the other worktrees doing?" | OpenCode's `status` tool |
-| `ocreload` | restart the tab's OpenCode in the current folder, after reloading the OpenCode service's config |
-| `zreset` | end the session and delete its saved copy; the next terminal starts a fresh one |
-| `mdview [FILE]`, Helix `+` `m` | Markdown in the browser |
-| `cheat`, `Alt-/` | the cheatsheet ([CHEATSHEET.md](CHEATSHEET.md): all the keys) |
-| `/btw` | a side question in OpenCode, outside the conversation |
-| `gcai` | a commit message drafted by OpenCode from the staged diff |
+| `Alt-y`                                                | Yazi as a picker; files open in the tab's Helix                                                                                                                                                                  |
+| Helix `+` `a`                                          | ask the tab's OpenCode about the line or the selection                                                                                                                                                           |
+| `Alt-v`                                                | review everything the worktree changed, committed or not, in tuicr; `y` hands your comments to OpenCode, `e` opens a file in Helix                                                                               |
+| "delegate this", `/delegate`                           | OpenCode starts the work in a new worktree tab ("with the context" carries the conversation over)                                                                                                                |
+| "how are the other worktrees doing?"                   | OpenCode's `status` tool                                                                                                                                                                                         |
+| `ocreload`                                             | restart the tab's OpenCode in the current folder, after reloading the OpenCode service's config                                                                                                                  |
+| `zreset`                                               | end the session and delete its saved copy; the next terminal starts a fresh one                                                                                                                                  |
+| `mdview [FILE]`, Helix `+` `m`                         | Markdown in the browser                                                                                                                                                                                          |
+| `cheat`, `Alt-/`                                       | the cheatsheet ([CHEATSHEET.md](CHEATSHEET.md): all the keys)                                                                                                                                                    |
+| `/btw`                                                 | a side question in OpenCode, outside the conversation                                                                                                                                                            |
+| `gcai`                                                 | a commit message drafted by OpenCode from the staged diff                                                                                                                                                        |
 
 Each tab's name starts with the most urgent status of its agents: 󰔟
 working,  waiting for you,  done and  failed or interrupted; the right
@@ -98,7 +101,7 @@ change: `Ctrl-r` reloads them all, dropping unsaved edits.
   config names in `gh.user`; its header shows how to set that in
   `~/.gitconfig`).
 - `shell/*.zsh`: the zsh setup, the `wt*` functions (short names for `ade
-  worktree`), `ocreload`, `zreset`, `gcai`, `mdview` and `cheat`.
+worktree`), `ocreload`, `zreset`, `gcai`, `mdview` and `cheat`.
 - [`packages/`](packages), npm workspaces:
   - [`ade-kit`](packages/ade-kit): the `ade` command and library: adapters
     for the multiplexer, editor, agent and reviewer, and the worktree commands;
@@ -151,13 +154,13 @@ The live tests take a few minutes each. They run in a sandbox
 service), so they can run from inside Zellij and never reach your session or
 service.
 
-| After changing | Run |
-| --- | --- |
-| Zellij, Helix or OpenCode (upgrade), `dev.kdl`, `opencode-pane`, `resurrect-command.sh` | `zsh tests/zellij_restore_smoke.zsh` |
-| Zellij, Helix, Yazi or tuicr (upgrade), the keys and their scripts | `zsh tests/keys_smoke.zsh` (a stand-in for OpenCode) |
-| `opencode-ade`, `opencode-ade-status`, OpenCode (upgrade) | `zsh tests/ade_plugin_smoke.zsh` (nine short model calls) |
-| `opencode-ade-status`'s sounds, OpenCode (upgrade) | `zsh tests/opencode_attention_smoke.zsh` |
-| `opencode-ade-worktrees`, `ade worktree` | `zsh tests/opencode_worktrees_smoke.zsh` (no Zellij) |
+| After changing                                                                          | Run                                                       |
+| --------------------------------------------------------------------------------------- | --------------------------------------------------------- |
+| Zellij, Helix or OpenCode (upgrade), `dev.kdl`, `opencode-pane`, `resurrect-command.sh` | `zsh tests/zellij_restore_smoke.zsh`                      |
+| Zellij, Helix, Yazi or tuicr (upgrade), the keys and their scripts                      | `zsh tests/keys_smoke.zsh` (a stand-in for OpenCode)      |
+| `opencode-ade`, `opencode-ade-status`, OpenCode (upgrade)                               | `zsh tests/ade_plugin_smoke.zsh` (nine short model calls) |
+| `opencode-ade-status`'s sounds, OpenCode (upgrade)                                      | `zsh tests/opencode_attention_smoke.zsh`                  |
+| `opencode-ade-worktrees`, `ade worktree`                                                | `zsh tests/opencode_worktrees_smoke.zsh` (no Zellij)      |
 
 ## Changing the theme
 
@@ -168,22 +171,22 @@ Mocha hex values with the flavour's (<https://catppuccin.com/palette>).
 
 Named themes:
 
-| Tool | File | Setting | Apply |
-| --- | --- | --- | --- |
-| Helix | `config/.config/helix/config.toml` | `theme = "catppuccin_mocha_dim"` | `:config-reload` |
-| Zellij | `config/.config/zellij/config.kdl` | `theme "catppuccin-mocha"` | a new session |
-| Yazi | `config/.config/yazi/package.toml` and `theme.toml` | the flavour, in both | `ya pkg install`, restart Yazi |
-| delta | `config/.config/git/config` | `syntax-theme = Catppuccin Mocha` | next `git diff` |
+| Tool   | File                                                | Setting                           | Apply                          |
+| ------ | --------------------------------------------------- | --------------------------------- | ------------------------------ |
+| Helix  | `config/.config/helix/config.toml`                  | `theme = "catppuccin_mocha_dim"`  | `:config-reload`               |
+| Zellij | `config/.config/zellij/config.kdl`                  | `theme "catppuccin-mocha"`        | a new session                  |
+| Yazi   | `config/.config/yazi/package.toml` and `theme.toml` | the flavour, in both              | `ya pkg install`, restart Yazi |
+| delta  | `config/.config/git/config`                         | `syntax-theme = Catppuccin Mocha` | next `git diff`                |
 
 Hand-picked colours:
 
-| What | File |
-| --- | --- |
-| Helix's dimmed docstrings | `config/.config/helix/themes/catppuccin_mocha_dim.toml` (inherits the stock theme; one green) |
-| delta's gutters and blame | `config/.config/git/config`, `[delta "catppuccin-mocha"]` |
-| glow (`cheat`, `Alt-/`) | `config/.config/glow/catppuccin-mocha.json`, named in `shell/cheatsheet.zsh` and `config.kdl` |
-| `mdview`, `cheat --pretty` | `CHEATSHEET.css` |
-| the top bar | `config/.config/zellij/layouts/dev.kdl`, the colours in the bar's `format_*`, `tab_*` and `attention_*` options |
+| What                       | File                                                                                                            |
+| -------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| Helix's dimmed docstrings  | `config/.config/helix/themes/catppuccin_mocha_dim.toml` (inherits the stock theme; one green)                   |
+| delta's gutters and blame  | `config/.config/git/config`, `[delta "catppuccin-mocha"]`                                                       |
+| glow (`cheat`, `Alt-/`)    | `config/.config/glow/catppuccin-mocha.json`, named in `shell/cheatsheet.zsh` and `config.kdl`                   |
+| `mdview`, `cheat --pretty` | `CHEATSHEET.css`                                                                                                |
+| the top bar                | `config/.config/zellij/layouts/dev.kdl`, the colours in the bar's `format_*`, `tab_*` and `attention_*` options |
 
 Mocha: `base #1e1e2e` · `mantle #181825` · `crust #11111b` · `surface0 #313244` ·
 `surface1 #45475a` · `surface2 #585b70` · `overlay0 #6c7086` · `text #cdd6f4` ·

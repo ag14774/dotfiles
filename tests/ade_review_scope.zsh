@@ -5,6 +5,7 @@
 set -eu
 
 ROOT=${0:A:h:h}
+ADE=$ROOT/packages/ade-kit/src/cli.ts
 TMP=$(mktemp -d)
 TMP=${TMP:A}
 trap 'rm -rf "$TMP"' EXIT
@@ -15,7 +16,7 @@ fail() {
 }
 scope() { # $1 = directory
   local out
-  out=$(cd "$1" && "$ROOT/config/.local/bin/ade" review --scope) || return
+  out=$(cd "$1" && "$ADE" review --scope) || return
   print -r -- ${(j: :)${(f)out}}
 }
 check() { # $1 = case, $2 = directory, $3 = expected scope
@@ -24,7 +25,7 @@ check() { # $1 = case, $2 = directory, $3 = expected scope
   [[ $got == "$3" ]] || fail "$1: expected '$3', got '$got'"
 }
 
-git init -q --bare "$TMP/origin.git"
+git init -q -b main --bare "$TMP/origin.git"
 git init -q -b main "$TMP/seed"
 git -C "$TMP/seed" config user.name Test
 git -C "$TMP/seed" config user.email test@example.com

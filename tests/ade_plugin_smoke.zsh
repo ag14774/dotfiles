@@ -154,8 +154,8 @@ sandbox_opencode ZELLIJ=0 ZELLIJ_SESSION_NAME="$S" ZELLIJ_PANE_ID=0 || fail "the
 
 # Two projects in wt's layout, for delegate: proj, and proj2 to reach from it.
 for p in proj proj2; do
-  git init -q --bare "$TMP/$p.git"
-  git init -q "$TMP/seed-$p" && print seed > "$TMP/seed-$p/README"
+  git init -q -b main --bare "$TMP/$p.git"
+  git init -q -b main "$TMP/seed-$p" && print seed > "$TMP/seed-$p/README"
   git -C "$TMP/seed-$p" add README && git -C "$TMP/seed-$p" -c user.name=t -c user.email=t@example.com commit -qm init
   git -C "$TMP/seed-$p" push -q "$TMP/$p.git" HEAD:main && git --git-dir="$TMP/$p.git" symbolic-ref HEAD refs/heads/main
   (cd "$TMP" && ade worktree clone "$TMP/$p.git" "$p" && cd "$p" && ade worktree open --stay main) >/dev/null 2>&1

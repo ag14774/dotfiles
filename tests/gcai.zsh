@@ -34,7 +34,7 @@ unset GCAI_MODEL FAKE_CONFIG
 source "$ROOT/shell/git.zsh"
 
 cd "$TMP/repo"
-git init -q
+git init -q -b main
 git config user.email test@example.com
 git config user.name test
 git config commit.gpgsign false
