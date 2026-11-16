@@ -1,3 +1,9 @@
+; Helix 25.07.1's runtime/queries/python/highlights.scm, from
+; https://github.com/helix-editor/helix, under the Mozilla Public License 2.0
+; (https://mozilla.org/MPL/2.0/), with the "Docstrings" block added at the
+; end. It replaces Helix's own file, so copy it again after upgrading Helix
+; and add that block back.
+
 ; -------
 ; Punctuation
 ; -------
