@@ -5,7 +5,19 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { test } from "node:test"
 import type { Terminal } from "../src/actions.ts"
-import { ADE, fileRef, open, pastes, review, send, tabs as tabsOf, workspace, closeTabs } from "../src/actions.ts"
+import {
+  ADE,
+  fileRef,
+  open,
+  pastes,
+  restartAgent,
+  review,
+  send,
+  tabs as tabsOf,
+  where,
+  workspace,
+  closeTabs,
+} from "../src/actions.ts"
 import { DEFAULTS } from "../src/config.ts"
 import { makeKit, run } from "../src/kit.ts"
 import type { Config, Key, Multiplexer, Pane, Role, Tab } from "../src/types.ts"
@@ -103,7 +115,10 @@ test("open: typed into the editor of the caller's tab, which then gets focus", a
   // From the agent pane, whose folder isn't known, the same.
   const again = record()
   await open(kitWith(), ["notes.md"], from("5", "/elsewhere"))
-  assert.deepEqual(again, [["type", "2", typedOpen("/elsewhere/notes.md")], ["focus", "2"]])
+  assert.deepEqual(again, [
+    ["type", "2", typedOpen("/elsewhere/notes.md")],
+    ["focus", "2"],
+  ])
 })
 
 test("open from a tab you are not on: its editor, without focus", async () => {
@@ -125,18 +140,29 @@ test("open: a stopped editor is replaced by a fresh one, focused only in the tab
 test("open in a tab without an editor: started there if you are on it, else refused", async () => {
   const calls = record(session.filter((p) => p.id !== "2"))
   await open(kitWith(), ["notes.md"], from("1"))
-  assert.deepEqual(calls, [["start", { tab: "1", role: "editor", argv: [join(temp, "bin", "hx"), join(dir, "notes.md")], focus: true }]])
+  assert.deepEqual(calls, [
+    ["start", { tab: "1", role: "editor", argv: [join(temp, "bin", "hx"), join(dir, "notes.md")], focus: true }],
+  ])
   const refused = record()
-  await assert.rejects(open(kitWith(), ["notes.md"], from("6")), /^Error: tab 3 has no editor and is not the tab you are on; not switching tabs$/)
+  await assert.rejects(
+    open(kitWith(), ["notes.md"], from("6")),
+    /^Error: tab 3 has no editor and is not the tab you are on; not switching tabs$/,
+  )
   assert.deepEqual(refused, [])
 })
 
 test("open refuses, touching nothing, when the caller's pane is gone or it is not inside the multiplexer", async () => {
   const calls = record()
-  await assert.rejects(open(kitWith(), ["a"], from("42")), /^Error: pane 42 does not exist; not guessing which tab to use$/)
+  await assert.rejects(
+    open(kitWith(), ["a"], from("42")),
+    /^Error: pane 42 does not exist; not guessing which tab to use$/,
+  )
   await assert.rejects(open(kitWith(), ["a"], from(undefined)), /^Error: not inside Fake$/)
   await assert.rejects(open(kitWith(), ["a"], { env: { FAKE_SESSION: "1" }, cwd: dir }), /^Error: not inside Fake$/)
-  await assert.rejects(open(kitWith({ multiplexer: "none" }), ["a"], from("1")), /^Error: Helix is reached through its pane, and no multiplexer is configured$/)
+  await assert.rejects(
+    open(kitWith({ multiplexer: "none" }), ["a"], from("1")),
+    /^Error: Helix is reached through its pane, and no multiplexer is configured$/,
+  )
   assert.deepEqual(calls, [])
 })
 
@@ -146,7 +172,10 @@ test("open passes lines on to an editor that supports them, and drops them for o
   assert.deepEqual(calls[0], [
     "type",
     "2",
-    [{ text: JSON.stringify({ path: join(dir, "a.md"), line: 3, column: 2 }) }, { text: JSON.stringify({ path: join(dir, "b.md") }) }],
+    [
+      { text: JSON.stringify({ path: join(dir, "a.md"), line: 3, column: 2 }) },
+      { text: JSON.stringify({ path: join(dir, "b.md") }) },
+    ],
   ])
   const dropped = record()
   await open(kitWith(), ["a.md:3"], from("1"))
@@ -168,14 +197,16 @@ test("pastes: the reference, relative to the agent's folder when inside it, with
 })
 
 test("pastes: a selection of more than one character as a fenced block, then a space", () => {
-  assert.deepEqual(pastes(at("a.py", { start: "1", end: "2", language: "python", selection: "def f():\n    pass" }), "/w", "/w"), [
-    "a.py:1-2 ",
-    "```python\ndef f():\n    pass\n```",
-    " ",
-  ])
+  assert.deepEqual(
+    pastes(at("a.py", { start: "1", end: "2", language: "python", selection: "def f():\n    pass" }), "/w", "/w"),
+    ["a.py:1-2 ", "```python\ndef f():\n    pass\n```", " "],
+  )
   assert.deepEqual(pastes(at("a.md", { selection: "a\n```\nb" }), "/w", "/w").slice(1), ["````\na\n```\nb\n````", " "])
   assert.deepEqual(pastes(at("a.md", { selection: "\u{1F600}" }), "/w", "/w"), ["a.md "]) // one character
-  assert.deepEqual(pastes(at("[scratch]", { selection: "some text", language: "text" }), "/w", "/w"), ["```text\nsome text\n```", " "])
+  assert.deepEqual(pastes(at("[scratch]", { selection: "some text", language: "text" }), "/w", "/w"), [
+    "```text\nsome text\n```",
+    " ",
+  ])
 })
 
 test("send: pasted into the agent of the caller's tab, which then gets focus", async () => {
@@ -192,10 +223,17 @@ test("send: pasted into the agent of the caller's tab, which then gets focus", a
 test("send --text: inserted as it is, or with submit, pasted then Enter", async () => {
   const inserted = record()
   await send(kitWith(), { text: "1. `a.txt:2` - Why?" }, from("1"))
-  assert.deepEqual(inserted, [["paste", "5", "1. `a.txt:2` - Why?"], ["focus", "5"]])
+  assert.deepEqual(inserted, [
+    ["paste", "5", "1. `a.txt:2` - Why?"],
+    ["focus", "5"],
+  ])
   const submitted = record()
   await send(kitWith(), { text: "comments", submit: true }, from("1"))
-  assert.deepEqual(submitted, [["paste", "5", "comments"], ["type", "5", [{ key: "enter" }]], ["focus", "5"]])
+  assert.deepEqual(submitted, [
+    ["paste", "5", "comments"],
+    ["type", "5", [{ key: "enter" }]],
+    ["focus", "5"],
+  ])
 })
 
 test("send refuses, touching nothing, without text, an agent pane in the tab, or the caller's pane", async () => {
@@ -203,7 +241,10 @@ test("send refuses, touching nothing, without text, an agent pane in the tab, or
   await assert.rejects(send(kitWith(), { text: "" }, from("1")), /^Error: no text to send$/)
   await assert.rejects(send(kitWith(), at("a.md"), from("3")), /^Error: this tab has no OpenCode pane$/)
   await assert.rejects(send(kitWith(), at("a.md"), from("42")), /^Error: pane 42 does not exist/)
-  await assert.rejects(send(kitWith({ multiplexer: "none" }), at("a.md"), from("1")), /^Error: OpenCode is reached through its pane, and no multiplexer is configured$/)
+  await assert.rejects(
+    send(kitWith({ multiplexer: "none" }), at("a.md"), from("1")),
+    /^Error: OpenCode is reached through its pane, and no multiplexer is configured$/,
+  )
   assert.deepEqual(calls, [])
 })
 
@@ -253,13 +294,20 @@ test("review: the reviewer on the worktree of the pane you were in; its comments
   const { recorded, seen } = terminal("1. `a.txt:1` - Why?\n\n")
   await review(kitWith(), from("10", temp), recorded)
   assert.deepEqual(seen, [["interact", ["tuicr", "-r", `${base}..HEAD`, "--stdout"], branch, editorVariable]])
-  assert.deepEqual(calls, [["paste", "5", "1. `a.txt:1` - Why?"], ["focus", "5"]])
+  assert.deepEqual(calls, [
+    ["paste", "5", "1. `a.txt:1` - Why?"],
+    ["focus", "5"],
+  ])
 })
 
 test("review: with review.deliver submit, the comments are sent; with no comments, nothing", async () => {
   const calls = record(reviewing())
   await review(kitWith({ review: { deliver: "submit" } }), from("10", temp), terminal("comments\n").recorded)
-  assert.deepEqual(calls, [["paste", "5", "comments"], ["type", "5", [{ key: "enter" }]], ["focus", "5"]])
+  assert.deepEqual(calls, [
+    ["paste", "5", "comments"],
+    ["type", "5", [{ key: "enter" }]],
+    ["focus", "5"],
+  ])
   const none = record(reviewing())
   await review(kitWith(), from("10", temp), terminal("").recorded)
   assert.deepEqual(none, [])
@@ -280,7 +328,9 @@ test("review: nothing to review is said, and waits for a key", async () => {
   record(reviewing().map((p) => (p.tab === "1" && p.cwd === branch ? { ...p, cwd: clean } : p)))
   const { recorded, seen } = terminal()
   await review(kitWith(), from("10", temp), recorded)
-  assert.deepEqual(seen, [["pause", `Nothing to review in ${clean}: no commits since origin/HEAD and no uncommitted changes.`]])
+  assert.deepEqual(seen, [
+    ["pause", `Nothing to review in ${clean}: no commits since origin/HEAD and no uncommitted changes.`],
+  ])
   const plain = terminal()
   await review(kitWith({ multiplexer: "none" }), from(undefined, dir), plain.recorded)
   assert.deepEqual(plain.seen, [["pause", `Nothing to review: ${dir} is not in a Git repository.`]])
@@ -290,7 +340,10 @@ test("review: comments that can't reach the agent are shown, and so is a reviewe
   record(reviewing().filter((p) => p.id !== "5"))
   const { recorded, seen } = terminal("1. Why?\n")
   await review(kitWith(), from("10", temp), recorded)
-  assert.deepEqual(seen.at(-1), ["pause", "1. Why?\n\nThe comments above could not be sent: this tab has no OpenCode pane."])
+  assert.deepEqual(seen.at(-1), [
+    "pause",
+    "1. Why?\n\nThe comments above could not be sent: this tab has no OpenCode pane.",
+  ])
   // Outside the multiplexer it reviews this folder, and can't send.
   const outside = terminal("1. Why?")
   await review(kitWith(), from(undefined, branch), outside.recorded)
@@ -302,7 +355,7 @@ test("review: comments that can't reach the agent are shown, and so is a reviewe
 })
 
 // For the actions on tabs: a plain clone with a worktree nested inside it, as
-// `wt` makes in a repository that isn't in the worktree layout.
+// `ade worktree open` makes in a repository that isn't in the worktree layout.
 git(temp, "clone", "-q", join(temp, "origin.git"), "outer")
 const outer = join(temp, "outer")
 git(outer, "worktree", "add", "-q", "-b", "inner", "inner")
@@ -331,20 +384,31 @@ const counted = () => {
 test("tabs: the tabs working in each worktree, a nested worktree's not counted for the outer one", async () => {
   record(nested)
   const { kit, commands } = counted()
-  assert.deepEqual(await tabsOf(kit, [outer, "outer/inner", join(temp, "elsewhere")], { env: { FAKE_PANE: "1" }, cwd: temp }), {
-    [outer]: [{ tab: "1", sure: true }, { tab: "3", sure: false }],
-    "outer/inner": [{ tab: "2", sure: true }],
-    [join(temp, "elsewhere")]: [],
-  })
+  assert.deepEqual(
+    await tabsOf(kit, [outer, "outer/inner", join(temp, "elsewhere")], { env: { FAKE_PANE: "1" }, cwd: temp }),
+    {
+      [outer]: [
+        { tab: "1", sure: true },
+        { tab: "3", sure: false },
+      ],
+      "outer/inner": [{ tab: "2", sure: true }],
+      [join(temp, "elsewhere")]: [],
+    },
+  )
   // One look at the worktrees per repository.
   assert.equal(commands.filter((argv) => argv.includes("worktree")).length, 2)
 })
 
 test("tabs works with the multiplexer's session alone, and not outside one", async () => {
   record(nested)
-  assert.deepEqual(await tabsOf(kitWith(), [inner], { env: { FAKE_SESSION: "1" }, cwd: temp }), { [inner]: [{ tab: "2", sure: true }] })
+  assert.deepEqual(await tabsOf(kitWith(), [inner], { env: { FAKE_SESSION: "1" }, cwd: temp }), {
+    [inner]: [{ tab: "2", sure: true }],
+  })
   await assert.rejects(tabsOf(kitWith(), [inner], from(undefined)), /^Error: not inside Fake$/)
-  await assert.rejects(tabsOf(kitWith({ multiplexer: "none" }), [inner], from("1")), /^Error: there are no tabs without a multiplexer/)
+  await assert.rejects(
+    tabsOf(kitWith({ multiplexer: "none" }), [inner], from("1")),
+    /^Error: there are no tabs without a multiplexer/,
+  )
 })
 
 // A multiplexer with tabs for worktrees: openTab adds a tab with a shell and
@@ -367,7 +431,10 @@ const withTabs = (panes: Pane[], o: { agent?: boolean; fail?: "openTab" | "start
     openTab: async (t) => {
       calls.push(["openTab", t])
       if (o.fail === "openTab") throw new Error("boom")
-      state.push(pane("20", "9", "shell", { cwd: t.dir }), ...(o.agent === false ? [] : [pane("21", "9", "agent", { cwd: t.dir })]))
+      state.push(
+        pane("20", "9", "shell", { cwd: t.dir }),
+        ...(o.agent === false ? [] : [pane("21", "9", "agent", { cwd: t.dir })]),
+      )
       if (!t.agent) return { tab: "9" }
       return { tab: "9", agent: o.agent === false ? "no pane" : o.fail === "start" ? "failed" : "started" }
     },
@@ -394,7 +461,10 @@ test("workspace: the worktree's tab, gone to or left in the background; a tab no
   const calls = withTabs(nested)
   const { messages, tell } = told()
   assert.deepEqual(await workspace(kitWith(), { dir: inner, focus: true }, scripted, tell), { tab: "2", opened: false })
-  assert.deepEqual(await workspace(kitWith(), { dir: "outer", focus: false }, scripted, tell), { tab: "1", opened: false })
+  assert.deepEqual(await workspace(kitWith(), { dir: "outer", focus: false }, scripted, tell), {
+    tab: "1",
+    opened: false,
+  })
   assert.deepEqual(calls, [["showTab", "2"]])
   assert.deepEqual(messages, ["outer already has a tab"])
   const unsure = withTabs(nested.filter((p) => p.tab === "3"))
@@ -425,41 +495,70 @@ test("workspace: with a conversation or prompt, the new tab's agent starts on th
 
 test("workspace refuses a conversation or prompt for a worktree with a tab, and an agent it can't find", async () => {
   const calls = withTabs(nested)
-  await assert.rejects(workspace(kitWith(viaPane), { dir: inner, focus: false, prompt: "go" }, scripted),
-    /^Error: inner already has a tab; send the prompt to its OpenCode instead$/)
-  await assert.rejects(workspace(kitWith(), { dir: inner, focus: false, session: "ses_1" }, { ...scripted, env: { FAKE_SESSION: "1", PATH: "/nowhere" } }),
-    /^Error: OpenCode executable not found \(tried opencode\)$/)
+  await assert.rejects(
+    workspace(kitWith(viaPane), { dir: inner, focus: false, prompt: "go" }, scripted),
+    /^Error: inner already has a tab; send the prompt to its OpenCode instead$/,
+  )
+  await assert.rejects(
+    workspace(
+      kitWith(),
+      { dir: inner, focus: false, session: "ses_1" },
+      { ...scripted, env: { FAKE_SESSION: "1", PATH: "/nowhere" } },
+    ),
+    /^Error: OpenCode executable not found \(tried opencode\)$/,
+  )
   assert.deepEqual(calls, [])
   // A program given with its path is used as it is.
   const given = withTabs([])
-  await workspace(kitWith({ opencode: { command: ["/opt/oc"] } } as Partial<Config>), { dir: inner, focus: true, prompt: "go" }, scripted)
+  await workspace(
+    kitWith({ opencode: { command: ["/opt/oc"] } } as Partial<Config>),
+    { dir: inner, focus: true, prompt: "go" },
+    scripted,
+  )
   assert.deepEqual((given[0][1] as { agent: string[] }).agent, ["/opt/oc", "--prompt", "go"])
 })
 
 test("workspace says what failed: no tab, no agent pane in it, the agent not started", async () => {
   withTabs([], { fail: "openTab" })
-  await assert.rejects(workspace(kitWith(), { dir: inner, focus: false }, scripted), /^Error: could not open a Fake tab for inner$/)
+  await assert.rejects(
+    workspace(kitWith(), { dir: inner, focus: false }, scripted),
+    /^Error: could not open a Fake tab for inner$/,
+  )
   withTabs([], { agent: false })
   const { messages, tell } = told()
-  await assert.rejects(workspace(kitWith(viaPane), { dir: inner, focus: false, prompt: "go" }, scripted, tell),
-    /^Error: no opencode pane in tab inner; prompt not sent \(the tab stays open\)$/)
+  await assert.rejects(
+    workspace(kitWith(viaPane), { dir: inner, focus: false, prompt: "go" }, scripted, tell),
+    /^Error: no opencode pane in tab inner; prompt not sent \(the tab stays open\)$/,
+  )
   assert.deepEqual(messages, ["opened tab inner in the background"])
   withTabs([], { fail: "start" })
-  await assert.rejects(workspace(kitWith(viaPane), { dir: inner, focus: false, prompt: "go" }, scripted),
-    /^Error: could not start OpenCode with the prompt in tab inner$/)
+  await assert.rejects(
+    workspace(kitWith(viaPane), { dir: inner, focus: false, prompt: "go" }, scripted),
+    /^Error: could not start OpenCode with the prompt in tab inner$/,
+  )
 })
 
 test("workspace needs a folder, a multiplexer that opens tabs, and a session", async () => {
   const calls = withTabs([])
-  await assert.rejects(workspace(kitWith(), { dir: "nowhere", focus: true }, scripted), new RegExp(`^Error: ${join(temp, "nowhere")} is not a folder$`))
+  await assert.rejects(
+    workspace(kitWith(), { dir: "nowhere", focus: true }, scripted),
+    new RegExp(`^Error: ${join(temp, "nowhere")} is not a folder$`),
+  )
   assert.deepEqual(calls, [])
   record(nested.filter((p) => p.tab === "2"))
-  await assert.rejects(workspace(kitWith(), { dir: outer, focus: true }, scripted), /^Error: the multiplexer "fake" lacks: openTab$/)
+  await assert.rejects(
+    workspace(kitWith(), { dir: outer, focus: true }, scripted),
+    /^Error: the multiplexer "fake" lacks: openTab$/,
+  )
   await assert.rejects(workspace(kitWith(), { dir: outer, focus: true }, from(undefined)), /^Error: not inside Fake$/)
 })
 
 // Tabs found before the worktree went: 1 and 4 sure, 3 unsure.
-const before = [{ tab: "1", sure: true }, { tab: "3", sure: false }, { tab: "4", sure: true }]
+const before = [
+  { tab: "1", sure: true },
+  { tab: "3", sure: false },
+  { tab: "4", sure: true },
+]
 
 test("closeTabs: the tabs found before, except yours and the unsure ones, each told", async () => {
   const calls = withTabs(nested)
@@ -497,5 +596,43 @@ test("closeTabs closes nothing for the agent's commands or when your tab is unkn
   await closeTabs(kitWith(), "/p/gone", before.slice(0, 1), from("7"), tell)
   assert.deepEqual([calls, messages], [[["closeTab", "1"]], ["warning: could not close the tab of gone"]])
   record(nested)
-  await assert.rejects(closeTabs(kitWith(), "/p/gone", before, from("7")), /^Error: the multiplexer "fake" lacks: closeTab$/)
+  await assert.rejects(
+    closeTabs(kitWith(), "/p/gone", before, from("7")),
+    /^Error: the multiplexer "fake" lacks: closeTab$/,
+  )
+})
+
+test("where: the folder of the pane you were in, else the caller's", async () => {
+  const elsewhere = join(temp, "elsewhere")
+  mkdirSync(elsewhere, { recursive: true })
+  record(session.map((p) => (p.id === "1" ? { ...p, focused: true, cwd: elsewhere } : p)))
+  assert.equal(await where(kitWith(), from("9")), dir) // pane 9 is in no tab
+  assert.equal(await where(kitWith(), from(undefined)), dir)
+  record([
+    ...session.map((p) => (p.id === "1" ? { ...p, focused: true, cwd: elsewhere } : p)),
+    pane("9", "1", undefined, { floating: true }),
+  ])
+  assert.equal(await where(kitWith(), from("9", "/")), elsewhere)
+})
+
+test("restartAgent: the configured agent in place of the tab's agent pane, in the folder; focus stays", async () => {
+  const command = join(temp, "bin", "opencode-pane")
+  writeFileSync(command, "#!/bin/sh\n")
+  chmodSync(command, 0o755)
+  const viaPane = { opencode: { command: ["opencode-pane"] } } as Partial<Config>
+  const withPath = (pane: string) => ({ env: { FAKE_PANE: pane, PATH: process.env.PATH }, cwd: dir })
+  let calls = record()
+  await restartAgent(kitWith(viaPane), temp, withPath("1"))
+  assert.deepEqual(calls, [
+    ["start", { tab: "1", role: "agent", argv: [command], focus: false, replace: "5", cwd: temp }],
+  ])
+  // A tab without an agent pane gets a new one; focus comes back to you.
+  calls = record()
+  await restartAgent(kitWith(viaPane), ".", withPath("3"))
+  assert.deepEqual(calls, [
+    ["start", { tab: "2", role: "agent", argv: [command], focus: true, cwd: dir }],
+    ["focus", "3"],
+  ])
+  await assert.rejects(restartAgent(kitWith(viaPane), "missing", withPath("1")), /is not a folder$/)
+  await assert.rejects(restartAgent(kitWith(viaPane), ".", from(undefined)), /^Error: not inside Fake$/)
 })

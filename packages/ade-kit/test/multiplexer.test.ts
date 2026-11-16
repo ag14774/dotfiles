@@ -1,15 +1,14 @@
 import assert from "node:assert/strict"
 import { readFileSync } from "node:fs"
 import { test } from "node:test"
-import { DEFAULTS } from "../src/config.ts"
 import { callerDir, isActive, paneWith, tabOf, tabsIn } from "../src/multiplexer.ts"
-import { parsePanes, parseTabs } from "../src/multiplexers/zellij.ts"
+import { DEFAULTS as ZELLIJ, parsePanes, parseTabs } from "../src/multiplexers/zellij.ts"
 import type { Pane } from "../src/types.ts"
 
 // A Zellij session: tab 0 in /work/A (main, opencode, editor, a stopped pane
 // that has focus, a floating review pane in /work/B), tab 1 in /work/B.
 const fixture = (name: string) => readFileSync(new URL(`fixtures/${name}`, import.meta.url), "utf8")
-const panes = parsePanes(fixture("zellij-list-panes.json"), DEFAULTS.zellij.panes)
+const panes = parsePanes(fixture("zellij-list-panes.json"), ZELLIJ.panes)
 const tabs = parseTabs(fixture("zellij-list-tabs.json"))
 
 const pane = (id: string, tab: string, cwd: string | undefined, more: Partial<Pane> = {}): Pane => ({
@@ -47,9 +46,27 @@ test("callerDir: the tab's focused tiled pane, else its agent pane, else its she
     pane("5", "1", "/other", { focused: true }),
   ]
   assert.equal(callerDir(tab, { session: "s", pane: "4" }), "/agent")
-  assert.equal(callerDir(tab.map((p) => (p.id === "3" ? { ...p, focused: true } : p)), { session: "s", pane: "4" }), "/editor")
-  assert.equal(callerDir(tab.filter((p) => p.id !== "2"), { session: "s", pane: "4" }), "/shell")
-  assert.equal(callerDir(tab.filter((p) => p.id === "3" || p.id === "4"), { session: "s", pane: "4" }), undefined)
+  assert.equal(
+    callerDir(
+      tab.map((p) => (p.id === "3" ? { ...p, focused: true } : p)),
+      { session: "s", pane: "4" },
+    ),
+    "/editor",
+  )
+  assert.equal(
+    callerDir(
+      tab.filter((p) => p.id !== "2"),
+      { session: "s", pane: "4" },
+    ),
+    "/shell",
+  )
+  assert.equal(
+    callerDir(
+      tab.filter((p) => p.id === "3" || p.id === "4"),
+      { session: "s", pane: "4" },
+    ),
+    undefined,
+  )
   assert.equal(callerDir(tab, { session: "s", pane: "9" }), undefined)
   assert.equal(callerDir(tab, { session: "s" }), undefined) // the pane isn't known
 })
@@ -94,10 +111,16 @@ test("tabsIn: with nested worktrees, a pane counts only for the deepest one cont
   ])
   assert.deepEqual(tabsIn(session, "/p/main/.worktrees/fix", worktrees), [{ tab: "1", sure: true }])
   // Without the list, the outer worktree would claim the nested one's tab.
-  assert.deepEqual(tabsIn(session, "/p/main", []).map((t) => t.tab), ["0", "1", "2", "3"])
+  assert.deepEqual(
+    tabsIn(session, "/p/main", []).map((t) => t.tab),
+    ["0", "1", "2", "3"],
+  )
 })
 
 test("tabsIn lists tabs in numeric order", () => {
   const session = [pane("1", "10", "/w"), pane("2", "2", "/w"), pane("3", "1", "/w")]
-  assert.deepEqual(tabsIn(session, "/w", []).map((t) => t.tab), ["1", "2", "10"])
+  assert.deepEqual(
+    tabsIn(session, "/w", []).map((t) => t.tab),
+    ["1", "2", "10"],
+  )
 })

@@ -1,22 +1,21 @@
 #!/usr/bin/env bash
-# opencode-pane -- run the OpenCode TUI in a Zellij pane.
+# opencode-pane -- run OpenCode in a Zellij pane that survives a restart.
 #
 #   opencode-pane [--session ID] [--prompt PROMPT]
-#                                     start OpenCode, optionally on conversation
-#                                     ID and/or sending PROMPT
-#   opencode-pane --resume            continue this directory's most recent
+#                                     start OpenCode (a new conversation, or
+#                                     conversation ID), sending PROMPT if given
+#   opencode-pane --resume            continue this folder's most recent
 #                                     conversation, if it has one
 #
-# Zellij saves each pane's own command line to restore it after a restart. A
-# fresh start therefore re-runs this script as `opencode-pane --resume` and
-# passes "fresh" (and any conversation and prompt) in the environment for this
-# run only: a restored pane resumes its directory's conversation, and a prompt
-# is never sent twice.
+# When Zellij restores the pane after a restart, it continues the folder's most
+# recent conversation; a prompt is never sent twice. OpenCode gets your shell's
+# environment (~/.zshrc's PATH and secrets).
 #
-# OpenCode runs in an interactive zsh for ~/.zshrc's PATH and secrets, with job
-# control off (+m) so it stays in this pane's process group: Zellij then records
-# this script rather than the bare `opencode`, without its discovery hook. This
-# script stays the parent, so a restored pane runs the current version of it.
+# How: Zellij restores a pane with the command line it started with, so a
+# fresh start reruns this script as `--resume`, passing "fresh" (and the
+# conversation and prompt) in the environment for that run only. OpenCode runs
+# in an interactive zsh without job control (+m), which keeps it in this
+# pane's process group, so Zellij records this script, not `opencode`.
 set -u
 
 usage() {
@@ -27,7 +26,7 @@ if [ "${1:-}" = --resume ]; then
   [ "$#" -eq 1 ] || usage
 else
   session="" prompt=""
-  [ "${1-x}" != "" ] || shift # an empty first argument means none, as before
+  [ "${1-x}" != "" ] || shift # an empty first argument means no options
   while [ "$#" -gt 0 ]; do
     case "$1" in
       --session)

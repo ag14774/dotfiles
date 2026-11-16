@@ -1,601 +1,191 @@
 # dotfiles
 
-Personal terminal setup for macOS (**iTerm2**), Debian, and Manjaro/Arch Linux
-(**Ghostty**): **Helix + Yazi + Zellij** (Catppuccin Mocha), plus zsh helper
-functions (git-worktree workflow, opencode reload, and more).
+A terminal-only agentic development environment (ADE) for macOS (iTerm2) and
+Linux (Debian 13, Arch and Manjaro; Ghostty): **Zellij**, **Helix**,
+**OpenCode**, **Yazi** and **tuicr**, glued together with zsh and the packages
+in [`packages/`](packages). Each git worktree gets a Zellij tab with a shell,
+OpenCode and, once you open a file, Helix. Agents can open files in your
+editor, start work in a new worktree tab and report on the others, and the
+top bar shows what every tab's agents are doing. Catppuccin Mocha throughout.
 
 ## Install
 
 ```sh
-git clone <this-repo> ~/dotfiles
+git clone https://github.com/ag14774/dotfiles ~/dotfiles
 ~/dotfiles/install.sh
 exec zsh
 ```
 
-`install.sh` (safe to rerun) selects Homebrew on macOS, APT on Debian, or
-Pacman on Arch-based Linux,
-installs the platform packages plus developer tools/language servers and the Yazi
-flavor, symlinks `config/` into `~/.config` and `~/.local/bin` via GNU Stow, and appends a small
-configuration block to `~/.zshrc` (adds the managed user-tool directories to `PATH`, sources
-`~/.config/zsh/secrets.zsh`, and loads the `shell/*.zsh` functions). A separate
-managed preamble is kept at the beginning for Zellij autostart; it also sets
-`PATH` and `EDITOR` (the available Helix executable) first, so Zellij and the
-panes it restores get them. If the account's
-login shell is not zsh, the installer changes it permanently with `chsh`;
-`exec zsh` enters zsh immediately without waiting for the next login. Run the
-installer as your normal user, not with `sudo`; it elevates package installation
-itself when needed.
+`install.sh` picks Homebrew (macOS), APT (Debian) or Pacman (Arch-based
+Linux) and installs the platform packages, the developer tools and language
+servers below, and OpenCode 2 with its app settings (`cli.json`, created from
+`config/.config/opencode/cli.json.example` when missing). It links `config/`
+into `~/.config` and `~/.local/bin` with GNU Stow, links the packages for the
+OpenCode plugins (`npm install`, which downloads nothing), makes zsh the login
+shell, and keeps two blocks in `~/.zshrc`: one at the top starts Zellij, one
+at the end loads `shell/*.zsh`. It is safe to rerun, and rerunning upgrades the
+user-level tools. Run it as your normal user; it uses `sudo` itself where
+needed.
 
-Homebrew must already be installed on macOS. The Linux backends support Debian
-13 (Trixie, amd64 only) and Pacman-based distributions such as Manjaro and Arch Linux.
-Because several tools are not in Debian 13, its backend installs Yazi, Zellij,
-tuicr, Taplo, and Marksman from their upstream GitHub releases. Ghostty uses
-the community Debian package linked from
-[Ghostty's official installation docs](https://ghostty.org/docs/install/binary#debian-and-ubuntu).
+- macOS needs Homebrew first.
+- Debian 13 (amd64 only) gets Yazi, Zellij, tuicr, Taplo and Marksman from
+  their upstream releases, Ghostty from the community package its docs link
+  to, and Helix as a pinned `.deb`: bump `HELIX_VERSION`, `HELIX_DEB_VERSION`
+  and `HELIX_SHA256` in `install/apt.sh` to upgrade it.
+- `OPENCODE_VERSION=2.x.y ~/dotfiles/install.sh` picks an OpenCode release.
+- The top bar needs a permission once per release: inside Zellij, run the
+  `zellij plugin -f -- "<bar-url>"` command the installer prints, press `y`,
+  and close that pane.
 
-Debian's packaged Helix is too old for the shared configuration. `install/apt.sh`
-installs the upstream Helix **25.07.1** `.deb` through APT, replacing Debian's `hx`
-package. **The Debian Helix version is hardcoded and must be bumped manually:**
-update `HELIX_VERSION`, `HELIX_DEB_VERSION`, and `HELIX_SHA256` in that script,
-then rerun the installer. Normal APT upgrades do not track upstream Helix releases.
-The pinned release has no arm64 `.deb`, so the Debian installer rejects arm64
-before making package changes. Homebrew and Pacman continue to use their repositories.
+| Manager | Tools |
+| --- | --- |
+| Homebrew / Pacman | Node/npm, Ruff, Taplo, Marksman, ShellCheck, shfmt, GitHub CLI |
+| APT (`install/apt.sh`) | Node/npm (NodeSource, current LTS), ShellCheck, shfmt, GitHub CLI |
+| uv's installer (`~/.local/bin`) | uv |
+| `uv tool` | Pyright, plus Ruff on Debian |
+| npm (`~/.local`) | TypeScript, bash/yaml/json language servers |
+| OpenCode's installer (`~/.opencode/bin`) | OpenCode 2 |
+| rustup and Cargo (`~/.cargo`) | stable Rust, `jinja-lsp` |
 
-### Managed developer tools
+## Using it
 
-The installer keeps user-level tools with the package manager for their
-ecosystem:
+Every terminal attaches to one Zellij session, `main` (set
+`ZELLIJ_AUTO_START=false` for a plain shell). Zellij does all the tabs and
+panes (`Alt-t` a tab, `Alt-n` a pane); Ghostty's own are switched off. A tab
+belongs to one worktree: a shell pane, OpenCode on the right, and Helix above
+the shell once a file is opened.
 
-| Manager | Installed by | Managed tools |
-| --- | --- | --- |
-| Homebrew/Pacman | platform backend | Node/npm, Ruff, Taplo, Marksman, ShellCheck, shfmt, GitHub CLI |
-| APT | `install/apt.sh` | Node/npm (NodeSource's repository, current LTS), ShellCheck, shfmt, GitHub CLI |
-| Upstream release assets | `install/apt.sh` | Helix (pinned `.deb` via APT), Yazi, Ghostty, Zellij, tuicr, Taplo, Marksman on Debian |
-| Official uv installer (`~/.local/bin`) | `install.sh` | uv |
-| `uv tool` | `install.sh` | Pyright, plus Ruff on Debian |
-| npm (`~/.local`) | `install.sh` | TypeScript plus bash/yaml/json language servers |
-| Official OpenCode V2 installer (`~/.opencode/bin`) | `install/opencode.sh` | OpenCode 2 |
-| Official rustup installer (`~/.cargo`, `~/.rustup`) | `install.sh` | stable Rust toolchain and Cargo |
-| Cargo (`~/.cargo/bin`) | `install.sh` | `jinja-lsp` |
+| | |
+| --- | --- |
+| `wt <branch>` | cd into the branch's worktree, creating it; `-s` stays and prints its path, `-t` goes to its tab, `-b` opens the tab in the background |
+| `wt -p "task" <branch>` | a background tab whose OpenCode starts on the task (`--session ID`: on an existing conversation) |
+| `wtrm`, `wtprune [-m]`, `wtls`, `wtclone`, `wtconvert` | remove a worktree and close its tabs; remove the worktrees whose remote branch was deleted (`-m`: or merged); list them; clone a repository for worktrees; turn a normal clone into one (`wthelp`: every option) |
+| `Alt-y` | Yazi as a picker; files open in the tab's Helix |
+| Helix `+` `a` | ask the tab's OpenCode about the line or the selection |
+| `Alt-v` | review everything the worktree changed, committed or not, in tuicr; `y` hands your comments to OpenCode, `e` opens a file in Helix |
+| "delegate this", `/delegate` | OpenCode starts the work in a new worktree tab ("with the context" carries the conversation over) |
+| "how are the other worktrees doing?" | OpenCode's `status` tool |
+| `ocreload` | restart the tab's OpenCode in the current folder, after reloading the OpenCode service's config |
+| `zreset` | end the session and delete its saved copy; the next terminal starts a fresh one |
+| `mdview [FILE]`, Helix `+` `m` | Markdown in the browser |
+| `cheat`, `Alt-/` | the cheatsheet ([CHEATSHEET.md](CHEATSHEET.md): all the keys) |
+| `/btw` | a side question in OpenCode, outside the conversation |
+| `gcai` | a commit message drafted by OpenCode from the staged diff |
 
-Rerunning `install.sh` upgrades the user-level tools. Jinja projects can set
-their own template and backend paths in `pyproject.toml` when the defaults are
-not sufficient:
+Each tab's name starts with the most urgent status of its agents: 󰔟
+working,  waiting for you,  done and  failed or interrupted; the right
+of the bar counts them. Done and failed clear once you have seen the pane.
+The tabs ade opens for worktrees are named `project: worktree`, and the bar
+groups them under the project's name, also when it has only one (a group of
+one never collapses); in tab mode (`Ctrl-g`, `t`), `g` and `G` collapse or
+expand the current group or all of them. Helix doesn't reload files agents
+change: `Ctrl-r` reloads them all, dropping unsaved edits.
 
-```toml
-[tool.jinja-lsp]
-templates = "./templates"
-backend = ["./src"]
-```
+## How it fits together
 
-Zellij autostarts from a pre-Oh My Zsh preamble in both iTerm2 and Ghostty, so
-the outer shell immediately becomes Zellij without initializing the framework
-twice. Ghostty hides its own tab bar and disables its tab and split creation
-shortcuts; use Zellij (`Alt-t` for a tab, `Alt-n` for a pane) for all
-multiplexing. Set `ZELLIJ_AUTO_START=false` before launching zsh when a bare
-shell is needed.
+- `config/` is stowed into `$HOME`:
+  - `zellij/`: `config.kdl` (keys, session `main`), `layouts/dev.kdl` (the tab
+    layout and the top bar), `yazi-picker.sh`, `resurrect-command.sh`;
+  - `helix/`, `yazi/`, `tuicr/`, `git/`, `ghostty/`, `fzf/`, `glow/`;
+  - `opencode/`: `cli.json.example`, the plugin links in `plugins/`, and
+    `tui-plugins/btw-v2` (`/btw`, adapted from OpenCode's built-in);
+  - `ade/config.json`: what differs from ade-kit's defaults (OpenCode through
+    `opencode-pane`, tabs named `{project}: {worktree}`).
+- `config/.local/bin/`: `ade` (a link to `packages/ade-kit/src/cli.ts`),
+  `opencode-pane` (OpenCode in a pane that continues its conversation after a
+  restart) and `zellij-sync-bars` (gives saved sessions the bar from
+  `dev.kdl`).
+- `shell/*.zsh`: the zsh setup, the `wt*` functions (short names for `ade
+  worktree`), `ocreload`, `zreset`, `gcai`, `mdview` and `cheat`.
+- [`packages/`](packages), npm workspaces:
+  - [`ade-kit`](packages/ade-kit): the `ade` command and library: adapters
+    for the multiplexer, editor, agent and reviewer, and the worktree commands;
+  - [`opencode-ade`](packages/opencode-ade): the OpenCode plugin with
+    `show_file`, `delegate` and `status`;
+  - [`opencode-ade-status`](packages/opencode-ade-status): done and failed
+    statuses for the tabs, and OpenCode's sounds once, in the right tab;
+  - [`opencode-ade-worktrees`](packages/opencode-ade-worktrees): OpenCode's
+    own worktrees through ade-kit.
+- The top bar is [ade-zjstatus](https://github.com/ag14774/ade-zjstatus), a
+  zjstatus fork with agent statuses and tab groups, loaded by `dev.kdl` from
+  its release URL.
+- Secrets go in `~/.config/zsh/secrets.zsh` (from `secrets.zsh.example`), and
+  machine-local shell code in `~/.config/zsh/local.zsh`; neither is tracked.
 
-### Restoring Zellij after a restart
+## Keeping it running
 
-Every terminal attaches to one session, `main`. Zellij saves it every 60
-seconds (the first save happens a minute after it starts), so after a reboot,
-a crash or quitting it with `Ctrl-q`, the next terminal brings back its tabs,
-panes and directories, with these programs running again:
+**Restarts.** Zellij saves `main` every 60 seconds. After a reboot, a crash or
+`Ctrl-q`, the next terminal brings back its tabs, panes and folders: Helix
+panes reopen the files they were started with, OpenCode panes continue their
+folder's latest conversation, open floating panes reopen, and other panes come
+back as shells (`resurrect-command.sh` decides what reruns). The last minute
+before a crash can be missing. If Zellij can't start, the terminal falls back
+to a plain shell; `zreset` clears the saved session. A brand-new session shows
+a welcome screen: press `Esc` (`Enter` would install Zellij.app).
 
-- Helix panes reopen the files they were started with; files opened later and
-  unsaved edits are lost.
-- OpenCode panes continue the most recent conversation in their directory
-  (`gcai` deletes its own drafting sessions so they never take that place).
-- Panes you started a program in from their shell come back as plain shells:
-  dev servers, `git log`, scripts and the like are deliberately not rerun.
-- Floating panes that were open, such as the `Alt-y` picker or the `Alt-/`
-  cheatsheet, open again. A Helix `+ r` run pane does not rerun its code.
+**Upgrading Zellij, or a new bar.** A running Zellij keeps its version, and
+each saved tab keeps the bar it was opened with. Inside Zellij, run
+`zellij-sync-bars --restart`: it saves and quits the session (closing its
+terminal windows) and gives the saved tabs the bar from `dev.kdl`; then open a
+terminal. `zellij-sync-bars --check` lists saved sessions with another bar. A
+bar with a new release URL needs its permission granted once (above).
 
-Panes started with a program are saved with their own command line: Helix, and
-OpenCode through `opencode-pane`, which always saves itself as
-`opencode-pane --resume`. For programs you start from a shell,
-`config/.config/zellij/resurrect-command.sh` decides what is rerun; extend its
-allow-list if you want more. Keep that hook cheap: Zellij also runs it for
-`list-panes` and waits only 100 ms. A restored OpenCode pane stays open as
-"exited" after you quit OpenCode (`ocreload` replaces it), and changes made in
-the last minute before a crash can be missing. New tabs (`Alt-t`, tab-mode `n`,
-`wt -t/-b`) are built from `dev.kdl` itself, because a restored session's saved
-new-tab template starts its commands suspended. If Zellij cannot start, for
-example because the saved session is unreadable, the terminal falls back to a
-plain shell. `zreset` deletes the saved session for a clean start.
+**After pulling.** Rerun `install.sh` (or its stow and `npm install` steps) so
+new links exist. OpenCode's service keeps a plugin's server part until
+`opencode service restart` (which interrupts running conversations; OpenCode
+panes warn when it runs old code), and an OpenCode app loads the app parts
+when it starts (`ocreload`).
 
-After upgrading Zellij, Helix or OpenCode, run `zsh tests/zellij_restore_smoke.zsh`.
-It saves, kills and restores a throwaway session (never `main`) and checks that
-all of the above still holds. After upgrading OpenCode or changing the ADE
-plugin, also run `zsh tests/ade_plugin_smoke.zsh` (see "OpenCode agents and Zellij"),
-after changing the worktree plugin or `ade worktree`,
-`zsh tests/opencode_worktrees_smoke.zsh` (a private OpenCode service, no Zellij),
-and after upgrading OpenCode or changing the status plugin,
-`zsh tests/opencode_attention_smoke.zsh` (its sounds play once, in the right app).
-After changing `packages/`, run `node --test` in each of `packages/ade-kit`,
-`packages/opencode-ade`, `packages/opencode-ade-status` and
-`packages/opencode-ade-worktrees` (Node's own test
-runner, no dependencies), and
-`zsh tests/ade_open.zsh`, `zsh tests/ade_send.zsh` and
-`zsh tests/ade_review_scope.zsh`, which check `ade open` and `ade send` against a
-stand-in for Zellij, and what `ade review` covers; `zsh tests/worktree.zsh`
-checks the `wt*` commands (`ade worktree`), with a stand-in for Zellij too.
-After upgrading Zellij, Helix, Yazi or tuicr, or changing the scripts behind
-the keys, run `zsh tests/keys_smoke.zsh`: it checks `Alt-y`, Helix's `+ a` and
-the `Alt-v` review end to end in a throwaway session, with a stand-in for
-OpenCode (no model calls).
+## Tests
 
-These three live tests run Zellij in a sandbox (`tests/lib/zellij-sandbox.zsh`),
-so they can be started from inside Zellij: their own Zellij server (their own
-`ZELLIJ_SOCKET_DIR`; a guard refuses any `zellij` command without it), their
-own HOME with this checkout's config and commands, and OpenCode only through a
-private service on a port of its own. They never reach your session or your
-OpenCode service, and leave nothing in your Zellij cache or tuicr's reviews.
+`npm test` runs every test that needs no Zellij session, OpenCode service or
+model: the packages' node tests, and the zsh and python tests with stand-ins
+for Zellij and OpenCode. `npm install && npm run check` type-checks the
+packages, and `npm run format` formats them (Prettier) and the bash scripts
+(shfmt); `.editorconfig` has the rest.
 
-The top bar is [ade-zjstatus](https://github.com/ag14774/ade-zjstatus), a
-zjstatus fork that draws agent statuses (they need Zellij 0.46). It shows the
-mode, the tabs (each with the icon of its most urgent agent status, see
-"OpenCode agents and Zellij") and an `Alt-t` hint on the left, and on the right
-how many agents are waiting, failed, done or working. It has no clock: zjstatus
-redraws only on Zellij events, so a clock went stale while the session was
-idle. It is loaded by `dev.kdl` straight from its release URL, and Zellij
-keeps plugin permissions per URL, so the first time, and again after the URL
-changes to a new release, grant its permission once (the installer prints
-this): inside a zellij session run `zellij plugin -f -- "<bar-url>"`, press
-`y`, then close that pane. The bar itself can't ask (its prompt would sit in
-the one-row bar, where it can't be answered). Every bar asks for the same
-permissions, including "Execute actions as the user" for tab groups, whatever
-its options. A bar left at that prompt doesn't notice a later grant, and while
-one waits Zellij holds every `zellij pipe` (it returns once the tab closes or
-Zellij restarts).
+The live tests take a few minutes each. They run in a sandbox
+(`tests/lib/zellij-sandbox.zsh`: their own Zellij server, HOME and OpenCode
+service), so they can run from inside Zellij and never reach your session or
+service.
 
-The bar groups tabs: a tab named `prefix: name` belongs to the group `prefix`
-(see ade-zjstatus's FORK.md), so each project's worktree tabs sit together
-under the project's name, also when it has only one (a group of one tab never
-collapses):
-
-- `config/.config/ade/config.json` sets `"zellij": { "tabName": "{project}:
-  {worktree}" }` (ade's default is `"{worktree}"`): tabs that `wt -t/-b/-p`
-  and `delegate` open are named like `dotfiles: ade-phase3` (`{project}` is the
-  folder holding the repository's `.bare` or `.git`). Tabs are still found by
-  their panes' folders, never by name. Names already of the form `prefix:name`
-  (no space needed) are grouped too.
-- `dev.kdl`'s bar has `tab_groups "true"`. The bar of the tab you are on moves
-  a group's tabs next to each other (hence the extra permission), background
-  tabs included, so tab numbers follow the bar.
-- In tab mode (`Ctrl-g`, `t`), `g` collapses or expands the current tab's
-  group and `G` all groups (clicking a group's name does too); like `h`/`l`,
-  they stay in tab mode (`Esc` or `Enter` leaves). All of a session's tabs show
-  the same collapsed groups, which survive a restart of Zellij (the bar keeps
-  them per session name in its cache folder); a new bar release starts with
-  every group at its default. With two clients attached, `g` and `G` also act
-  in the other client's tab, as Zellij doesn't say which client pressed them.
-
-The bar of the tab you are on draws all the tabs, and a tab keeps the bar it
-was opened or resurrected with (its URL and options are part of the saved
-session). So after the bar in `dev.kdl` changes, only new tabs have it until
-the saved tabs get it too, with `zellij-sync-bars` (see "Upgrading Zellij").
-
-### Upgrading Zellij
-
-A running Zellij keeps its version, and a newer `zellij` still attaches to it,
-so restart Zellij after an upgrade (`install.sh` upgrades it), and also after
-the bar in `dev.kdl` changes; `main` comes back by resurrection:
-
-1. Inside Zellij, run `zellij-sync-bars --restart`. It saves the session
-   (Zellij saves only every 60 seconds, and not when it is stopped), quits it,
-   which closes every pane and the terminal windows attached to it, and gives
-   the saved tabs the bar from `dev.kdl` (log in `$TMPDIR/zellij-sync-bars.log`).
-2. Open a terminal.
-
-`zellij-sync-bars` alone updates saved sessions that are not running (the
-installer runs it), `zellij-sync-bars --check` lists those whose bars differ
-from `dev.kdl`, and `python3 tests/zellij_sync_bars.py` tests it. Each changed
-saved session keeps its previous layout as `session-layout.kdl.before-bar`.
-
-Zellij 0.46's own status features keep their defaults, except `host_status`
-(`attention` in `config.kdl`): with it on, Zellij reports the session's combined
-status to the outer terminal (OSC 7501), and iTerm2 3.7 alerted on every change,
-from every tab's agents, mid-turn too. The bar shows only what agents report themselves
-(`attention_source "program_status"` in `dev.kdl`), not Zellij's guesses such
-as a long shell command that finished. Zellij's inbox is in the session manager
-(session mode `w`). A new session (not a resurrected one) starts with a welcome
-screen: press `Esc`, or `Ctrl-c` so it never shows again; `Enter` would install
-Zellij.app and copy Zellij into a folder of its own.
-
-## Layout
-
-- `config/.config/{ghostty,zellij,helix,yazi,opencode}/` — stowed into `~/.config`
-- `config/.local/bin/` — reusable commands, stowed into `~/.local/bin` (on `PATH`
-  for shells, Zellij, and programs started from them):
-  - `zellij-sync-bars [--check | --restart | SESSION...]` — give saved Zellij
-    sessions the top bar from `dev.kdl` (see "Upgrading Zellij")
-  - `ade` — the ADE command, a link to `packages/ade-kit/src/cli.ts` (run by
-    Node 23.6 or newer; `ade help`). Its choices and options are optional, in
-    `~/.config/ade/config.json` (defaults in `packages/ade-kit/src/config.ts`:
-    Zellij, Helix, plain `opencode`); this repository's
-    `config/.config/ade/config.json` starts OpenCode through `opencode-pane`.
-    `ADE_CONFIG=/abs/file.json` reads another config (the tests use it);
-    `ADE_LOG=FILE` appends each command it runs.
-    - `ade open FILE[:LINE[:COLUMN]]...` — open files in the current tab's
-      editor pane (Helix: the pane named `editor`), starting it if needed, above
-      the `main` pane (used by the `Alt-y` picker and the ADE plugin). The tab
-      is the one of `$ZELLIJ_PANE_ID`; it refuses to guess when that pane is
-      gone, and never switches you to another tab: in a tab you are not on, it
-      only uses an existing editor, without focusing it. Lines are dropped for
-      editors that can't open a file at a line (Helix)
-    - `ade send FILE [START [END [LANGUAGE]]] [< SELECTION]` — paste a
-      reference (`FILE:START-END`) and the selection, as a fenced block, into
-      the current tab's agent prompt (OpenCode: the pane named `opencode`) and
-      focus it; nothing is submitted. Not tied to an editor; Helix calls it from
-      `+ a` (see "OpenCode agents and Zellij"). `ade send --text < TEXT` pastes
-      text as it is (the `Alt-v` review); with `--submit` it also presses Enter
-    - `ade review` — the `Alt-v` review (see "Reviewing changes"); `ade review
-      --scope` prints what a review here covers (`-r BASE..HEAD` for the
-      commits, `-w` for uncommitted changes)
-    - `ade workspace DIR [--background] [--session ID] [--prompt TEXT]` — go
-      to the tab of the worktree `DIR`, or open one there with the `dev` layout
-      (`--background`: without going to it). With a conversation or a prompt,
-      the new tab's agent starts on them (`opencode.command`, found on `PATH`:
-      here `opencode-pane`); a worktree that has a tab is refused. Behind
-      `wt -t/-b/-p` and `delegate`
-    - `ade tabs DIR` — the tabs working in the worktree `DIR`: those whose
-      running panes are all inside it (`ID:sure`), or with a pane that didn't
-      say where it is (`ID:unsure`). Found by directories, never by tab names;
-      a tab in a nested worktree doesn't count for the outer one. `--json` takes
-      several folders
-    - `ade close-tabs DIR [ID:sure|ID:unsure...]` — close the tabs of a
-      removed worktree (those `ade tabs` found before `wtrm` removed it),
-      except yours and the unsure ones; none when run by an agent or when
-      `$ZELLIJ_PANE_ID` no longer exists
-    - `ade worktree [--cwd-file FILE] COMMAND ...` — the worktree commands
-      behind the `wt*` shell functions (`ade worktree help`: `clone`, `open`,
-      `rm`, `ls [--json]`, `prune`, `convert`); the shell functions are thin
-      wrappers that `cd` for you. For scripts and agents, stdout carries only
-      the result (such as the worktree path) and progress goes to stderr.
-      Whether there is a multiplexer to open tabs in is the ADE config's
-      `multiplexer` (with `"none"`, `-t` changes directory and `-p` fails)
-  - `opencode-pane [--session ID] [--prompt PROMPT] | --resume` — run OpenCode
-    in a pane with your shell environment, optionally on a given conversation,
-    in a way Zellij restores as `--resume`, which continues the directory's
-    latest conversation; a prompt is never resent (used by the layout,
-    `ocreload`, `wt -p` and `wt --session`)
-
-  The `wt*` functions, `ocreload` and the `Alt-y` picker call this checkout's
-  copies directly. Rerun `install.sh` (or its stow step) to put new commands on
-  `PATH`, and to remove the links of commands this checkout no longer has.
-- `shell/*.zsh` — sourced directly by the `.zshrc` block
-- `install/{apt,brew,pacman}.sh` — platform package installation backends
-- `Brewfile` — Homebrew package manifest
-- `secrets.zsh.example` — template; real secrets live in
-  `~/.config/zsh/secrets.zsh` (gitignored, never committed)
-
-### OpenCode 2 migration
-
-The installer uses the [V2 installer](https://opencode.ai/v2/install), currently
-the 2.x channel, rather than V1's GitHub latest release. Set
-`OPENCODE_VERSION=2.0.24 ~/dotfiles/install.sh` to select a specific stable 2.x
-release. A new binary is staged and its version verified before replacement.
-Package-managed OpenCode installations must be removed first; the script reports
-the conflict instead of overwriting their binaries.
-
-Before replacing OpenCode or creating V2 client settings, the installer creates a
-private backup under `~/.local/state/opencode/dotfiles-backups/` (respects XDG).
-It includes the old binary, global configuration, credentials, shell startup file,
-persisted UI preferences, and a consistent SQLite backup including committed WAL
-transactions. Configuration-file symlinks are copied as snapshots. Existing
-`opencode.json(c)`, agents, commands, skills and credentials stay in V1-compatible
-form; V2 loads them without requiring a native-format rewrite.
-
-If `cli.json` is absent, supported global `tui.json(c)` settings and persisted
-preferences are migrated into it and validated against V2's published schema,
-with the [BTW plugin](#opencode-btw) enabled.
-An existing `cli.json` is validated and preserved on reruns, except for replacing
-an old BTW plugin file reference if V2 already auto-migrated it, and removing the
-ADE plugin's old app part (`./tui-plugins/ade`; the plugin is a package in
-`plugins/` now, see "OpenCode agents and Zellij"). This is a real file,
-owned by the client; `cli.json.example` documents the defaults. Other V1 plugins
-are reported and left in the original V1 file, since their implementation must be
-ported before V2 can load them.
-
-Restart OpenCode after installation. V2 imports V1 session data on startup.
-For V2 `2.0.24`, the installer starts the shared service and repairs the known
-[Azure credential migration bug #53443](https://github.com/anomalyco/opencode/issues/53443).
-It moves the migrated Azure `resourceName` form answer into a new credential's
-`configuration`, activates it, and retains the original credential plus a private
-JSON backup. The repair is idempotent and does not edit the database directly.
-It also backs up and removes imported Vertex API-key credentials when existing
-Google ADC can successfully refresh a token. Claude on Vertex requires ADC;
-an imported API key prevents the V2 provider from using it. If ADC is unavailable,
-the key is preserved and the installer prints the required setup step.
-Verify provider credentials, models and MCP connections in your project.
-V2 has no OpenCode LSP tools or diagnostics; use project lint/typecheck commands
-(Helix's language servers are independent). Shell completions support both versions.
-`gcai` uses the still-supported `run --format json` text-event contract.
-`ocreload` reloads V2's shared server configuration before replacing the client pane.
-
-For rollback, quit V2 and stop its service (`opencode service stop`), restore the
-backup binary into `~/.opencode/bin/opencode`, restore global configuration and
-credentials from the backup, and restore the database while all OpenCode processes
-are stopped. Remove stale database `-wal`/`-shm` files before restoring it. The V1
-`tui.json` remains available, but the V1 BTW plugin was removed. See the
-[upstream migration guide](https://opencode.ai/v2/docs/migrate-v1/).
-
-### OpenCode agents and Zellij
-
-OpenCode itself knows nothing about Zellij, and an agent's commands are started
-by OpenCode's shared background service, not by your pane. So agents act on
-your Zellij through the ADE plugin instead of running Zellij scripts: its tools
-ask the OpenCode app in the pane showing the conversation (for a subagent, its
-parent's pane) to do the work with that pane's own environment. One pane
-carries it out (the first to claim it), and the agent is told what happened,
-including "no OpenCode pane in Zellij is showing this conversation".
-
-- `show_file` opens files in the tab's Helix (as `ade open` does), also after `/cd`.
-- The other way round, in Helix press `+` then `a` to ask this tab's OpenCode
-  about the code: it gets `file:line`, or for a selection `file:start-end` and
-  the selected text (shown as `[Pasted ~N lines]`, unsaved edits included), and
-  becomes the focused pane for your question. Only the primary selection is
-  sent. Helix doesn't reload files agents change: `Ctrl-R` reloads them all
-  (`:reload-all`, which discards unsaved edits), and Helix refuses to save over
-  a file changed on disk unless you use `:w!`.
-- `delegate` starts work in another worktree: say "delegate this", "do this in
-  a new worktree", or use `/delegate [what]`. The pane runs `ade worktree open
-  --prompt BRIEF BRANCH` (in-process), so a background tab opens for the worktree and its
-  OpenCode starts on a brief the agent writes. The calling conversation stays
-  where it is and isn't told when the new one finishes. (In a plain clone, as
-  with `wt`, the worktree goes inside the repository folder.) It works in the
-  repository of the conversation's folder; name another one ("delegate this to
-  a worktree of ~/projects/x") and the agent passes a folder in it as
-  `directory`, without moving the conversation.
-  - Say "with the context" (or "with a summary") to carry this conversation
-    over: the pane first creates the worktree (`ade worktree open --stay`), copies
-    the conversation up to your request into it (compacting the copy for a
-    summary), and the same `open --prompt` runs with `--session COPY`.
-    The original conversation stays in its tab, unchanged.
-  - OpenCode's own `worktree_create`/`worktree_list` tools are hidden from
-    agents: they make worktrees without a tab. What OpenCode makes or removes
-    itself (Ctrl+P "Open" → a project → Right → Ctrl+N "New worktree", the
-    desktop app, the agents' `worktree_remove`) goes through the worktree plugin,
-    `packages/opencode-ade-worktrees` (an OpenCode worktree strategy on
-    `ade worktree`): the repository's layout, a real branch named as you typed,
-    seeded files, and `wtrm`'s checks (with changes, OpenCode asks before
-    forcing). It opens and closes no tabs. It replaces OpenCode's own Git
-    strategy by taking its name, `git`, so the worktrees OpenCode already
-    knows go through it too.
-- `status` answers "how are the other worktrees doing?" from any tab: for each
-  of the project's worktrees, its branch, uncommitted changes, commits ahead of
-  `origin/HEAD`, whether it has a tab (`ade worktree ls --json`, in the pane),
-  and its latest conversation: working, waiting for you (a permission request
-  or question), idle, failed or interrupted, with the start of its last answer.
-  Read-only; a tab you only use to delegate and ask this acts as a coordinator.
-  Like `delegate`, it takes `directory` for another repository.
-- Each tab shows what its agents are doing, with a Nerd Font icon in front of
-  its name: 󰔟 working,  waiting for you (a permission request or question),
-   done and  failed or interrupted; with several agent panes in a tab,
-  the most urgent status wins. Zellij 0.46 tracks each pane's status from what
-  its program reports (OSC 7501), and the bar draws it. OpenCode reports
-  working and waiting itself; the status plugin, `packages/opencode-ade-status`,
-  adds done and failed, which OpenCode doesn't report yet (its issue #60411).
-  Done and failed show only if the pane wasn't in view when the work ended, and
-  clear once you have seen it (by visiting its tab, unless the pane is hidden
-  there). Tab names are left alone. Stow links the plugin as
-  `~/.config/opencode/plugins/ade-status` (a link committed under `config/`);
-  it has only an app part, which each OpenCode app loads when it starts.
-- OpenCode's sounds (turn done, question, permission, error, subagent done)
-  and system notifications play once, in the tab showing the conversation.
-  OpenCode's own attention plugin plays every conversation's in every OpenCode
-  app connected to the service, so once per tab; `cli.json` switches it off
-  (`"-opencode.notifications"` in `plugins`, which the installer adds) and the
-  status plugin plays them instead, with the same sounds, volume and focus
-  rules (`attention.*` in `cli.json`), for the conversations its app shows and
-  their subagents. It reads `cli.json` as OpenCode does, and plays nothing
-  while the built-in plugin is on, so the two never both play;
-  `"opencode.notifications"` in `plugins` brings the built-in one back. The
-  live tests' OpenCode apps play no sounds.
-- Each conversation a pane in Zellij shows gets short instructions about this
-  setup (tabs, `show_file`, `status`, delegating only when asked), as a per-conversation
-  instruction entry rather than a global `AGENTS.md`, so OpenCode elsewhere
-  never sees them. They name the multiplexer and editor of the ADE config.
-- The plugin is `packages/opencode-ade`, which uses `ade-kit` (`show_file` runs
-  `ade open`'s code in the app part). Stow links it as
-  `~/.config/opencode/plugins/ade` (a link committed under `config/`), and
-  OpenCode loads both its parts from there. The worktree plugin is linked the
-  same way, as `plugins/ade-worktrees`; it has only a server part, so a change
-  to it applies after `opencode service restart`.
-- The server part also removes the Zellij variables from the service's own
-  environment. A conversation that
-  never had a pane (a subagent, a fork not yet opened) would otherwise get the
-  variables of whichever pane started the service, and act on that pane's tab.
-- `src/rpc.ts` holds the calls between the two parts; its `show_file`,
-  `delegate` and `status` methods do what the tools do, for scripts, e.g. `opencode api POST
-  "/api/rpc/ade/show_file?location%5Bdirectory%5D=DIR" -d
-  '{"input":{"sessionID":"ses_…","paths":["/abs/file"]}}'` (RPC calls take
-  their folder from `location[directory]`, not `directory`).
-
-Agents can still run `ade open` or `wtrm` through the shell: `ade open` refuses
-when `$ZELLIJ_PANE_ID` no longer exists, and `wtrm`/`wtprune` close no tabs when
-run by an agent (OpenCode marks its commands with `OPENCODE_TERMINAL=1`) or
-when that pane no longer exists.
-
-The service can go on running an old server part: OpenCode reloads a changed
-package plugin, but not after a reload that fails. When the files differ from
-what the service runs, OpenCode panes say so in a warning; run `opencode
-service restart` (this interrupts running conversations). The status plugin has no
-server part: restart the OpenCode panes (`ocreload`) after it changes.
-`tests/ade_plugin_smoke.zsh`
-tests this checkout's plugin with a private OpenCode service and a throwaway
-Zellij session, so it needs no restart and never touches your session or
-service. It makes nine short model calls.
-
-### OpenCode BTW
-
-The OpenCode TUI plugin provides `/btw` for side questions. V2 adapts the
-[built-in BTW plugin](https://github.com/anomalyco/opencode/blob/v2/packages/tui/src/feature-plugins/prompt/btw.tsx):
-it uses the current session's context and model through transient `session.generate`
-calls, without running tools or adding messages to the main conversation.
-The dialog renders Markdown with tables, scroll controls, copy, and follow-ups.
-Press `f` or Enter to write a follow-up, Enter to send, `c` to copy the latest
-answer while reading (`Ctrl+Y` while typing), and Esc to close. Side-conversation
-history stays only in the dialog and is discarded on close; no temporary session
-is created. A `/btw` spinner in the prompt footer indicates pending requests.
-V2 loads `btw-v2/tui.tsx` through the `btw-v2/` plugin directory and disables
-the built-in one-shot `opencode.btw`, so `/btw` always means this plugin. The
-installer deletes older BTW plugin files (`btw.tsx`, `btw-v2.tsx`) from
-`~/.config/opencode/tui-plugins/`.
-
-To test the built-in without changing settings, launch
-`OPENCODE_CLI_CONFIG_CONTENT='{"plugins":["opencode.btw"]}' opencode`.
-To test the custom plugin, launch `opencode`, open a session, and run
-`/btw What is 2 + 2?`. After the answer appears, press `f` and ask `Multiply that by 3`
-in the follow-up input, then press Esc to close the temporary conversation.
-
-### Reading Markdown
-
-Run `mdview` in a repo to open its README in your browser, or
-`mdview docs/guide.md` for another file. In Helix, press `+` then `m` to preview
-the saved file; use `Alt-y` to pick it first if needed. The preview uses
-Catppuccin styling and embeds images relative to the document's directory.
-Fenced `mermaid` blocks render as diagrams using Mermaid 12.2.0, loaded from
-jsDelivr in the browser (internet access required; diagram source stays local).
-If loading or rendering fails, the source remains visible with an error message.
-Save edits and preview again to update it (no live reload).
-The same renderer powers `cheat --pretty`.
-
-### Worktree tabs
-
-`wt <branch>` changes into the branch's worktree, creating it if needed. Choose
-a different landing with `-s` (stay here and print the path), `-t` (focus the
-worktree's Zellij tab, opening one with OpenCode if needed), or `-b` (open that
-tab in the background). `wt -p "fix the flaky test" <branch>` opens a background
-tab whose OpenCode immediately starts on the prompt; `--session ID` (with or
-without `-p`) opens it on an existing OpenCode conversation. Outside Zellij,
-`-t` changes directory, `-b` stays, and `-p` fails.
-
-A worktree's tab is any tab whose panes are all inside the worktree's
-directory; names and tab IDs play no part, so renaming a tab or restoring the
-session changes nothing. Opened tabs are named after the worktree directory
-only for display. `-t` returns to that tab later; `wtrm` and `wtprune` close the
-worktree's tabs with it (their shells would be left in a deleted directory),
-except the tab you run them from. Tabs with a pane elsewhere, such as a tab
-where one shell `cd`'d into the worktree, are never focused or closed. Options
-go before the branch.
-
-### Worktree layouts
-
-Where `wt` puts worktrees is the ADE config's `worktrees.layout`:
-
-- `bare` (the default): the repository is a bare one in `project/.bare`, as
-  `wtclone` and `wtconvert` make it, and each branch's worktree is
-  `project/<branch>` (`/` becomes `-`). In a normal clone, worktrees go inside
-  it (`repo/<branch>`).
-- `sibling`: beside a normal clone, `repo.<branch>`.
-- `inside`: in a normal clone's `repo/.worktrees/<branch>`, which git status
-  doesn't show (an entry in the repository's `info/exclude`).
-- A file of your own, `"layout": "~/.config/ade/my-layout.ts"`, exporting
-  `(kit) => ({ ...kit.builtin.layout("sibling"), name: "mine", path: (repo,
-  name) => ... })`.
-
-In a bare repository, `sibling` and `inside` also use `project/<branch>`.
-`wtclone` clones as the layout says (`sibling` and `inside`: a normal clone).
-`wtconvert` converts a normal clone ade hasn't set up (one made with `git
-clone`, say) to the configured layout: to `bare` as described above (the
-clone's other worktrees stay where they are and keep working; a worktree inside
-the clone is already where `bare` puts it); to `sibling` or `inside` by moving
-its worktrees where that layout puts them. It refuses a bare repository, or one
-already recorded with that layout. A repository keeps its layout when the config
-changes: ade records it in the repository's own git config (`ade.layout`) when
-it clones the repository or makes its first worktree there, and before that
-goes by where the repository's worktrees already are. `git config ade.layout
-<name>` changes it for one repository; existing worktrees stay where they are
-and keep working. `worktrees.base` (`origin/HEAD`) is where new branches start;
-`worktrees.seed` lists the untracked files copied into new worktrees (`.env`,
-`.env.*`, `.envrc`, `pyrightconfig.json`; `WT_SEED` and a repository's
-`<common-dir>/wt-seed` replace it).
-
-### Reviewing changes
-
-`Alt-v` opens a [tuicr](https://tuicr.dev) review of the worktree of the pane
-you are in, in a floating pane: everything it changed since it left the
-remote's default branch (`origin/HEAD`, the base `wt` uses), committed or not.
-That covers an agent's commits, which Helix's gutter no longer shows.
-To review a pull request, open its branch's worktree (`wt -t <branch>`; for a
-fork's PR, `gh pr checkout <number>` inside a worktree) and press `Alt-v`.
-
-In tuicr, `c` comments on a line, `v` selects lines for a range comment, `e`
-opens the file in the tab's editor pane (`Alt-v` brings the review back), and
-`y` ends the review and pastes your comments into the tab's OpenCode prompt,
-ready to send. `:q` quits without sending. `Alt-v` runs `ade review`, which
-takes the reviewer from the ADE config (tuicr; `"review": {"deliver":
-"submit"}` would send the comments instead of filling them in).
-`zsh tests/ade_review_scope.zsh` checks what the review covers.
-
-Yazi marks the same changes: git.yazi's yellow, green, red and magenta signs
-for uncommitted changes, and, to their left, the same signs in blue for what
-the branch's commits changed since `origin/HEAD` (a local plugin,
-`config/.config/yazi/plugins/git-branch.yazi`). Like git.yazi, an open Yazi
-picks up a new commit when you re-enter the folder; each `Alt-y` starts fresh.
+| After changing | Run |
+| --- | --- |
+| Zellij, Helix or OpenCode (upgrade), `dev.kdl`, `opencode-pane`, `resurrect-command.sh` | `zsh tests/zellij_restore_smoke.zsh` |
+| Zellij, Helix, Yazi or tuicr (upgrade), the keys and their scripts | `zsh tests/keys_smoke.zsh` (a stand-in for OpenCode) |
+| `opencode-ade`, `opencode-ade-status`, OpenCode (upgrade) | `zsh tests/ade_plugin_smoke.zsh` (nine short model calls) |
+| `opencode-ade-status`'s sounds, OpenCode (upgrade) | `zsh tests/opencode_attention_smoke.zsh` |
+| `opencode-ade-worktrees`, `ade worktree` | `zsh tests/opencode_worktrees_smoke.zsh` (no Zellij) |
 
 ## Changing the theme
 
-Everything is **Catppuccin Mocha**, applied per tool. Because `config/` is
-stowed (symlinked), editing these files changes the live config directly — no
-reinstall needed, aside from the "apply" step noted below. Changes are of two
-kinds: **(A)** rename a named theme, **(B)** recolor a handcrafted palette. (The
-base 16 terminal colors come from your terminal app, not this repo.)
+Everything is Catppuccin Mocha, set per tool. `config/` is stowed, so edits
+apply to the live config. The 16 base terminal colours come from the terminal
+app. For another Catppuccin flavour, rename the themes below and replace the
+Mocha hex values with the flavour's (<https://catppuccin.com/palette>).
 
-Switching to another **Catppuccin flavour** (Frappé/Macchiato/Latte) = do the
-(A) renames + find/replace the Mocha hex with the target flavour's hex
-(palettes at <https://catppuccin.com/palette>). A non-Catppuccin theme = (A)
-renames + recolour the (B) files by hand.
-
-### A. Named themes (rename, then apply)
+Named themes:
 
 | Tool | File | Setting | Apply |
 | --- | --- | --- | --- |
-| Helix | `config/.config/helix/config.toml` | `theme = "catppuccin_mocha_dim"` | `:config-reload` (or `:theme <name>` to preview) |
-| Zellij | `config/.config/zellij/config.kdl` | `theme "catppuccin-mocha"` (built-in) | start a new zellij session |
-| Yazi | `config/.config/yazi/package.toml` **and** `config/.config/yazi/theme.toml` | flavour name in **both** | `ya pkg install`, restart yazi |
-| delta (git diff syntax) | `config/.config/git/config` | `syntax-theme = Catppuccin Mocha` | next `git diff` |
+| Helix | `config/.config/helix/config.toml` | `theme = "catppuccin_mocha_dim"` | `:config-reload` |
+| Zellij | `config/.config/zellij/config.kdl` | `theme "catppuccin-mocha"` | a new session |
+| Yazi | `config/.config/yazi/package.toml` and `theme.toml` | the flavour, in both | `ya pkg install`, restart Yazi |
+| delta | `config/.config/git/config` | `syntax-theme = Catppuccin Mocha` | next `git diff` |
 
-Helix's `catppuccin_mocha_dim` is a **local** theme (see B) that only inherits
-the stock `catppuccin_mocha`. Point `theme` at any bundled name (e.g.
-`catppuccin_macchiato`, `dracula`) to switch outright — the local file is then
-just unused.
+Hand-picked colours:
 
-### B. Handcrafted palettes (edit the colours)
+| What | File |
+| --- | --- |
+| Helix's dimmed docstrings | `config/.config/helix/themes/catppuccin_mocha_dim.toml` (inherits the stock theme; one green) |
+| delta's gutters and blame | `config/.config/git/config`, `[delta "catppuccin-mocha"]` |
+| glow (`cheat`, `Alt-/`) | `config/.config/glow/catppuccin-mocha.json`, named in `shell/cheatsheet.zsh` and `config.kdl` |
+| `mdview`, `cheat --pretty` | `CHEATSHEET.css` |
+| the top bar | `config/.config/zellij/layouts/dev.kdl`, the colours in the bar's `format_*`, `tab_*` and `attention_*` options |
 
-| What | File | Notes |
-| --- | --- | --- |
-| Helix docstring dim | `config/.config/helix/themes/catppuccin_mocha_dim.toml` | change `inherits` + the single `#5f7c65` green (blend recipe is in the file's comments); or delete the file and drop `_dim` in `config.toml` |
-| delta UI (diff gutters, blame) | `config/.config/git/config` → `[delta "catppuccin-mocha"]` block | hardcoded hex: `blame-palette`, the `*-style` lines, `map-styles` |
-| glow (the `cheat` pager) | `config/.config/glow/catppuccin-mocha.json` | full markdown palette. **Also referenced by** `shell/cheatsheet.zsh` and `config/.config/zellij/config.kdl` (the cheatsheet pane) — edit in place, or rename the file and update both refs |
-| `cheat --pretty` HTML | `CHEATSHEET.css` | Catppuccin CSS vars at the top (`--base`, `--text`, `--red`, …) |
-| top bar (ade-zjstatus) | `config/.config/zellij/layouts/dev.kdl` | hex inside the `format_*` / `mode_*` / `tab_*` / `attention_*` strings; independent of Zellij's `theme` |
-| Zellij `onedark-custom` | `config/.config/zellij/config.kdl`, `themes {}` block | an **unused** custom theme (RGB triplets) — only matters if you set `theme` to it |
-
-Not themed here (they follow the terminal palette): `fzf`
-(`config/.config/fzf/*`), and plain `yazi.toml` / `init.lua`.
-
-Cosmetic name-only mentions (don't affect colours, but update if you rename so
-docs don't drift): the `README.md` intro, the Yazi-flavour echo in `install.sh`,
-and the `catppuccin*` comments in `config/.config/git/config`, `CHEATSHEET.css`,
-and `shell/cheatsheet.zsh`.
-
-### Catppuccin Mocha hex (for find/replace)
-
-`base #1e1e2e` · `mantle #181825` · `crust #11111b` · `surface0 #313244` ·
+Mocha: `base #1e1e2e` · `mantle #181825` · `crust #11111b` · `surface0 #313244` ·
 `surface1 #45475a` · `surface2 #585b70` · `overlay0 #6c7086` · `text #cdd6f4` ·
 `subtext0 #a6adc8` · `subtext1 #bac2de` · `red #f38ba8` · `maroon #eba0ac` ·
 `peach #fab387` · `yellow #f9e2af` · `green #a6e3a1` · `teal #94e2d5` ·
 `sky #89dceb` · `sapphire #74c7ec` · `blue #89b4fa` · `lavender #b4befe` ·
 `mauve #cba6f7` · `pink #f5c2e7`
-
-## Notes
-
-- The `shell/*.zsh` files are plain zsh functions (not oh-my-zsh plugins);
-  completions register via `compdef` if `compinit` has run.
-- Zellij: `Alt-y` summons a Yazi picker that opens files into a named `editor`
-  (Helix) pane, and `Alt-v` reviews the tab's changes in tuicr (see "Reviewing
-  changes"); `dev.kdl` uses a swap layout (editor top / terminal bottom /
-  opencode right).

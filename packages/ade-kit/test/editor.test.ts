@@ -60,7 +60,10 @@ test("typedEditor types each file's keys into the editor pane, in one go", async
 })
 
 test("typedEditor needs the pane, and so a multiplexer", async () => {
-  await assert.rejects(sample().open([{ path: "/a" }], { workspace }), /^Error: Sample is reached through its pane, which needs a multiplexer$/)
+  await assert.rejects(
+    sample().open([{ path: "/a" }], { workspace }),
+    /^Error: Sample is reached through its pane, which needs a multiplexer$/,
+  )
   await assert.rejects(sample().open([{ path: "/a" }], { workspace, mux: recorder().mux }), /needs a multiplexer/)
 })
 
@@ -68,7 +71,11 @@ test("typedEditor starts the first of its programs on PATH, with the files; or s
   const path = process.env.PATH
   try {
     process.env.PATH = PATH
-    assert.deepEqual(sample().start([{ path: "/a" }, { path: "/b", line: 3 }], workspace), [join(bin, "one/b"), "/a", "/b"])
+    assert.deepEqual(sample().start([{ path: "/a" }, { path: "/b", line: 3 }], workspace), [
+      join(bin, "one/b"),
+      "/a",
+      "/b",
+    ])
     process.env.PATH = join(bin, "nowhere")
     assert.throws(() => sample().start([], workspace), /^Error: Sample executable not found \(tried c and b\)$/)
   } finally {
@@ -92,10 +99,17 @@ test("Helix and Mitos: Escape, then :open with the path quoted, then Enter", asy
     const { mux, typed } = recorder()
     await editor.open([{ path: '/w/a "b".md', line: 3 }, { path: "/w/50%{x}'s.md" }], { workspace, mux, pane: "1" })
     assert.deepEqual(typed, [
-      ["1", [
-        { key: "escape" }, { text: ':open "/w/a ""b"".md"' }, { key: "enter" },
-        { key: "escape" }, { text: ":open '/w/50%{x}''s.md'" }, { key: "enter" },
-      ]],
+      [
+        "1",
+        [
+          { key: "escape" },
+          { text: ':open "/w/a ""b"".md"' },
+          { key: "enter" },
+          { key: "escape" },
+          { text: ":open '/w/50%{x}''s.md'" },
+          { key: "enter" },
+        ],
+      ],
     ])
     assert.equal(editor.supports.line, false)
   }

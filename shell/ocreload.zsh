@@ -1,56 +1,9 @@
 # ocreload.zsh
-# Reload opencode in the CURRENT zellij TAB, pointed at the CURRENT directory.
-#
-# Usage: in your shell pane, `cd` into your project, then run:  ocreload
-#
-# Locating this tab's opencode pane:
-#   1. PREFER a pane NAMED "opencode" (shared pane-id.sh resolver, scoped to this
-#      tab) -- matches the named layout in dev.kdl.
-#   2. FALL BACK to any pane running `opencode` (or opencode-pane) in this tab.
-# It replaces that pane IN PLACE (keeping its slot, re-named "opencode") with a
-# fresh opencode in $PWD, then returns focus here. If none is found, opens one right.
-typeset -g _OCRELOAD_PANE=${${(%):-%x}:A:h:h}/config/.local/bin/opencode-pane
+# ocreload: restart this tab's OpenCode in the current folder. The shared
+# OpenCode service outlives the pane, so its config is reloaded first.
+typeset -g _OCRELOAD_ADE=${${(%):-%x}:A:h:h}/config/.local/bin/ade
 
 ocreload() {
-  [[ -z "$ZELLIJ" ]] && {
-    echo "ocreload: not inside a zellij session" >&2
-    return 1
-  }
-  local dir="$PWD"
-  local back="terminal_${ZELLIJ_PANE_ID}"
-  local resolver="$HOME/.config/zellij/pane-id.sh"
-  local tab id
-
-  # V2's server survives the client pane. Reload it too so config edits apply.
-  local version=$(command opencode --version 2>/dev/null)
-  if [[ $version == "opencode v2."* ]]; then
-    command opencode reload || return
-  fi
-
-  tab=$(zellij action current-tab-info 2>/dev/null | awk '/^id:/{print $2}')
-
-  # 1) prefer a pane NAMED "opencode" in this tab
-  [[ -f "$resolver" ]] && id=$(bash "$resolver" opencode "$tab" 2>/dev/null)
-
-  # 2) fall back: any pane running the `opencode` command in this tab
-  if [[ -z "$id" ]]; then
-    id=$(zellij action list-panes --all 2>/dev/null | awk -v t="$tab" '
-      NR>1 && $1==t {
-        isoc=0; pid=""
-        for (i=1; i<=NF; i++) {
-          if ($i=="opencode" || $i ~ /(^|\/)opencode-pane$/) isoc=1
-          if ($i ~ /^(terminal|plugin)_[0-9]+$/) pid=$i
-        }
-        if (isoc && pid!="") { print pid; exit }
-      }')
-  fi
-
-  # opencode-pane keeps the pane restorable by Zellij session resurrection.
-  if [[ -n "$id" ]]; then
-    zellij action focus-pane-id "$id"
-    zellij action new-pane --in-place --close-replaced-pane --close-on-exit --name opencode --cwd "$dir" -- "$_OCRELOAD_PANE"
-  else
-    zellij action new-pane --direction right --close-on-exit --name opencode --cwd "$dir" -- "$_OCRELOAD_PANE"
-  fi
-  zellij action focus-pane-id "$back"
+  command opencode reload || return
+  "$_OCRELOAD_ADE" restart-agent "$PWD"
 }

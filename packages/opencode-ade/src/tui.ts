@@ -7,13 +7,11 @@
 // packages/opencode-ade-status.)
 import { Plugin } from "@opencode/plugin/tui"
 import { createEffect, createMemo, createRoot } from "solid-js"
-import { open } from "../../ade-kit/src/actions.ts"
-import { makeKit } from "../../ade-kit/src/kit.ts"
-import { located } from "../../ade-kit/src/workspace.ts"
-import { worktreeCommand } from "../../ade-kit/src/worktree-cli.ts"
+import { located, makeKit, open, worktreeCommand } from "ade-kit"
 import { serverDigest } from "./digest.ts"
 import { environmentFor } from "./environment.ts"
 import { Ade } from "./rpc.ts"
+import { rootOf } from "./sessions.ts"
 
 type Copy = { sessionID: string; before?: string; compact: boolean; prepare: string[] }
 type Request = {
@@ -36,10 +34,11 @@ export default Plugin.define({
 
     // The OpenCode service can go on running old server code after the files
     // change: it reloads a changed package plugin, but not after a failed
-    // reload, and it never reloaded the symlinked file this plugin once was.
+    // reload.
     const warn = (message: string) =>
       context.ui.toast.show({ variant: "warning", title: "ADE plugin", message, duration: 15_000 })
-    const stale = "The OpenCode service runs an older version of this plugin. Run `opencode service restart` " +
+    const stale =
+      "The OpenCode service runs an older version of this plugin. Run `opencode service restart` " +
       "(it interrupts running conversations)."
     const checkServer = async () => {
       const expected = serverDigest()
@@ -55,7 +54,7 @@ export default Plugin.define({
         }
         await new Promise((done) => setTimeout(done, 2_000))
       }
-      warn("The plugin's server part (packages/opencode-ade) is not running; see the OpenCode log.")
+      warn("The plugin's server part is not running; see the OpenCode log.")
     }
     void checkServer()
 
@@ -73,19 +72,10 @@ export default Plugin.define({
       parents.set(sessionID, info.parentID ?? undefined)
       return info.parentID ?? undefined
     }
-    const rootOf = async (sessionID: string) => {
-      let id = sessionID
-      for (let depth = 0; depth < 16; depth++) {
-        const parent = await parentOf(id)
-        if (!parent) return id
-        id = parent
-      }
-      return id
-    }
     const shows = async (sessionID: string) => {
       const route = context.ui.router.current()
       if (route.type !== "session") return false
-      return (await rootOf(sessionID)) === (await rootOf(route.sessionID))
+      return (await rootOf(sessionID, parentOf)) === (await rootOf(route.sessionID, parentOf))
     }
 
     // `ade worktree ARGS`, as the command would answer.

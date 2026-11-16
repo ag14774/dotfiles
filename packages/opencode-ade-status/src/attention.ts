@@ -92,8 +92,9 @@ export function attend(
       failed.add(id)
       if (data.error.type !== "provider.free-limit" && data.error.type !== "provider.go-limit")
         alert(id, data.error.message, "error")
-      // The built-in plugin's toast, in every app as before.
-      if (o.active()) host.toast({ sessionID: id, title: "Session failed", message: data.error.message, variant: "error" })
+      // The built-in plugin's toast, which it shows in every app.
+      if (o.active())
+        host.toast({ sessionID: id, title: "Session failed", message: data.error.message, variant: "error" })
       end(id)
     }),
   ]

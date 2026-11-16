@@ -131,15 +131,13 @@ cp "$REAL/.local/share/opencode/auth.json" "$TMP/oc/data/opencode/" 2>/dev/null
 cp "$REAL/.local/state/opencode/model.json" "$TMP/oc/state/opencode/" 2>/dev/null
 cp -RL "$REAL/.config/opencode" "$TMP/oc/config/opencode" 2>/dev/null
 config=$TMP/oc/config/opencode
-rm -rf "$config"/{service.json,node_modules,plugins/ade.ts,plugins/ade,plugins/ade-status,tui-plugins/ade}
-mkdir -p "$config/plugins"
+rm -rf "$config"/{service.json,node_modules,plugins/ade,plugins/ade-status,plugins/ade-worktrees}
+mkdir -p "$config/plugins" "$TMP/src/node_modules"
 cp -R "$ROOT/packages" "$TMP/src/"
+ln -s ../packages/ade-kit "$TMP/src/node_modules/ade-kit"
 ln -s "$TMP/src/packages/opencode-ade" "$config/plugins/ade"
 ln -s "$TMP/src/packages/opencode-ade-status" "$config/plugins/ade-status"
-# The plugin's old app part, which the installer removes from cli.json.
-[[ -f $config/cli.json ]] || print '{}' > "$config/cli.json"
-jq '.plugins = ((.plugins // []) - ["./tui-plugins/ade"])' "$config/cli.json" \
-  > "$config/cli.json.new" && mv "$config/cli.json.new" "$config/cli.json"
+ln -s "$TMP/src/packages/opencode-ade-worktrees" "$config/plugins/ade-worktrees"
 # This checkout's ADE config (OpenCode through opencode-pane); the sandbox has
 # this checkout's ade and opencode-pane first on PATH, as installed.
 mkdir -p "$TMP/oc/config/ade"
@@ -178,7 +176,7 @@ sid=$(start_conversation "$oc" "$TMP/A")
 
 step "a conversation a pane shows gets the environment instructions; one no pane shows doesn't"
 wait_for 15 has_environment "$sid" || fail "no environment instructions on the conversation"
-[[ $(environment_of "$sid") == *"inside a Zellij terminal tab"*"a Helix editor pane"*"with git, wt, zellij"*'`directory`'* ]] \
+[[ $(environment_of "$sid") == *"inside a Zellij terminal tab"*"a Helix editor pane"*"with git, ade, zellij"*'`directory`'* ]] \
   || fail "unexpected environment instructions: $(environment_of "$sid")"
 loose=$(oc_cli api POST /api/session -d "{\"location\":{\"directory\":\"$TMP/C\"}}" 2>/dev/null | jq -r '.data.id // empty')
 [[ -n $loose ]] || fail "could not create a conversation without a pane"
@@ -359,7 +357,7 @@ watch=$oc
 for p in "$oc" "$oc_2"; do zj write --pane-id "terminal_$p" 3; sleep 1; zj write --pane-id "terminal_$p" 3; done
 sleep 3
 msg=$(show "$sid" "$TMP/B/notes.md")
-[[ $msg == "No OpenCode pane in Zellij is showing this conversation"* ]] || fail "unexpected answer: $msg"
+[[ $msg == "No OpenCode pane in a multiplexer is showing this conversation"* ]] || fail "unexpected answer: $msg"
 
 # A conversation keeps the environment of the last pane that showed it (OpenCode
 # does that); one that never had a pane gets the service's, without Zellij.

@@ -6,3 +6,5 @@ secrets.zsh
 *.bak
 *.bak.*
 *.bak-*
+# npm install (links the packages in packages/)
+node_modules/

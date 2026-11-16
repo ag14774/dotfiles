@@ -8,20 +8,15 @@ import type { Config } from "./types.ts"
 
 type Env = Record<string, string | undefined>
 
-// Today's setup: Zellij with the dev layout and its pane names, Helix,
-// OpenCode, tuicr's comments filled in for you to send, and worktrees in the
-// bare layout.
+// Zellij, Helix, OpenCode, tuicr's comments filled in for you to send, and
+// worktrees in the bare layout. Adapters keep the defaults of their own
+// sections (the Zellij adapter: the dev layout and its pane names).
 export const DEFAULTS: Config = {
   multiplexer: "zellij",
   editor: "helix",
   agent: "opencode",
   reviewer: "tuicr",
   review: { deliver: "insert" },
-  zellij: {
-    layout: "dev",
-    panes: { agent: "opencode", shell: "main", editor: "editor", review: "review" },
-    tabName: "{worktree}",
-  },
   worktrees: {
     layout: "bare",
     base: "origin/HEAD",
@@ -41,28 +36,24 @@ const isObject = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value)
 
 // Objects merge key by key; anything else replaces the default.
-const merge = (base: unknown, over: unknown): unknown => {
+export const merge = (base: unknown, over: unknown): unknown => {
   if (!isObject(base) || !isObject(over)) return over === undefined ? base : over
   const merged: Record<string, unknown> = { ...base }
   for (const [key, value] of Object.entries(over)) merged[key] = merge(base[key], value)
   return merged
 }
 
-// The settings ade-kit itself reads must have the right type.
+// The settings ade-kit itself reads must have the right type (adapters check
+// their own sections).
 const check = (config: Config, path: string) => {
-  const zellij: Record<string, unknown> = isObject(config.zellij) ? config.zellij : {}
   const worktrees: Record<string, unknown> = isObject(config.worktrees) ? config.worktrees : {}
-  const panes: [string, unknown][] = isObject(zellij.panes) ? Object.entries(zellij.panes) : [["", undefined]]
   const values: Record<string, unknown> = {
     multiplexer: config.multiplexer,
     editor: config.editor,
     agent: config.agent,
     reviewer: config.reviewer,
-    "zellij.layout": zellij.layout,
-    "zellij.tabName": zellij.tabName,
     "worktrees.layout": worktrees.layout,
     "worktrees.base": worktrees.base,
-    ...Object.fromEntries(panes.map(([role, name]) => [`zellij.panes${role ? `.${role}` : ""}`, name])),
   }
   const wrong = Object.keys(values).filter((key) => typeof values[key] !== "string")
   if (wrong.length) throw new Error(`ade: in ${path}, these must be strings: ${wrong.join(", ")}`)

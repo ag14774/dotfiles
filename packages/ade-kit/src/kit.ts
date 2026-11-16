@@ -2,16 +2,11 @@
 import { execFile } from "node:child_process"
 import { basename, dirname } from "node:path"
 import { pasteAgent } from "./agent.ts"
-import opencode from "./agents/opencode.ts"
-import { readConfig } from "./config.ts"
+import { builtin } from "./builtins.ts"
+import { merge, readConfig } from "./config.ts"
 import { typedEditor } from "./editor.ts"
-import helix from "./editors/helix.ts"
-import mitos from "./editors/mitos.ts"
-import bare from "./layouts/bare.ts"
-import inside from "./layouts/inside.ts"
-import sibling from "./layouts/sibling.ts"
-import tuicr from "./reviewers/tuicr.ts"
-import type { Agent, Config, Editor, Key, Kit, Layout, Reviewer, RunOptions, RunResult } from "./types.ts"
+import { Failed, gitFor } from "./git.ts"
+import type { Config, Key, Kit, RunOptions, RunResult } from "./types.ts"
 
 const TIMEOUT_MS = 10_000
 
@@ -66,33 +61,24 @@ export async function tabName(run: Kit["run"], template: string, dir: string) {
   return template.replace(/\{(worktree|project)\}/g, (_, key: string) => (key === "worktree" ? worktree : project))
 }
 
-const EDITORS: Record<string, (kit: Kit) => Editor> = { helix, mitos }
-const AGENTS: Record<string, (kit: Kit) => Agent> = { opencode }
-const REVIEWERS: Record<string, (kit: Kit) => Reviewer> = { tuicr }
-const LAYOUTS: Record<string, (kit: Kit) => Layout> = { bare, sibling, inside }
-
-const builtin = <T>(adapters: Record<string, (kit: Kit) => T>, kind: string, name: string, kit: Kit) => {
-  const make = Object.hasOwn(adapters, name) ? adapters[name] : undefined
-  if (!make) throw new Error(`ade: there is no built-in ${kind} named "${name}"`)
-  return make(kit)
-}
-
-export function makeKit(
-  o: { config?: Config; env?: Record<string, string | undefined>; run?: Kit["run"] } = {},
-): Kit {
+export function makeKit(o: { config?: Config; env?: Record<string, string | undefined>; run?: Kit["run"] } = {}): Kit {
   const kit: Kit = {
     config: o.config ?? readConfig(o.env),
     run: o.run ?? run,
     quote,
     keys,
+    options: <T>(name: string, defaults: T) => merge(structuredClone(defaults), kit.config[name]) as T,
+    git: gitFor({ run: (argv, options) => kit.run(argv, options) }),
+    fail: (message) => new Failed(message),
     tabName: (template, dir) => tabName(kit.run, template, dir),
     typedEditor,
     pasteAgent,
     builtin: {
-      editor: (name) => builtin(EDITORS, "editor", name, kit),
-      agent: (name) => builtin(AGENTS, "agent", name, kit),
-      reviewer: (name) => builtin(REVIEWERS, "reviewer", name, kit),
-      layout: (name) => builtin(LAYOUTS, "layout", name, kit),
+      multiplexer: (name) => builtin("multiplexer", name, kit),
+      editor: (name) => builtin("editor", name, kit),
+      agent: (name) => builtin("agent", name, kit),
+      reviewer: (name) => builtin("reviewer", name, kit),
+      layout: (name) => builtin("layout", name, kit),
     },
   }
   return kit

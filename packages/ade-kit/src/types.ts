@@ -55,7 +55,7 @@ export interface Multiplexer {
   // Paste as a terminal does (bracketed), so nothing is submitted.
   paste(pane: string, text: string): Promise<void>
   focus(pane: string): Promise<void>
-  // Optional, for a tab per worktree (ade workspace): a new tab in the
+  // Optional, for a tab per worktree (ade worktree open -t/-b): a new tab in the
   // worktree `dir` with the layout's panes (the agent's and the shell's),
   // named after it, in front or in the background; with `agent`, the agent
   // pane runs that command instead of its own. Fails only if no tab opened.
@@ -124,8 +124,8 @@ export type PasteAgentOptions = {
   start(o: { session?: string; prompt?: string }): string[]
 }
 
-// What a review covers: the commits since the merge base with origin/HEAD
-// (`base`), and uncommitted changes (new files included). With HEAD at the
+// What a review covers: the commits since the merge base with the configured
+// worktrees.base (`base`), and uncommitted changes (new files included). With HEAD at the
 // merge base (a branch's changes staged on a detached HEAD), only
 // `uncommitted` is set.
 export type Scope = { dir: string; base?: string; commits: boolean; uncommitted: boolean }
@@ -154,6 +154,9 @@ export type WorktreeIo = {
   confirm?(question: string): Promise<boolean> // a yes/no question; absent without a terminal
 }
 
+// A worktree, as `git worktree list --porcelain` describes it.
+export type WorktreeRecord = { path: string; branch?: string; bare: boolean }
+
 // A repository, as the worktree commands see it.
 export type Repository = {
   common: string // its Git common folder (.bare, .git)
@@ -169,10 +172,10 @@ export interface Layout {
   label?: string
   // The folder for the worktree `name` (a branch's name, with / as -).
   path(repo: Repository, name: string): string
-  // Optional (wtclone): clone `url` into `dir`, laid out this way, without a
+  // Optional (ade worktree clone): clone `url` into `dir`, laid out this way, without a
   // worktree yet.
   clone?(url: string, dir: string, io: WorktreeIo): Promise<void>
-  // Optional (wtconvert): turn the normal clone you are in into this layout;
+  // Optional (ade worktree convert): turn the normal clone you are in into this layout;
   // the folder to go to.
   convert?(io: WorktreeIo, o: { yes: boolean }): Promise<string>
   // Optional: before the worktree `dir` is made (inside: keep .worktrees/ out
@@ -180,15 +183,8 @@ export interface Layout {
   prepare?(repo: Repository, dir: string, io: WorktreeIo): Promise<void>
 }
 
-// The ADE config (config.ts): choices, and options sections for adapters.
-export type ZellijOptions = {
-  layout: string
-  panes: Record<Role, string> // pane names, by role
-  // The name of a worktree's tab (see Kit's tabName): "{project}: {worktree}"
-  // groups each project's tabs in ade-zjstatus. Names are only shown: tabs
-  // are found by their panes' folders.
-  tabName: string
-}
+// The ADE config (config.ts): choices, the worktree commands' options, and
+// a section of options per adapter, which the adapter reads (Kit's options).
 // The worktree commands (worktrees.ts).
 export type WorktreeOptions = {
   // Where new repositories' worktrees go: a built-in layout (bare, sibling,
@@ -207,7 +203,6 @@ export type Config = {
   // How review comments reach the agent: "insert" fills in its input for you
   // to send, "submit" sends them.
   review: { deliver: "insert" | "submit" }
-  zellij: ZellijOptions
   worktrees: WorktreeOptions
   [section: string]: unknown
 }
@@ -226,6 +221,22 @@ export type Kit = {
     single(text: string): string // '...', with '' for a ' inside
   }
   keys: { escape: Key; enter: Key; text(text: string): Key }
+  // An adapter's options: the config's section `name` merged over `defaults`
+  // (objects key by key; anything else replaces the default). Unchecked.
+  options<T>(name: string, defaults: T): T
+  // Git, for a layout's clone or convert: query returns the output, in
+  // English (undefined when git fails), value the same without its last
+  // newline, loud shows git's own output as it runs (true when it worked),
+  // worktrees lists the repository's worktrees.
+  git: {
+    query(io: WorktreeIo, args: string[], cwd?: string): Promise<string | undefined>
+    value(io: WorktreeIo, args: string[], cwd?: string): Promise<string | undefined>
+    loud(io: WorktreeIo, args: string[], cwd?: string): Promise<boolean>
+    worktrees(io: WorktreeIo, cwd: string, ...gitDir: string[]): Promise<WorktreeRecord[]>
+  }
+  // The error that ends a command: its message is the line to show (none: git
+  // has said why).
+  fail(message?: string): Error
   // A tab's name for the worktree `dir`, from a template: {worktree} is the
   // worktree folder's name, {project} its repository's root folder's.
   tabName(template: string, dir: string): Promise<string>
@@ -233,6 +244,7 @@ export type Kit = {
   pasteAgent(o: PasteAgentOptions): Agent
   // The built-in adapters, to start from.
   builtin: {
+    multiplexer(name: string): MultiplexerAdapter
     editor(name: string): Editor
     agent(name: string): Agent
     reviewer(name: string): Reviewer

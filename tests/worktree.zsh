@@ -173,22 +173,22 @@ wtrm stayed >/dev/null 2>&1
 # Options go before the branch; leftovers are rejected rather than ignored.
 if wt main -t >/dev/null 2>&1; then fail "wt should reject options after the branch"; fi
 
-# A WT_SEED array replaces the defaults even though arrays cannot be exported.
+# A ADE_SEED array replaces the defaults even though arrays cannot be exported.
 print 'custom' > "$project/main/custom.txt"
-WT_SEED=(custom.txt)
+ADE_SEED=(custom.txt)
 wt seed-array >/dev/null
-unset WT_SEED
+unset ADE_SEED
 assert_eq "$(<custom.txt)" custom
-[[ ! -e .env ]] || fail "WT_SEED should replace the default seed list"
+[[ ! -e .env ]] || fail "ADE_SEED should replace the default seed list"
 
-# An unexported WT_SEED_FILE still selects the seed manifest.
+# An unexported ADE_SEED_FILE still selects the seed manifest.
 cd "$project/main"
 print 'custom.txt' > "$TMP/seed-manifest"
-WT_SEED_FILE=$TMP/seed-manifest
+ADE_SEED_FILE=$TMP/seed-manifest
 wt seed-file >/dev/null
-unset WT_SEED_FILE
+unset ADE_SEED_FILE
 assert_eq "$(<custom.txt)" custom
-[[ ! -e .env ]] || fail "WT_SEED_FILE should replace the default seed list"
+[[ ! -e .env ]] || fail "ADE_SEED_FILE should replace the default seed list"
 
 cd "$project/main"
 wtrm -f seed-array >/dev/null
@@ -219,10 +219,10 @@ wt -s local-only >/dev/null 2>&1
 git --git-dir="$remote" update-ref -d refs/heads/gone-branch
 # Without a terminal to confirm (as for an agent), wtprune refuses to prompt.
 out=$(wtprune </dev/null 2>&1) && fail "wtprune without -y should need a terminal"
-assert_eq "$out" $'wtprune: git fetch --all --prune ...\nwtprune: worktrees to remove:\n'"$(row gone-branch 'remote branch deleted')"$'\nwtprune: no terminal to confirm; rerun with -y'
+assert_eq "$out" $'ade worktree prune: git fetch --all --prune ...\nade worktree prune: worktrees to remove:\n'"$(row gone-branch 'remote branch deleted')"$'\nade worktree prune: no terminal to confirm; rerun with -y'
 [[ -d $project/gone-branch ]] || fail "an unconfirmed wtprune should remove nothing"
 out=$(wtprune -n -y 2>&1)
-assert_eq "$out" $'wtprune: worktrees to remove:\n'"$(row gone-branch 'remote branch deleted')"$'\nremoved gone-branch'
+assert_eq "$out" $'ade worktree prune: worktrees to remove:\n'"$(row gone-branch 'remote branch deleted')"$'\nremoved gone-branch'
 [[ ! -d $project/gone-branch ]] || fail "wtprune should remove a worktree whose remote branch was deleted"
 [[ -d $project/kept-branch && -d $project/local-only && -d $project/main ]] \
   || fail "wtprune should keep branches with an upstream, without one, and the default branch"
@@ -231,7 +231,7 @@ pushed here-gone
 git --git-dir="$remote" update-ref -d refs/heads/here-gone
 cd "$project/here-gone"
 out=$(wtprune -y 2>&1)
-assert_eq "$out" $'wtprune: git fetch --all --prune ...\nwtprune: skipping current worktree \'here-gone\' -- cd elsewhere and rerun\nwtprune: nothing to remove.'
+assert_eq "$out" $'ade worktree prune: git fetch --all --prune ...\nade worktree prune: skipping current worktree \'here-gone\' -- cd elsewhere and rerun\nade worktree prune: nothing to remove.'
 cd "$project/main"
 wtprune -n -y >/dev/null 2>&1
 [[ ! -d $project/here-gone ]] || fail "wtprune should remove the gone worktree once you left it"
@@ -240,7 +240,7 @@ pushed merged-branch
 pushed reused-name
 export GH_PR_NUMBER=11 GH_PR_STATE=MERGED GH_MERGED_OID=$(git -C "$project" rev-parse merged-branch)
 out=$(wtprune -n -m -y 2>&1)
-assert_eq "$out" $'wtprune: worktrees to remove:\n'"$(row merged-branch 'merged PR #11')"$'\nremoved merged-branch'
+assert_eq "$out" $'ade worktree prune: worktrees to remove:\n'"$(row merged-branch 'merged PR #11')"$'\nremoved merged-branch'
 [[ -d $project/reused-name && -d $project/kept-branch ]] || fail "wtprune -m should keep branches whose tip is no merged PR's head"
 unset GH_MERGED_OID
 export GH_PR_STATE=OPEN
@@ -266,7 +266,7 @@ if ggpull >/dev/null 2>&1; then fail "ggpull should refuse a detached HEAD"; fi
 cd "$project/main"
 wtrm forked >/dev/null 2>&1
 
-# --- wt: the worktree's folder and branch ---
+# --- ade worktree open: the worktree's folder and branch ---
 # A new branch starts at origin/HEAD without an upstream (the first push sets
 # one), or at the base given; a branch only on the remote, even one pushed
 # after the last fetch, tracks it; a local branch is used as it is. The folder
@@ -302,47 +302,47 @@ rmdir "$project/plain-folder"
 # Errors, and nothing on stdout.
 core open && fail "wt without a branch should fail"
 assert_eq "$out" ""
-said "usage: wt [-s|-t|-b] [-p PROMPT] [--session ID] <branch> [base]   (options before the branch)"
+said "usage: ade worktree open [-s|-t|-b] [-p PROMPT] [--session ID] <branch> [base]   (options before the branch)"
 core open a b c && fail "wt with three arguments should fail"
 mkdir "$TMP/no-repo"
 (cd "$TMP/no-repo" && core open x) && fail "wt outside a repository should fail"
-said "wt: not inside a git repo"
+said "ade worktree open: not inside a git repo"
 
-# --- wt: seeding ---
+# --- ade worktree open: seeding ---
 # Copied from the worktree you are in, or from the default branch's worktree
 # when you are in the project folder; a file already in the new worktree (here
 # a tracked one) stays as it is; globs match, folders are copied whole. A
-# repository's <common-dir>/wt-seed manifest (comments and blank lines allowed)
-# wins over WT_SEED; an unsafe pattern there, or an unreadable WT_SEED_FILE,
+# repository's <common-dir>/ade-seed manifest (comments and blank lines allowed)
+# wins over ADE_SEED; an unsafe pattern there, or an unreadable ADE_SEED_FILE,
 # stops wt before it creates anything.
 core open -s seeded
-said "wt: seeded 1 local file(s) from main/ (default seed list)"
+said "ade worktree open: seeded 1 local file(s) from main/ (default seed list)"
 assert_eq "$(<"$project/seeded/.env")" 'seeded secret'
 cd "$project"
 core open -s from-root
-said "wt: seeded 1 local file(s) from main/ (default seed list)"
+said "ade worktree open: seeded 1 local file(s) from main/ (default seed list)"
 cd "$project/main"
-WT_SEED=app.txt core open -s tracked-seed
-grep -q '^wt: seeded' "$TMP/err" && fail "a file already in the worktree should not be seeded: $(<"$TMP/err")"
+ADE_SEED=app.txt core open -s tracked-seed
+grep -q '^ade worktree open: seeded' "$TMP/err" && fail "a file already in the worktree should not be seeded: $(<"$TMP/err")"
 print local > .env.local
 mkdir -p config.d/sub && print deep > config.d/sub/file
-WT_SEED=$'.env.*\nconfig.d' core open -s globbed
-said "wt: seeded 2 local file(s) from main/ (WT_SEED)"
+ADE_SEED=$'.env.*\nconfig.d' core open -s globbed
+said "ade worktree open: seeded 2 local file(s) from main/ (ADE_SEED)"
 assert_eq "$(<"$project/globbed/.env.local")$(<"$project/globbed/config.d/sub/file")" localdeep
 rm -rf .env.local config.d
-print $'# local files\n\n  .env  ' > "$project/.bare/wt-seed"
-WT_SEED=app.txt core open -s manifest
-said "wt: seeded 1 local file(s) from main/ ($project/.bare/wt-seed)"
-print '../outside' > "$project/.bare/wt-seed"
+print $'# local files\n\n  .env  ' > "$project/.bare/ade-seed"
+ADE_SEED=app.txt core open -s manifest
+said "ade worktree open: seeded 1 local file(s) from main/ ($project/.bare/ade-seed)"
+print '../outside' > "$project/.bare/ade-seed"
 core open -s unsafe && fail "an unsafe seed pattern should stop wt"
-said "wt: unsafe seed pattern in $project/.bare/wt-seed: ../outside"
-rm "$project/.bare/wt-seed"
-WT_SEED_FILE=$TMP/missing core open -s unread && fail "an unreadable WT_SEED_FILE should stop wt"
-said "wt: WT_SEED_FILE is not readable: $TMP/missing"
+said "ade worktree open: unsafe seed pattern in $project/.bare/ade-seed: ../outside"
+rm "$project/.bare/ade-seed"
+ADE_SEED_FILE=$TMP/missing core open -s unread && fail "an unreadable ADE_SEED_FILE should stop wt"
+said "ade worktree open: ADE_SEED_FILE is not readable: $TMP/missing"
 [[ ! -e $project/unsafe && ! -e $project/unread ]] || fail "wt should create nothing when seeding can't work"
 git -C "$project" show-ref -q --verify refs/heads/unsafe && fail "wt should create no branch when seeding can't work"
 
-# --- wtrm: which worktree ---
+# --- ade worktree rm: which worktree ---
 # By branch or by folder name, or by absolute path; a name that is a branch of
 # one worktree and the folder of another is refused.
 core rm feature/slashed
@@ -350,13 +350,13 @@ said "removed feature-slashed"
 git -C "$project" worktree add -q -b clash "$project/clash-branch" 2>/dev/null
 git -C "$project" worktree add -q -b other "$project/clash" 2>/dev/null
 core rm clash && fail "an ambiguous name should be refused"
-said "wtrm: 'clash' matches both a branch and a worktree directory; use the absolute path"
+said "ade worktree rm: 'clash' matches both a branch and a worktree directory; use the absolute path"
 core rm "$project/clash"
 said "removed clash"
 core rm nothing-here && fail "an unknown name should fail"
-said "wtrm: no worktree found for 'nothing-here'"
+said "ade worktree rm: no worktree found for 'nothing-here'"
 core rm && fail "wtrm without a name should fail"
-said "usage: wtrm [-f|--force] <branch|worktree>"
+said "usage: ade worktree rm [-f|--force] <branch|worktree>"
 
 # --- wtls ---
 # Plain: git's list. --json: no bare entry, no folder deleted by hand, null for
@@ -373,9 +373,9 @@ git -C "$TMP/local-only" commit -q --allow-empty -m one
 cd "$TMP/local-only"
 core ls --json
 cd "$project/main"
-assert_eq "$out" "[{\"path\":\"$TMP/local-only\",\"branch\":\"main\",\"changed\":0,\"ahead\":null,\"behind\":null,\"tab\":null}]"
+assert_eq "$out" "[{\"path\":\"$TMP/local-only\",\"branch\":\"main\",\"base\":\"origin/HEAD\",\"changed\":0,\"ahead\":null,\"behind\":null,\"tab\":null}]"
 (cd "$TMP/no-repo" && core ls --json) && fail "wtls outside a repository should fail"
-said "wtls: not inside a git repo"
+said "ade worktree ls: not inside a git repo"
 git -C "$project" worktree prune
 for name in fresh based remote-only local-branch elsewhere seeded from-root tracked-seed globbed manifest; do
   core rm -f "$name" || fail "could not remove $name: $(<"$TMP/err")"
@@ -388,7 +388,7 @@ done
 cd "$TMP"
 core clone "$remote"
 assert_eq "$out" ""
-said "worktree repo ready → cd demo && wt <branch>"
+said "worktree repo ready → cd demo && ade worktree open <branch>"
 assert_eq "$(<"$TMP/demo/.git")" "gitdir: ./.bare"
 assert_eq "$(git --git-dir="$TMP/demo/.bare" config core.bare)" true
 assert_eq "$(git --git-dir="$TMP/demo/.bare" config remote.origin.fetch)" '+refs/heads/*:refs/remotes/origin/*'
@@ -396,9 +396,9 @@ assert_eq "$(git --git-dir="$TMP/demo/.bare" symbolic-ref refs/remotes/origin/HE
 assert_eq "$(git --git-dir="$TMP/demo/.bare" symbolic-ref HEAD)" refs/heads/main
 assert_eq "$(git -C "$TMP/demo" worktree list --porcelain | grep -c '^worktree ')" 1
 core clone && fail "wtclone without a URL should fail"
-said "usage: wtclone <url> [dir]"
+said "usage: ade worktree clone <url> [dir]"
 core clone "$TMP/acme/missing.git" broken && fail "wtclone of a missing repository should fail"
-said "wtclone: fetch failed"
+said "ade worktree clone: fetch failed"
 
 # --- wtconvert ---
 # A clean normal clone on a branch, with an origin, becomes the bare layout:
@@ -411,15 +411,15 @@ cd "$TMP/convertme"
 print secret > .env
 print notes > scratch.txt
 core convert </dev/null && fail "wtconvert without -y should need a terminal"
-said "wtconvert: no terminal to confirm; rerun with -y"
+said "ade worktree convert: no terminal to confirm; rerun with -y"
 [[ -d .git ]] || fail "an unconfirmed wtconvert should change nothing"
 print dirty >> app.txt
 core convert -y && fail "wtconvert should refuse a dirty tree"
-said "wtconvert: working tree is dirty -- commit or stash changes first:"
+said "ade worktree convert: working tree is dirty -- commit or stash changes first:"
 git checkout -q app.txt
 git switch -q --detach
 core convert -y && fail "wtconvert should refuse a detached HEAD"
-said "wtconvert: detached HEAD -- check out a branch first"
+said "ade worktree convert: detached HEAD -- check out a branch first"
 git switch -q main
 wtconvert -y > "$TMP/convert.out" 2>&1 || fail "wtconvert failed: $(<"$TMP/convert.out")"
 out=$(grep -v -e "^'origin/HEAD' " -e '^Preparing worktree ' -e '^HEAD is now at ' "$TMP/convert.out")
@@ -427,20 +427,20 @@ assert_eq "$out" "convert to worktree layout:
   repo:   $TMP/convertme
   branch: main  ->  $TMP/convertme/main
   keep:   2 ignored path(s) -> moved into the worktree
-done -> $TMP/convertme/main   (try: wtls, or wt <other-branch>)"
+done -> $TMP/convertme/main   (try: ade worktree ls, or ade worktree open <other-branch>)"
 assert_eq "$PWD" "$TMP/convertme/main"
 assert_eq "$(print -l "$TMP/convertme"/*(DN:t))" $'.bare\n.git\nmain'
 assert_eq "$(<"$TMP/convertme/.git")" "gitdir: ./.bare"
 assert_eq "$(<.env)$(<scratch.txt)" secretnotes
 assert_eq "$(git status --porcelain)" ""
 core convert -y && fail "wtconvert should refuse a converted repository"
-said "wtconvert: $TMP/convertme/main/.git is not a repo dir (already converted?)"
+said "ade worktree convert: $TMP/convertme/main/.git is not a repo dir (already converted?)"
 git init -q -b main "$TMP/no-origin"
 git -C "$TMP/no-origin" commit -q --allow-empty -m one
 (cd "$TMP/no-origin" && core convert -y) && fail "wtconvert should refuse a clone without origin"
-said "wtconvert: no 'origin' remote found"
+said "ade worktree convert: no 'origin' remote found"
 (cd "$TMP/no-repo" && core convert -y) && fail "wtconvert should refuse a folder outside a clone"
-said "wtconvert: run this inside a normal (non-bare) git clone"
+said "ade worktree convert: run this inside a normal (non-bare) git clone"
 
 # --- ade worktree itself ---
 core help || fail "ade worktree help failed"
@@ -448,7 +448,7 @@ core help || fail "ade worktree help failed"
 core bogus && fail "an unknown command should fail"
 said "ade worktree: unknown command 'bogus' (see: ade worktree help)"
 core prune -x && fail "wtprune should reject unknown options"
-said "usage: wtprune [-y] [-n|--no-fetch] [-m|--merged]"
+said "usage: ade worktree prune [-y] [-n|--no-fetch] [-m|--merged]"
 cd "$project/main"
 
 # --- Zellij tabs, against the fake zellij: the caller is pane 1 in tab 1. ---
@@ -558,7 +558,7 @@ opencode_pane() { # $1=tab: the opencode pane's cwd and command
 zellij action go-to-tab-by-id 1
 engine -b said || fail "wt -b failed: $(<"$TMP/err")"
 assert_eq "$out" "$project/said"
-said "wt: opened tab said in the background"
+said "ade worktree open: opened tab said in the background"
 tab=$(tab_in "$project/said")
 assert_eq "$(tab_name "$tab")" said
 assert_eq "$(focused_tab)" 1
@@ -566,7 +566,7 @@ called_with new-tab "--layout dev" "--name said" "--cwd $project/said" --no-focu
   || fail "expected a background dev tab in the worktree, got: $(<"$ZJ_STATE/log")"
 engine -b said || fail "wt -b failed: $(<"$TMP/err")"
 assert_eq "$out" "$project/said"
-said "wt: said already has a tab"
+said "ade worktree open: said already has a tab"
 ! called_with new-tab || fail "wt -b should not open a second tab"
 engine -t said || fail "wt -t failed: $(<"$TMP/err")"
 assert_eq "$out" "$project/said"
@@ -575,13 +575,13 @@ assert_eq "$(focused_tab)" "$tab"
 zellij action go-to-tab-by-id 1
 if engine -p 'go on' said; then fail "wt -p should refuse a worktree with a tab"; fi
 assert_eq "$out" ""
-assert_eq "$(<"$TMP/err")" "wt: said already has a tab; send the prompt to its OpenCode instead"
+assert_eq "$(<"$TMP/err")" "ade worktree open: said already has a tab; send the prompt to its OpenCode instead"
 
 # -p: the layout's OpenCode pane is replaced in place, in the background, by
 # opencode-pane on the prompt, in the worktree; the pane closes with it.
 engine -p '-x "quoted" prompt' spoken || fail "wt -p failed: $(<"$TMP/err")"
 assert_eq "$out" "$project/spoken"
-assert_eq "$(grep '^wt: ' "$TMP/err" | grep -v '^wt: seeded ')" $'wt: opened tab spoken in the background\nwt: OpenCode in tab spoken is working on the prompt'
+assert_eq "$(grep '^ade worktree open: ' "$TMP/err" | grep -v '^ade worktree open: seeded ')" $'ade worktree open: opened tab spoken in the background\nade worktree open: OpenCode in tab spoken is working on the prompt'
 tab=$(tab_in "$project/spoken")
 assert_eq "$(focused_tab)" 1
 called_with new-pane --in-place --close-replaced-pane --no-focus --close-on-exit \
@@ -600,15 +600,15 @@ env -u ZELLIJ_PANE_ID "$ROOT/config/.local/bin/ade" worktree open -b nopane >/de
 # started. Each fails, saying so; the worktree is there all the same.
 if ZJ_FAIL=new-tab engine -b broken; then fail "wt -b should fail when Zellij can't open a tab"; fi
 assert_eq "$out" ""
-said "wt: could not open a Zellij tab for broken"
+said "ade worktree open: could not open a Zellij tab for broken"
 [[ -d $project/broken && -z $(tab_in "$project/broken") ]] || fail "a failed new-tab should leave the worktree, without a tab"
 if ZJ_NO_AGENT=1 engine -p x agentless; then fail "wt -p should fail without an opencode pane"; fi
 assert_eq "$out" ""
-assert_eq "$(grep '^wt: ' "$TMP/err" | grep -v '^wt: seeded ')" $'wt: opened tab agentless in the background\nwt: no opencode pane in tab agentless; prompt not sent (the tab stays open)'
+assert_eq "$(grep '^ade worktree open: ' "$TMP/err" | grep -v '^ade worktree open: seeded ')" $'ade worktree open: opened tab agentless in the background\nade worktree open: no opencode pane in tab agentless; prompt not sent (the tab stays open)'
 [[ -n $(tab_in "$project/agentless") ]] || fail "the tab without an opencode pane should stay open"
 if ZJ_FAIL=new-pane engine -p x unstarted; then fail "wt -p should fail when OpenCode can't start"; fi
 assert_eq "$out" ""
-assert_eq "$(grep '^wt: ' "$TMP/err" | grep -v '^wt: seeded ')" $'wt: opened tab unstarted in the background\nwt: could not start OpenCode with the prompt in tab unstarted'
+assert_eq "$(grep '^ade worktree open: ' "$TMP/err" | grep -v '^ade worktree open: seeded ')" $'ade worktree open: opened tab unstarted in the background\nade worktree open: could not start OpenCode with the prompt in tab unstarted'
 for name in said spoken nopane broken agentless unstarted; do wtrm -f "$name" >/dev/null 2>&1; done
 [[ -z $(tab_in "$project/said")$(tab_in "$project/spoken") ]] || fail "wtrm should close the tabs opened above"
 
@@ -617,7 +617,7 @@ for name in said spoken nopane broken agentless unstarted; do wtrm -f "$name" >/
 # panes, and the messages name the worktree.
 jq '.zellij.tabName = "{project}: {worktree}"' "$TMP/ade.json" > "$TMP/grouped.json"
 ADE_CONFIG=$TMP/grouped.json engine -b grouped || fail "wt -b failed: $(<"$TMP/err")"
-said "wt: opened tab grouped in the background"
+said "ade worktree open: opened tab grouped in the background"
 tab=$(tab_in "$project/grouped")
 assert_eq "$(tab_name "$tab")" "project: grouped"
 ADE_CONFIG=$TMP/grouped.json engine -t grouped || fail "wt -t failed: $(<"$TMP/err")"
@@ -633,12 +633,12 @@ wtrm grouped >/dev/null 2>&1
 jq '.multiplexer = "none"' "$TMP/ade.json" > "$TMP/none.json"
 ADE_CONFIG=$TMP/none.json core open -t unmuxed || fail "wt -t without a multiplexer failed: $(<"$TMP/err")"
 assert_eq "$out" "$project/unmuxed"
-said "wt: no multiplexer is configured; changing directory instead of opening a tab"
+said "ade worktree open: no multiplexer is configured; changing directory instead of opening a tab"
 ADE_CONFIG=$TMP/none.json core open -b unmuxed || fail "wt -b without a multiplexer failed: $(<"$TMP/err")"
 assert_eq "$out" "$project/unmuxed"
-said "wt: no multiplexer is configured; staying here instead of opening a tab"
+said "ade worktree open: no multiplexer is configured; staying here instead of opening a tab"
 ADE_CONFIG=$TMP/none.json core open -p x unprompted && fail "wt -p without a multiplexer should fail"
-said "wt: -p/--session start OpenCode in a new tab; no multiplexer is configured"
+said "ade worktree open: -p/--session start OpenCode in a new tab; no multiplexer is configured"
 [[ ! -d $project/unprompted ]] || fail "wt -p without a multiplexer should create nothing"
 [[ -z $(tab_in "$project/unmuxed") ]] || fail "no tab should open without a multiplexer"
 wtrm unmuxed >/dev/null 2>&1
@@ -749,9 +749,9 @@ zellij action close-tab-by-id "$paneless"
 wt -b listed >/dev/null 2>&1
 print change > "$project/listed/notes.md"
 json=$("$ROOT/config/.local/bin/ade" worktree ls --json)
-entry() { jq -c --arg p "$project/$1" '.[] | select(.path == $p) | {branch, changed, ahead, behind, tab}' <<< "$json"; }
-assert_eq "$(entry listed)" '{"branch":"listed","changed":1,"ahead":0,"behind":0,"tab":"sure"}'
-assert_eq "$(entry main)" '{"branch":"main","changed":0,"ahead":0,"behind":0,"tab":null}'
+entry() { jq -c --arg p "$project/$1" '.[] | select(.path == $p) | {branch, base, changed, ahead, behind, tab}' <<< "$json"; }
+assert_eq "$(entry listed)" '{"branch":"listed","base":"origin/HEAD","changed":1,"ahead":0,"behind":0,"tab":"sure"}'
+assert_eq "$(entry main)" '{"branch":"main","base":"origin/HEAD","changed":0,"ahead":0,"behind":0,"tab":null}'
 # Without the caller's pane the tabs are found all the same; outside Zellij
 # there are none. A live pane that reports no directory makes a tab "unsure".
 json=$(env -u ZELLIJ_PANE_ID "$ROOT/config/.local/bin/ade" worktree ls --json)
@@ -786,12 +786,12 @@ cd "$project/main"
 # Outside Zellij, -p fails before creating anything and -t changes directory.
 unset ZELLIJ ZELLIJ_SESSION_NAME ZELLIJ_PANE_ID
 core open -p x outside && fail "wt -p outside Zellij should fail"
-said "wt: -p/--session start OpenCode in a Zellij tab; not inside Zellij"
+said "ade worktree open: -p/--session start OpenCode in a Zellij tab; not inside Zellij"
 core open -b outside-b || fail "wt -b outside Zellij failed: $(<"$TMP/err")"
-said "wt: not inside Zellij; staying here instead of opening a tab"
+said "ade worktree open: not inside Zellij; staying here instead of opening a tab"
 assert_eq "$out" "$project/outside-b"
 core open -t outside-b
-said "wt: not inside Zellij; changing directory instead of opening a tab"
+said "ade worktree open: not inside Zellij; changing directory instead of opening a tab"
 if wt -p 'x' outside >/dev/null 2>&1; then fail "wt -p outside Zellij should fail"; fi
 [[ ! -d $project/outside ]] || fail "wt -p outside Zellij should not create a worktree"
 wt -t outside >/dev/null 2>&1

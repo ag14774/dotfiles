@@ -8,7 +8,11 @@ import { nameIn, strategy } from "../src/strategy.ts"
 
 const temp = realpathSync(mkdtempSync(join(tmpdir(), "ade-strategy-")))
 const git = (cwd: string, ...args: string[]) =>
-  execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@t", ...args], { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] })
+  execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@t", ...args], {
+    cwd,
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "ignore"],
+  })
 
 // An origin, and a clone in the bare layout with main (and a .env to seed).
 const origin = join(temp, "origin")
@@ -36,10 +40,14 @@ test("nameIn: the name below OpenCode's default parent, else the folder's name",
   assert.equal(nameIn("/elsewhere/task", env, "abcdef0123"), "task")
 })
 
-test("create: wt's folder and a real branch, from the start ref, seeded; reused", async () => {
+test("create: ade worktree open's folder and a real branch, from the start ref, seeded; reused", async () => {
   assert.equal(s.id, "git")
   // OpenCode starts from the canonical checkout: in the bare layout, .bare.
-  const made = await s.create({ directory: suggested("feat/x"), sourceDirectory: join(project, ".bare"), branch: "main" })
+  const made = await s.create({
+    directory: suggested("feat/x"),
+    sourceDirectory: join(project, ".bare"),
+    branch: "main",
+  })
   assert.deepEqual(made, { directory: join(project, "feat-x") })
   assert.equal(git(made.directory, "symbolic-ref", "--short", "HEAD"), "feat/x\n")
   assert.throws(() => git(made.directory, "config", "--get", "branch.feat/x.remote")) // no upstream yet
@@ -50,7 +58,10 @@ test("create: an existing branch's worktree is returned as it is; failures say w
   assert.deepEqual(await s.create({ directory: suggested("feat/x"), sourceDirectory: join(project, ".bare") }), {
     directory: join(project, "feat-x"),
   })
-  await assert.rejects(s.create({ directory: suggested("-x"), sourceDirectory: join(project, ".bare") }), /usage: wt /)
+  await assert.rejects(
+    s.create({ directory: suggested("-x"), sourceDirectory: join(project, ".bare") }),
+    /usage: ade worktree open /,
+  )
 })
 
 test("create seeds from the default branch's worktree", async () => {
@@ -72,6 +83,12 @@ test("remove: a worktree with changes needs force (OpenCode asks); then it goes"
     await assert.rejects(s.remove({ directory: join(project, name), force: false }), ForceRequired)
     await s.remove({ directory: join(project, name), force: true })
   }
-  assert.deepEqual((await s.list(join(project, "main"))).map((w) => w.directory), [join(project, ".bare"), join(project, "main")])
-  await assert.rejects(s.remove({ directory: join(project, "gone"), force: false }), /wtrm: no worktree found/)
+  assert.deepEqual(
+    (await s.list(join(project, "main"))).map((w) => w.directory),
+    [join(project, ".bare"), join(project, "main")],
+  )
+  await assert.rejects(
+    s.remove({ directory: join(project, "gone"), force: false }),
+    /ade worktree rm: no worktree found/,
+  )
 })

@@ -25,7 +25,7 @@ git(temp, "clone", "-q", join(temp, "origin.git"), "work")
 const work = join(temp, "work")
 const base = git(work, "rev-parse", "HEAD")
 
-test("the scope: commits since the merge base with origin/HEAD, and uncommitted changes", async () => {
+test("the scope: commits since the merge base with origin/HEAD (the default base), and uncommitted changes", async () => {
   assert.deepEqual(await scopeOf(kit, work), { dir: work, base, commits: false, uncommitted: false })
   git(work, "switch", "-qc", "agent")
   writeFileSync(join(work, "a.txt"), "one\ntwo\n")
@@ -44,6 +44,19 @@ test("the scope: commits since the merge base with origin/HEAD, and uncommitted 
   assert.deepEqual(await scopeOf(kit, local), { dir: local, commits: false, uncommitted: false })
 })
 
+test("the scope counts from worktrees.base", async () => {
+  git(temp, "clone", "-q", join(temp, "origin.git"), "work2")
+  const work2 = join(temp, "work2")
+  git(work2, "switch", "-qc", "develop")
+  git(work2, "commit", "-q", "--allow-empty", "-m", "develop")
+  const develop = git(work2, "rev-parse", "HEAD")
+  git(work2, "switch", "-qc", "feature")
+  git(work2, "commit", "-q", "--allow-empty", "-m", "feature")
+  const fromDevelop = makeKit({ config: { ...DEFAULTS, worktrees: { ...DEFAULTS.worktrees, base: "develop" } } })
+  assert.deepEqual(await scopeOf(fromDevelop, work2), { dir: work2, base: develop, commits: true, uncommitted: false })
+  assert.deepEqual(await scopeOf(kit, work2), { dir: work2, base, commits: true, uncommitted: false })
+})
+
 test("the scope in words, as ade review --scope prints it", () => {
   assert.deepEqual(scopeWords({ dir: "/w", base: "abc", commits: true, uncommitted: true }), ["-r abc..HEAD", "-w"])
   assert.deepEqual(scopeWords({ dir: "/w", base: "abc", commits: false, uncommitted: true }), ["-w"])
@@ -52,8 +65,19 @@ test("the scope in words, as ade review --scope prints it", () => {
 
 test("tuicr: the commits as a range, -w for uncommitted changes, comments on stdout", () => {
   const command = tuicr().command
-  assert.deepEqual(command({ dir: "/w", base: "abc", commits: true, uncommitted: true }), ["tuicr", "-r", "abc..HEAD", "-w", "--stdout"])
-  assert.deepEqual(command({ dir: "/w", base: "abc", commits: true, uncommitted: false }), ["tuicr", "-r", "abc..HEAD", "--stdout"])
+  assert.deepEqual(command({ dir: "/w", base: "abc", commits: true, uncommitted: true }), [
+    "tuicr",
+    "-r",
+    "abc..HEAD",
+    "-w",
+    "--stdout",
+  ])
+  assert.deepEqual(command({ dir: "/w", base: "abc", commits: true, uncommitted: false }), [
+    "tuicr",
+    "-r",
+    "abc..HEAD",
+    "--stdout",
+  ])
   assert.deepEqual(command({ dir: "/w", base: "abc", commits: false, uncommitted: true }), ["tuicr", "-w", "--stdout"])
 })
 

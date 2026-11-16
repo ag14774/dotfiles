@@ -20,6 +20,7 @@ export default (): Layout => ({
     } catch {
       mkdirSync(join(repo.common, "info"), { recursive: true })
     }
-    if (!text.split("\n").includes(EXCLUDE)) appendFileSync(file, `${text && !text.endsWith("\n") ? "\n" : ""}${EXCLUDE}\n`)
+    if (!text.split("\n").includes(EXCLUDE))
+      appendFileSync(file, `${text && !text.endsWith("\n") ? "\n" : ""}${EXCLUDE}\n`)
   },
 })

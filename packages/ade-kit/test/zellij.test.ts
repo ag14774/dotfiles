@@ -3,13 +3,13 @@ import { readFileSync } from "node:fs"
 import { test } from "node:test"
 import { DEFAULTS } from "../src/config.ts"
 import { makeKit } from "../src/kit.ts"
-import zellij, { parsePanes, parseTabs } from "../src/multiplexers/zellij.ts"
-import type { RunResult } from "../src/types.ts"
+import zellij, { DEFAULTS as ZELLIJ, optionsOf, parsePanes, parseTabs } from "../src/multiplexers/zellij.ts"
+import type { Config, RunResult } from "../src/types.ts"
 
 const fixture = (name: string) => readFileSync(new URL(`fixtures/${name}`, import.meta.url), "utf8")
 
 test("list-panes --json: terminal panes with their roles, directories and states", () => {
-  assert.deepEqual(parsePanes(fixture("zellij-list-panes.json"), DEFAULTS.zellij.panes), [
+  assert.deepEqual(parsePanes(fixture("zellij-list-panes.json"), ZELLIJ.panes), [
     { id: "0", tab: "0", role: "shell", cwd: "/work/A", running: true, floating: false, focused: false },
     { id: "1", tab: "0", role: "agent", cwd: "/work/A", running: true, floating: false, focused: false },
     { id: "2", tab: "0", role: "editor", cwd: "/work/A", running: true, floating: false, focused: false },
@@ -36,7 +36,8 @@ test("here: inside Zellij with its session, and the pane when Zellij names it", 
   const adapter = zellij(makeKit({ config: DEFAULTS, run: async () => ({ ok: true, stdout: "", stderr: "" }) }))
   const env = { ZELLIJ: "0", ZELLIJ_SESSION_NAME: "main", ZELLIJ_PANE_ID: "7" }
   assert.deepEqual(adapter.here(env), { session: "main", pane: "7" })
-  for (const name of ["ZELLIJ", "ZELLIJ_SESSION_NAME"]) assert.equal(adapter.here({ ...env, [name]: undefined }), undefined)
+  for (const name of ["ZELLIJ", "ZELLIJ_SESSION_NAME"])
+    assert.equal(adapter.here({ ...env, [name]: undefined }), undefined)
   assert.deepEqual(adapter.here({ ...env, ZELLIJ_PANE_ID: undefined }), { session: "main" })
   assert.deepEqual(adapter.here({ ...env, ZELLIJ_PANE_ID: "" }), { session: "main" })
 })
@@ -44,19 +45,27 @@ test("here: inside Zellij with its session, and the pane when Zellij names it", 
 // The adapter with a kit whose run() records the commands and answers from
 // `answers` (by the zellij arguments after the session; a list answers in
 // turn, its last answer repeating).
-const recording = (answers: Record<string, string | string[]>, failing: string[] | Record<string, string> = []) => {
+const recording = (
+  answers: Record<string, string | string[]>,
+  failing: string[] | Record<string, string> = [],
+  config: Config = DEFAULTS,
+) => {
   const failures: Record<string, string> = Array.isArray(failing)
     ? Object.fromEntries(failing.map((key) => [key, "boom\n"]))
     : failing
   const calls: string[][] = []
   const kit = makeKit({
-    config: DEFAULTS,
+    config,
     run: async (argv): Promise<RunResult> => {
       calls.push(argv)
       const key = argv.slice(3).join(" ")
       if (key in failures) return { ok: false, stdout: "", stderr: failures[key] }
       const answer = answers[key] ?? ""
-      return { ok: true, stdout: Array.isArray(answer) ? (answer.length > 1 ? answer.shift()! : answer[0]) : answer, stderr: "" }
+      return {
+        ok: true,
+        stdout: Array.isArray(answer) ? (answer.length > 1 ? answer.shift()! : answer[0]) : answer,
+        stderr: "",
+      }
     },
   })
   return { mux: zellij(kit).connect({ session: "test", pane: "3" }), calls }
@@ -84,11 +93,14 @@ test("a failing zellij command fails the operation", async () => {
 test("type: text as characters, Escape and Enter as bytes, into the pane", async () => {
   const { mux, calls } = recording({})
   await mux.type("7", [{ key: "escape" }, { text: ':open "/a b"' }, { key: "enter" }])
-  assert.deepEqual(calls.map((argv) => argv.slice(4)), [
-    ["write", "--pane-id", "terminal_7", "27"],
-    ["write-chars", "--pane-id", "terminal_7", ':open "/a b"'],
-    ["write", "--pane-id", "terminal_7", "13"],
-  ])
+  assert.deepEqual(
+    calls.map((argv) => argv.slice(4)),
+    [
+      ["write", "--pane-id", "terminal_7", "27"],
+      ["write-chars", "--pane-id", "terminal_7", ':open "/a b"'],
+      ["write", "--pane-id", "terminal_7", "13"],
+    ],
+  )
   await mux.focus("7")
   assert.deepEqual(actions(calls).at(-1), "focus-pane-id terminal_7")
 })
@@ -96,16 +108,27 @@ test("type: text as characters, Escape and Enter as bytes, into the pane", async
 test("paste: bracketed, as a terminal pastes, so nothing is submitted", async () => {
   const { mux, calls } = recording({})
   await mux.paste("3", "line 1\nline 2")
-  assert.deepEqual(calls.map((argv) => argv.slice(4)), [["write-chars", "--pane-id", "terminal_3", "\x1b[200~line 1\nline 2\x1b[201~"]])
+  assert.deepEqual(
+    calls.map((argv) => argv.slice(4)),
+    [["write-chars", "--pane-id", "terminal_3", "\x1b[200~line 1\nline 2\x1b[201~"]],
+  )
 })
 
 test("start in place of a stopped pane: the pane closes with its program, focus as asked", async () => {
-  const { mux, calls } = recording({ "action new-pane --in-place --pane-id terminal_8 --close-replaced-pane --close-on-exit --no-focus -n editor -- hx a.md": "terminal_12\n" })
+  const { mux, calls } = recording({
+    "action new-pane --in-place --pane-id terminal_8 --close-replaced-pane --close-on-exit --no-focus -n editor -- hx a.md":
+      "terminal_12\n",
+  })
   assert.equal(await mux.start({ tab: "4", role: "editor", argv: ["hx", "a.md"], focus: false, replace: "8" }), "12")
-  assert.deepEqual(actions(calls), ["new-pane --in-place --pane-id terminal_8 --close-replaced-pane --close-on-exit --no-focus -n editor -- hx a.md"])
+  assert.deepEqual(actions(calls), [
+    "new-pane --in-place --pane-id terminal_8 --close-replaced-pane --close-on-exit --no-focus -n editor -- hx a.md",
+  ])
   const focused = recording({})
   await focused.mux.start({ tab: "4", role: "agent", argv: ["oc"], focus: true, replace: "8" }).catch(() => {})
-  assert.deepEqual(actions(focused.calls)[0], "new-pane --in-place --pane-id terminal_8 --close-replaced-pane --close-on-exit -n opencode -- oc")
+  assert.deepEqual(
+    actions(focused.calls)[0],
+    "new-pane --in-place --pane-id terminal_8 --close-replaced-pane --close-on-exit -n opencode -- oc",
+  )
 })
 
 // Tab 1 after `new-pane` printed terminal_9: main at row $main, the editor at
@@ -150,26 +173,66 @@ test("a new editor beside or below the shell pane: the swap layout again, and if
   ])
 })
 
+test("newPanes: a new agent pane opens on the right; a direction for the editor replaces its swap layout", async () => {
+  const agent = recording({ "action new-pane --direction right --close-on-exit -n opencode -- oc": "terminal_9\n" })
+  assert.equal(await agent.mux.start({ tab: "1", role: "agent", argv: ["oc"], focus: true }), "9")
+  assert.deepEqual(actions(agent.calls), [
+    "go-to-tab-by-id 1",
+    "new-pane --direction right --close-on-exit -n opencode -- oc",
+    "focus-pane-id terminal_9",
+  ])
+  const below = { ...DEFAULTS, zellij: { newPanes: { editor: "down", agent: null } } } as Config
+  const editor = recording(
+    { "action new-pane --direction down --close-on-exit -n editor -- hx a.md": "terminal_9\n" },
+    [],
+    below,
+  )
+  assert.equal(await editor.mux.start({ tab: "1", role: "editor", argv: ["hx", "a.md"], focus: true }), "9")
+  assert.deepEqual(actions(editor.calls), [
+    "go-to-tab-by-id 1",
+    "new-pane --direction down --close-on-exit -n editor -- hx a.md",
+    "focus-pane-id terminal_9",
+  ])
+  const free = recording({ "action new-pane --close-on-exit -n opencode -- oc": "terminal_9\n" }, [], below)
+  await free.mux.start({ tab: "1", role: "agent", argv: ["oc"], focus: true })
+  assert.ok(actions(free.calls).includes("new-pane --close-on-exit -n opencode -- oc"))
+})
+
 test("a new pane that new-pane doesn't name is found by its name in the tab", async () => {
-  const later = JSON.stringify([{ id: 5, is_plugin: false, tab_id: 2, title: "editor" }, { id: 6, is_plugin: false, tab_id: 1, title: "editor" }])
+  const later = JSON.stringify([
+    { id: 5, is_plugin: false, tab_id: 2, title: "editor" },
+    { id: 6, is_plugin: false, tab_id: 1, title: "editor" },
+  ])
   const { mux } = recording({ "action list-panes --json": ["[]", later] })
   assert.equal(await mux.start({ tab: "1", role: "editor", argv: ["hx"], focus: true }), "6")
 })
 
 test("a new pane only opens in the tab you are on, and a failing start fails", async () => {
   const { mux, calls } = recording({})
-  await assert.rejects(mux.start({ tab: "1", role: "editor", argv: ["hx"], focus: false }), /only open in the tab you are on/)
+  await assert.rejects(
+    mux.start({ tab: "1", role: "editor", argv: ["hx"], focus: false }),
+    /only open in the tab you are on/,
+  )
   assert.deepEqual(calls, [])
   const failing = recording({}, ["action new-pane --close-on-exit -n editor -- hx"])
-  await assert.rejects(failing.mux.start({ tab: "1", role: "editor", argv: ["hx"], focus: true }), /zellij action new-pane: boom$/)
+  await assert.rejects(
+    failing.mux.start({ tab: "1", role: "editor", argv: ["hx"], focus: true }),
+    /zellij action new-pane: boom$/,
+  )
 })
 
 test("focusing the pane that has focus is fine (Zellij 0.46 calls it an error); other failures fail", async () => {
   const focused = recording({}, { "action focus-pane-id terminal_7": "Pane Terminal(7) is already focused\n" })
   await focused.mux.focus("7")
-  const { mux } = recording({ ...spawned, "action list-panes --json": geometry(1, 35) }, { "action focus-pane-id terminal_9": "Pane Terminal(9) is already focused" })
+  const { mux } = recording(
+    { ...spawned, "action list-panes --json": geometry(1, 35) },
+    { "action focus-pane-id terminal_9": "Pane Terminal(9) is already focused" },
+  )
   assert.equal(await mux.start({ tab: "1", role: "editor", argv: ["hx", "a.md"], focus: true }), "9")
-  await assert.rejects(recording({}, ["action focus-pane-id terminal_7"]).mux.focus("7"), /zellij action focus-pane-id: boom$/)
+  await assert.rejects(
+    recording({}, ["action focus-pane-id terminal_7"]).mux.focus("7"),
+    /zellij action focus-pane-id: boom$/,
+  )
 })
 
 test("openTab: the layout's tab in the folder, named after it, in front or in the background; its ID", async () => {
@@ -184,7 +247,13 @@ test("openTab: the layout's tab in the folder, named after it, in front or in th
     "new-tab --layout dev --name feat --cwd /p/feat",
   ])
   await assert.rejects(recording({}).mux.openTab!({ dir: "/p/feat", focus: true }), /new-tab printed no tab ID$/)
-  await assert.rejects(recording({}, ["action new-tab --layout dev --name feat --cwd /p/feat"]).mux.openTab!({ dir: "/p/feat", focus: true }), /zellij action new-tab: boom$/)
+  await assert.rejects(
+    recording({}, ["action new-tab --layout dev --name feat --cwd /p/feat"]).mux.openTab!({
+      dir: "/p/feat",
+      focus: true,
+    }),
+    /zellij action new-tab: boom$/,
+  )
 })
 
 test("showTab goes to the tab, closeTab closes it", async () => {
@@ -200,11 +269,19 @@ const layoutPanes = JSON.stringify([
   { id: 11, is_plugin: false, tab_id: 4, title: "main" },
   { id: 12, is_plugin: false, tab_id: 4, title: "opencode" },
 ])
-const replaced = "action new-pane --in-place --pane-id terminal_12 --close-replaced-pane --close-on-exit --no-focus -n opencode --cwd /p/feat -- oc --prompt go"
+const replaced =
+  "action new-pane --in-place --pane-id terminal_12 --close-replaced-pane --close-on-exit --no-focus -n opencode --cwd /p/feat -- oc --prompt go"
 
 test("openTab with an agent: the layout's agent pane is replaced in place, in the background, in the worktree", async () => {
-  const { mux, calls } = recording({ [newTab]: "4\n", "action list-panes --json": ["[]", layoutPanes], [replaced]: "terminal_13\n" })
-  assert.deepEqual(await mux.openTab?.({ dir: "/p/feat", focus: false, agent: ["oc", "--prompt", "go"] }), { tab: "4", agent: "started" })
+  const { mux, calls } = recording({
+    [newTab]: "4\n",
+    "action list-panes --json": ["[]", layoutPanes],
+    [replaced]: "terminal_13\n",
+  })
+  assert.deepEqual(await mux.openTab?.({ dir: "/p/feat", focus: false, agent: ["oc", "--prompt", "go"] }), {
+    tab: "4",
+    agent: "started",
+  })
   assert.deepEqual(actions(calls), [
     "new-tab --layout dev --name feat --cwd /p/feat --no-focus",
     "list-panes --json",
@@ -216,15 +293,21 @@ test("openTab with an agent: the layout's agent pane is replaced in place, in th
 test("openTab with an agent: no agent pane in the new tab (after a while), or the agent not started", async () => {
   const lone = JSON.stringify([{ id: 11, is_plugin: false, tab_id: 4, title: "main" }])
   const none = recording({ [newTab]: "4\n", "action list-panes --json": lone })
-  assert.deepEqual(await none.mux.openTab?.({ dir: "/p/feat", focus: false, agent: ["oc"] }), { tab: "4", agent: "no pane" })
+  assert.deepEqual(await none.mux.openTab?.({ dir: "/p/feat", focus: false, agent: ["oc"] }), {
+    tab: "4",
+    agent: "no pane",
+  })
   assert.equal(actions(none.calls).filter((call) => call.startsWith("new-pane")).length, 0)
   const failing = recording({ [newTab]: "4\n", "action list-panes --json": layoutPanes }, [replaced])
-  assert.deepEqual(await failing.mux.openTab?.({ dir: "/p/feat", focus: false, agent: ["oc", "--prompt", "go"] }), { tab: "4", agent: "failed" })
+  assert.deepEqual(await failing.mux.openTab?.({ dir: "/p/feat", focus: false, agent: ["oc", "--prompt", "go"] }), {
+    tab: "4",
+    agent: "failed",
+  })
 })
 
 test("openTab names the tab from the tabName option", async () => {
   const calls: string[][] = []
-  const config = { ...DEFAULTS, zellij: { ...DEFAULTS.zellij, tabName: "{project}: {worktree}" } }
+  const config = { ...DEFAULTS, zellij: { tabName: "{project}: {worktree}" } }
   const kit = makeKit({
     config,
     run: async (argv) => {
@@ -233,9 +316,51 @@ test("openTab names the tab from the tabName option", async () => {
       return { ok: true, stdout: "4\n", stderr: "" }
     },
   })
-  assert.deepEqual(await zellij(kit).connect({ session: "test" }).openTab?.({ dir: "/home/me/dotfiles/feat", focus: false }), { tab: "4" })
+  assert.deepEqual(
+    await zellij(kit).connect({ session: "test" }).openTab?.({ dir: "/home/me/dotfiles/feat", focus: false }),
+    { tab: "4" },
+  )
   assert.deepEqual(calls, [
     ["git", "-C", "/home/me/dotfiles/feat", "rev-parse", "--path-format=absolute", "--git-common-dir"],
-    ["zellij", "--session", "test", "action", "new-tab", "--layout", "dev", "--name", "dotfiles: feat", "--cwd", "/home/me/dotfiles/feat", "--no-focus"],
+    [
+      "zellij",
+      "--session",
+      "test",
+      "action",
+      "new-tab",
+      "--layout",
+      "dev",
+      "--name",
+      "dotfiles: feat",
+      "--cwd",
+      "/home/me/dotfiles/feat",
+      "--no-focus",
+    ],
   ])
+})
+
+test("the zellij section merges over the defaults key by key; wrong types are refused", () => {
+  const kitWith = (zellij: unknown) =>
+    makeKit({ config: { ...DEFAULTS, zellij }, run: async () => ({ ok: true, stdout: "", stderr: "" }) })
+  assert.deepEqual(optionsOf(kitWith(undefined)), ZELLIJ)
+  assert.deepEqual(optionsOf(kitWith({ panes: { agent: "claude" }, newPanes: { editor: "down" } })), {
+    layout: "dev",
+    panes: { agent: "claude", shell: "main", editor: "editor", review: "review" },
+    newPanes: { agent: "right", editor: "down" },
+    tabName: "{worktree}",
+  })
+  assert.equal(ZELLIJ.panes.agent, "opencode")
+  assert.throws(
+    () => zellij(kitWith({ panes: { agent: null } })),
+    /in the ADE config, these must be strings: zellij\.panes\.agent$/,
+  )
+  assert.throws(() => optionsOf(kitWith({ panes: [] })), /strings: zellij\.panes$/)
+  assert.throws(() => optionsOf(kitWith({ tabName: null, layout: 1 })), /strings: zellij\.layout, zellij\.tabName$/)
+  assert.throws(() => optionsOf(kitWith("dev")), /strings: zellij\.layout, zellij\.tabName, zellij\.panes$/)
+  assert.equal(optionsOf(kitWith({ newPanes: { agent: null } })).newPanes.agent, null)
+  assert.throws(
+    () => optionsOf(kitWith({ newPanes: { agent: "middle", bogus: "up" } })),
+    /each right, down, left, up or null: zellij\.newPanes\.agent, zellij\.newPanes\.bogus$/,
+  )
+  assert.throws(() => optionsOf(kitWith({ newPanes: "right" })), /: zellij\.newPanes$/)
 })

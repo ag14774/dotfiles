@@ -17,7 +17,8 @@ execFileSync("git", ["init", "-q", repo])
 const elsewhere = join(temp, "elsewhere")
 mkdirSync(elsewhere)
 
-const kitWith = (multiplexer = "none"): Kit => makeKit({ config: { ...structuredClone(DEFAULTS), multiplexer } as Config, run })
+const kitWith = (multiplexer = "none"): Kit =>
+  makeKit({ config: { ...structuredClone(DEFAULTS), multiplexer } as Config, run })
 
 test("the derived session name: ade- and 8 hex digits of the path's SHA-1", () => {
   const sha = createHash("sha1").update("/home/me/project").digest("hex")

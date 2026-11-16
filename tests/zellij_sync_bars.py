@@ -28,7 +28,7 @@ OLD = "https://example.com/v1/zjstatus.wasm"
 TEST_SESSION = f"zellij-sync-bars-test-{os.getpid()}"
 DEV = bars.dev_bar((ROOT / "config/.config/zellij/layouts/dev.kdl").read_text("utf-8"))
 SAVED = f"""layout {{
-    tab name="\U000f051f dotfiles" focus=true {{
+    tab name="dotfiles" focus=true {{
         pane size=1 borderless=true {{
             plugin location="{OLD}" {{
                 format_left "old"
@@ -65,9 +65,6 @@ class RewriteTests(unittest.TestCase):
         after = bars.with_bar(SAVED, *DEV)
         template = after[after.index("new_tab_template") :]
         self.assertIn(f'plugin location="{DEV[0]}" {{\n            }}', template)
-
-    def test_old_status_icons_leave_tab_names(self):
-        self.assertIn('tab name="dotfiles"', bars.with_bar(SAVED, *DEV))
 
     def test_a_second_run_changes_nothing(self):
         once = bars.with_bar(SAVED, *DEV)

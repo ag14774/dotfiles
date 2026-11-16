@@ -7,11 +7,21 @@ import { existsSync } from "node:fs"
 import { basename, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 import { onPath } from "./editor.ts"
-import { labelOf, loadAgent, loadEditor, loadMultiplexer, loadReviewer } from "./load.ts"
+import { labelOf, loadAgent, loadEditor, loadReviewer } from "./load.ts"
 import { isActive, paneWith, tabOf, tabsIn } from "./multiplexer.ts"
 import { reviewerEnv, scopeOf } from "./review.ts"
 import type { Agent, FileRef, Kit, Multiplexer, MultiplexerAdapter, OpenedTab, Workspace } from "./types.ts"
-import { callerFolder, isDirectory, located, realPath, sessionOf, workspaceOf, worktreesOf } from "./workspace.ts"
+import {
+  callerFolder,
+  isDirectory,
+  located,
+  multiplexerAt,
+  outside,
+  realPath,
+  sessionOf,
+  workspaceOf,
+  worktreesOf,
+} from "./workspace.ts"
 
 type Env = Record<string, string | undefined>
 export type Caller = { env: Env; cwd: string }
@@ -30,10 +40,9 @@ export function fileRef(arg: string, cwd: string): FileRef {
 
 // The caller's tab in its multiplexer, and the panes there are.
 async function callerTab(kit: Kit, caller: Caller, why: string) {
-  const adapter = await loadMultiplexer(kit)
+  const { adapter, where } = await multiplexerAt(kit, caller.env)
   if (!adapter) throw new Error(`${why}, and no multiplexer is configured`)
-  const where = adapter.here(caller.env)
-  if (where?.pane === undefined) throw new Error(`not inside ${labelOf(adapter)}`)
+  if (where?.pane === undefined) throw new Error(outside(adapter))
   const mux = adapter.connect(where)
   const panes = await mux.panes()
   const tab = tabOf(panes, where.pane)
@@ -44,15 +53,18 @@ async function callerTab(kit: Kit, caller: Caller, why: string) {
 // The caller's multiplexer session, for the actions on its tabs (which don't
 // need the caller's pane).
 async function callerSession(kit: Kit, caller: Caller) {
-  const adapter = await loadMultiplexer(kit)
+  const { adapter, where } = await multiplexerAt(kit, caller.env)
   if (!adapter) throw new Error("there are no tabs without a multiplexer, and none is configured")
-  const where = adapter.here(caller.env)
-  if (!where) throw new Error(`not inside ${labelOf(adapter)}`)
+  if (!where) throw new Error(outside(adapter))
   return { adapter, where, mux: adapter.connect(where) }
 }
 
 // An optional operation of the multiplexer, which an action needs.
-function needs<K extends "openTab" | "showTab" | "closeTab">(mux: Multiplexer, operation: K, adapter: MultiplexerAdapter) {
+function needs<K extends "openTab" | "showTab" | "closeTab">(
+  mux: Multiplexer,
+  operation: K,
+  adapter: MultiplexerAdapter,
+) {
   const call = mux[operation]
   if (typeof call !== "function") throw new Error(`the multiplexer "${adapter.name}" lacks: ${operation}`)
   return call.bind(mux) as NonNullable<Multiplexer[K]>
@@ -60,9 +72,9 @@ function needs<K extends "openTab" | "showTab" | "closeTab">(mux: Multiplexer, o
 
 export type TabIn = { tab: string; sure: boolean }
 
-// The tabs working in each of `dirs` (see tabsIn), by folder as given. Each
-// folder's repository tells which worktrees there are, so that a tab in a
-// nested worktree doesn't count for the outer one.
+// The tabs working in each folder of `dirs`: tabs whose running panes are all
+// inside it ("unsure" when a pane didn't say where it is). A tab in a worktree
+// nested inside another counts only for the inner one.
 export async function tabs(kit: Kit, dirs: string[], caller: Caller): Promise<Record<string, TabIn[]>> {
   const { mux } = await callerSession(kit, caller)
   const panes = await mux.panes()
@@ -95,12 +107,16 @@ function agentCommand(agent: Agent, o: { session?: string; prompt?: string }, en
   return [found, ...args]
 }
 
-// Go to the tab working in the worktree `dir` (see tabsIn), or open the
-// layout's tab there, in front or in the background. A tab with a pane that
-// didn't say where it is counts: going to it is harmless, a duplicate is not.
-// With a conversation or a prompt, the new tab's agent starts on them, and a
-// worktree that has a tab is refused. `tell` gets what happened, to show.
-export async function workspace(kit: Kit, o: WorkspaceOptions, caller: Caller, tell: (message: string) => void = () => {}) {
+// Go to the tab working in the worktree `dir`, or open a tab there with the
+// configured layout, in front or in the background. With a conversation or a
+// prompt, the new tab's agent starts on it, and a worktree that already has a
+// tab is refused. `tell` gets the messages to show.
+export async function workspace(
+  kit: Kit,
+  o: WorkspaceOptions,
+  caller: Caller,
+  tell: (message: string) => void = () => {},
+) {
   const { adapter, mux } = await callerSession(kit, caller)
   const given = resolve(caller.cwd, o.dir)
   if (!isDirectory(given)) throw new Error(`${given} is not a folder`)
@@ -126,17 +142,17 @@ export async function workspace(kit: Kit, o: WorkspaceOptions, caller: Caller, t
   if (!o.focus) tell(`opened tab ${name} in the background`)
   if (agent && opened.agent === "no pane")
     throw new Error(`no ${agent.name} pane in tab ${name}; prompt not sent (the tab stays open)`)
-  if (agent && opened.agent !== "started") throw new Error(`could not start ${labelOf(agent)} with the prompt in tab ${name}`)
+  if (agent && opened.agent !== "started")
+    throw new Error(`could not start ${labelOf(agent)} with the prompt in tab ${name}`)
   if (agent) tell(`${labelOf(agent)} in tab ${name} is working on the prompt`)
   return { tab: opened.tab, opened: true }
 }
 
-// Close the tabs of the removed worktree `dir`: `found`, what tabs() found
-// before it was removed (its panes' folders are gone now), else the tabs
-// working in it now. Your own tab stays, and so does one with a pane that
-// didn't say where it is. Nothing closes for a command the agent's tools ran
-// (outside its pane, with a pane ID passed along that may not be theirs), nor
-// when your tab is unknown. `tell` gets what happened to each tab.
+// Close the tabs working in the removed worktree `dir` (`found`: the tabs
+// found before it was removed). Your own tab stays open, and so does a tab
+// with a pane that didn't say where it is. Nothing closes when an agent runs
+// this, or when it can't tell which tab is yours. `tell` gets what happened
+// to each tab.
 export async function closeTabs(
   kit: Kit,
   dir: string,
@@ -149,7 +165,8 @@ export async function closeTabs(
   const closing = found ?? (await tabs(kit, [dir], caller))[dir]
   if (!closing.length) return
   const agent = await loadAgent(kit)
-  if (agent.ranByAgent?.(caller.env)) return tell(`left the tabs of ${name} open (${labelOf(agent)} agents don't close tabs)`)
+  if (agent.ranByAgent?.(caller.env))
+    return tell(`left the tabs of ${name} open (${labelOf(agent)} agents don't close tabs)`)
   const own = where.pane === undefined ? undefined : tabOf(await mux.panes().catch(() => []), where.pane)
   if (own === undefined) return tell(`left the tabs of ${name} open (could not tell which tab you are in)`)
   const closeTab = needs(mux, "closeTab", adapter)
@@ -169,9 +186,10 @@ export async function closeTabs(
 const workspaceAt = async (kit: Kit, dir: string): Promise<Workspace> =>
   (await workspaceOf(kit, dir)) ?? { dir, session: sessionOf(dir) }
 
-// Open files in the editor of the caller's tab, then focus it. In a tab you
-// are not on, it only uses an editor that is already there, without focusing
-// it. Lines are dropped for an editor that can't open a file at a line.
+// Open files in the editor of the caller's tab and focus it; with no editor
+// in the tab, start one there. It never switches tabs: in a tab you are not
+// on, only an editor already there is used, and not focused. An editor that
+// can't open a file at a line gets the file without it.
 export async function open(kit: Kit, paths: string[], caller: Caller) {
   const editor = await loadEditor(kit)
   const label = labelOf(editor)
@@ -229,8 +247,9 @@ export function pastes(o: Extract<Sending, { file: string }>, agentDir: string |
   return pieces
 }
 
-// Give the agent of the caller's tab a place in a file (or text), for you to
-// ask about, then focus it. Nothing is sent unless `submit` asks for it.
+// Put a reference to lines of a file and the text selected there (or any
+// text) in the prompt of the caller's tab's agent, then focus the agent.
+// Nothing is sent unless `submit` asks for it.
 export async function send(kit: Kit, what: Sending, caller: Caller) {
   if ("text" in what && !what.text) throw new Error("no text to send")
   const agent = await loadAgent(kit)
@@ -245,6 +264,30 @@ export async function send(kit: Kit, what: Sending, caller: Caller) {
   await mux.focus(pane.id)
 }
 
+// The folder of the focused tiled pane of the caller's own tab (if that pane
+// reports none, the tab's agent pane's, then its shell pane's). Outside a
+// multiplexer, or when that folder no longer exists, the caller's own folder.
+// From a floating pane, which starts in the session's folder, this is the
+// folder of the focused tiled pane underneath.
+export async function where(kit: Kit, caller: Caller) {
+  const at = await located(kit, caller.env)
+  return callerFolder(at && (await at.mux.panes()), at?.where, caller.cwd)
+}
+
+// Replace the agent of the caller's tab with a fresh one started in `dir` (a
+// new agent pane when the tab has none). Focus stays where it is.
+export async function restartAgent(kit: Kit, dir: string, caller: Caller) {
+  const agent = await loadAgent(kit)
+  const cwd = resolve(caller.cwd, dir)
+  if (!isDirectory(cwd)) throw new Error(`${cwd} is not a folder`)
+  const { where: at, mux, panes, tab } = await callerTab(kit, caller, `${labelOf(agent)} runs in a pane`)
+  const argv = agentCommand(agent, {}, caller.env)
+  const pane = paneWith(panes, tab, "agent")
+  if (pane) return void (await mux.start({ tab, role: "agent", argv, focus: false, replace: pane.id, cwd }))
+  await mux.start({ tab, role: "agent", argv, focus: true, cwd })
+  if (at.pane !== undefined) await mux.focus(at.pane)
+}
+
 // What `review` needs from the terminal it runs in.
 export type Terminal = {
   // Run an interactive command here; its stdout is collected (error: it
@@ -254,10 +297,11 @@ export type Terminal = {
   pause(message: string): Promise<void>
 }
 
-// Review the worktree of the pane you were in (see callerDir) with the
-// reviewer, then hand its comments to the tab's agent (review.deliver: filled
-// in for you to send, or sent). One review per tab: if the tab has one open
-// (hidden after opening a file, say), show it instead of starting another.
+// Review what the worktree of the focused tiled pane of the caller's tab
+// (see where) changed since worktrees.base, committed or not, then give your
+// comments to the tab's agent: filled in for you to send, or sent
+// (review.deliver). One review per tab: if the tab has one open (hidden after
+// opening a file, say), show it instead of starting another.
 export async function review(kit: Kit, caller: Caller, terminal: Terminal) {
   const at = await located(kit, caller.env)
   const panes = at && (await at.mux.panes())
@@ -271,11 +315,12 @@ export async function review(kit: Kit, caller: Caller, terminal: Terminal) {
   if (!workspace) return terminal.pause(`Nothing to review: ${dir} is not in a Git repository.`)
   const scope = await scopeOf(kit, workspace.dir)
   if (!scope.commits && !scope.uncommitted) {
-    const remote = await kit.run(["git", "-C", workspace.dir, "rev-parse", "--verify", "--quiet", "origin/HEAD"])
+    const base = kit.config.worktrees.base
+    const known = await kit.run(["git", "-C", workspace.dir, "rev-parse", "--verify", "--quiet", base])
     return terminal.pause(
-      remote.ok
-        ? `Nothing to review in ${workspace.dir}: no commits since origin/HEAD and no uncommitted changes.`
-        : `Nothing to review in ${workspace.dir}: no uncommitted changes (and no origin/HEAD to compare commits with).`,
+      known.ok
+        ? `Nothing to review in ${workspace.dir}: no commits since ${base} and no uncommitted changes.`
+        : `Nothing to review in ${workspace.dir}: no uncommitted changes (and no ${base} to compare commits with).`,
     )
   }
   const reviewer = await loadReviewer(kit)

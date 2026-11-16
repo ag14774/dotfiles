@@ -1,19 +1,10 @@
 # reset.zsh
-# zreset -- blow away the current zellij session and start fresh.
+# zreset: end the Zellij session you are in (outside Zellij: `main`, the one
+# every terminal attaches to) and delete its saved copy, so the next terminal
+# starts a fresh session from the `dev` layout instead of restoring it. Run
+# from inside the session, it closes this terminal; open a new one.
 #
-# The shared zsh setup starts Zellij in every terminal frontend, and each one
-# attaches to the same session, `main` (see the autostart in ~/.zshrc and
-# config.kdl). `zreset` destroys it, including the copy saved for session
-# resurrection, so the NEXT terminal builds a clean one from the `dev` layout.
-#
-# Killing the session you're attached to from inside is unreliable, so we detach
-# first, then wipe it from a disowned background job that outlives this shell
-# (nohup). The outer shell exits when Zellij does, so the terminal then closes;
-# open a new one for a fresh "main". The job kills the session, waits for its
-# server to exit, and only then deletes the saved copy: deleting it while the
-# server shuts down can let the server save it again.
-#
-# Tip: set ZELLIJ_AUTO_START=false before launching zsh for a bare admin shell.
+# For a plain shell without Zellij, start zsh with ZELLIJ_AUTO_START=false.
 zreset() {
   local s="${ZELLIJ_SESSION_NAME:-main}"
   # shellcheck disable=SC2016 # expanded by the zsh -c below
@@ -24,6 +15,9 @@ zreset() {
       sleep 0.2
     done
     zellij delete-session --force "$s" >/dev/null 2>&1 || true  # none saved yet'
+  # From inside, detach first and let a background job that outlives this shell
+  # end the session; the saved copy goes only once the server has exited, or
+  # it could save the session again while shutting down.
   if [[ -n "$ZELLIJ" ]]; then
     nohup zsh -c "sleep 1; $wipe" zreset "$s" >/dev/null 2>&1 &
     disown

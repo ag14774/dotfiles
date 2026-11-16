@@ -12,24 +12,14 @@ import { statSync } from "node:fs"
 import { homedir } from "node:os"
 import { isAbsolute, resolve } from "node:path"
 import { Plugin } from "@opencode/plugin"
+import type { Copy, Task } from "./delegate.ts"
+import { delegated, delegation } from "./delegate.ts"
 import { serverDigest } from "./digest.ts"
 import { Ade } from "./rpc.ts"
+import type { Conversation, Worktree } from "./worktrees.ts"
+import { describe, excerpt, stateOf } from "./worktrees.ts"
 
 type Action = "show_file" | "delegate" | "status"
-// Copy conversation sessionID (up to message `before`) into the worktree that
-// `prepare` creates, and run the request's command on the copy (delegate).
-type Copy = { sessionID: string; before?: string; compact: boolean; prepare: string[] }
-type Task = { branch: string; brief: string; base?: string; context?: "none" | "full" | "compact"; directory?: string }
-// From `ade worktree ls --json`, plus the worktree's latest conversation.
-type Worktree = {
-  path: string
-  branch: string | null
-  changed: number
-  ahead: number | null
-  behind: number | null
-  tab: "sure" | "unsure" | null
-}
-type Conversation = { id: string; title?: string; state: string; last?: string }
 // ran: the pane ran the command (otherwise `message` says why not).
 type Result = { ok: boolean; ran: boolean; stdout: string; message: string }
 type Pending = { claimed: boolean; finish: (result: Result) => void }
@@ -132,7 +122,8 @@ export default Plugin.define({
         request.finish = finish
         pending.set(id, request)
         const claimTimer = setTimeout(() => {
-          if (!request.claimed) refuse("No OpenCode pane in Zellij is showing this conversation, so nothing was done.")
+          if (!request.claimed)
+            refuse("No OpenCode pane in a multiplexer is showing this conversation, so nothing was done.")
         }, CLAIM_TIMEOUT_MS)
         const timeout = TIMEOUT_MS[action] + (copy?.compact ? COMPACT_TIMEOUT_MS : 0)
         const resultTimer = setTimeout(
@@ -166,36 +157,13 @@ export default Plugin.define({
 
     // `before`: copy the conversation up to this message (the request to delegate).
     const delegate = async (sessionID: string, task: Task, signal: AbortSignal, before?: string) => {
-      const names = [task.branch, task.base ?? ""]
-      if (!task.branch.trim() || names.some((name) => name.startsWith("-") || /\s/.test(name)))
-        return { ok: false, message: "Nothing was delegated: branch and base must be names without spaces." }
+      const planned = delegation(sessionID, task, before)
+      if ("error" in planned) return { ok: false, message: planned.error }
       const cwd = folderFor(task.directory)
       if (!cwd) return { ok: false, message: `Nothing was delegated: ${task.directory} is not a folder.` }
-      const base = task.base ? [task.base] : []
-      const mode = task.context ?? "none"
-      const copy =
-        mode === "none"
-          ? undefined
-          : {
-              sessionID,
-              ...(before ? { before } : {}),
-              compact: mode === "compact",
-              prepare: ["open", "--stay", task.branch, ...base],
-            }
-      const brief = copy
-        ? `This conversation was copied into the worktree for branch ${task.branch}, which is now its ` +
-          "folder, to work on the task below. The original conversation goes on in its own tab; work only " +
-          `here, and don't delegate this again.\n\n${task.brief}`
-        : task.brief
-      const result = await ask(sessionID, "delegate", ["open", "--prompt", brief, task.branch, ...base], cwd, signal, copy)
-      if (result.ok)
-        return {
-          ok: true,
-          message:
-            `Opened a background tab for ${task.branch} (worktree ${result.stdout.trim()}); its OpenCode is ` +
-            (copy ? `working on the brief in a ${copy.compact ? "compacted " : ""}copy of this conversation. ` : "working on the brief. ") +
-            "You are not told when it finishes; the user follows it in that tab.",
-        }
+      const copy: Copy | undefined = planned.copy
+      const result = await ask(sessionID, "delegate", planned.args, cwd, signal, copy)
+      if (result.ok) return { ok: true, message: delegated(task, result.stdout.trim(), copy) }
       if (!result.ran) return { ok: false, message: result.message }
       return { ok: false, message: `Nothing was delegated: ${result.message || "the worktree command failed."}` }
     }
@@ -208,45 +176,9 @@ export default Plugin.define({
       if (!info) return null
       const messages = (await ctx.session.context({ sessionID: info.id })) as any[]
       const last = messages.findLast((message) => message.type === "assistant")
-      const pending = waiting.has(info.id)
-      // A question asked before this plugin copy loaded.
-      const asking = last?.content?.some(
-        (part: any) => part.type === "tool" && part.name === "question" && part.state?.status === "running",
-      )
-      const busy = info.time.busy !== undefined && (info.time.idle === undefined || info.time.busy > info.time.idle)
-      const state =
-        pending || asking
-          ? "waiting for the user"
-          : busy
-            ? "working"
-            : info.outcome === "failed" || last?.error
-              ? "failed"
-              : info.outcome === "interrupted"
-                ? "interrupted"
-                : "idle"
-      const text = (last?.content ?? [])
-        .filter((part: any) => part.type === "text")
-        .map((part: any) => part.text)
-        .join(" ")
-        .replace(/\s+/g, " ")
-        .trim()
-      const excerpt = text.length > 160 ? `${text.slice(0, 159)}…` : text
-      return { id: info.id, ...(info.title ? { title: info.title } : {}), state, ...(excerpt ? { last: excerpt } : {}) }
-    }
-
-    const describe = (worktree: Worktree & { conversation: Conversation | null }) => {
-      const here = ctx.location.directory === worktree.path || ctx.location.directory.startsWith(`${worktree.path}/`)
-      const parts = [
-        worktree.branch ? `branch ${worktree.branch}` : "detached HEAD",
-        worktree.changed ? `${worktree.changed} changed file${worktree.changed === 1 ? "" : "s"}` : "no changes",
-      ]
-      if (worktree.ahead !== null) parts.push(`${worktree.ahead} ahead, ${worktree.behind} behind origin/HEAD`)
-      parts.push(worktree.tab === "sure" ? "tab open" : worktree.tab === "unsure" ? "tab probably open" : "no tab")
-      const conversation = worktree.conversation
-      const talk = conversation
-        ? `conversation ${conversation.state}${conversation.last ? `: "${conversation.last}"` : ""}`
-        : "no conversation"
-      return `- ${worktree.path}${here ? " (this conversation)" : ""}: ${parts.join(", ")}; ${talk}`
+      const state = stateOf(info, last, waiting.has(info.id))
+      const text = excerpt(last)
+      return { id: info.id, ...(info.title ? { title: info.title } : {}), state, ...(text ? { last: text } : {}) }
     }
 
     const status = async (sessionID: string, signal: AbortSignal, directory?: string) => {
@@ -261,19 +193,19 @@ export default Plugin.define({
           conversation: await conversationIn(worktree.path).catch(() => null),
         })),
       )
-      return { ok: true, message: [`Worktrees (${worktrees.length}):`, ...worktrees.map(describe)].join("\n"), worktrees }
+      const lines = worktrees.map((worktree) => describe(worktree, ctx.location.directory))
+      return { ok: true, message: [`Worktrees (${worktrees.length}):`, ...lines].join("\n"), worktrees }
     }
 
     await ctx.tool.transform((editor) => {
       // Agents make worktrees with delegate, which also opens their tab
-      // (OpenCode's own make them without one; through
-      // packages/opencode-ade-worktrees, where wt would).
+      // (OpenCode's own make them without one).
       editor.remove("opencode_worktree_create")
       editor.remove("opencode_worktree_list")
       editor.add({
         name: "show_file",
         description:
-          "Show files to the user: open them in the Helix editor of the Zellij tab where the user is talking " +
+          "Show files to the user: open them in the editor of the terminal tab where the user is talking " +
           "to you. Use this, not a shell command, whenever the user asks to see or open a file. It never " +
           "switches the user to another tab; it reports whether the files were opened.",
         input: {
@@ -298,13 +230,13 @@ export default Plugin.define({
       editor.add({
         name: "delegate",
         description:
-          "Start work in another git worktree, in a new Zellij tab: creates (or reuses) the worktree for " +
+          "Start work in another git worktree, in a new terminal tab: creates (or reuses) the worktree for " +
           "`branch` and opens it in a background tab, where a new OpenCode conversation starts on `brief`. Use " +
           "it when the user asks to delegate something, to work on it in parallel, or to do it in a new worktree " +
           "or tab; never on your own initiative. The new conversation sees nothing of this one, so write a " +
           "complete brief: the goal, what you already know (files, findings, decisions), constraints, and how " +
           "to check the result. Set `context` when the user wants the new conversation to keep this one's " +
-          "history (\"with the context\": full; \"with a summary\": compact). It returns once the tab is open " +
+          'history ("with the context": full; "with a summary": compact). It returns once the tab is open ' +
           "and does not wait for the work. It works in the repository of this conversation's folder; for " +
           "another repository, set `directory` to a folder in it.",
         input: {
@@ -317,7 +249,8 @@ export default Plugin.define({
             brief: { type: "string", minLength: 1, description: "The complete task for the new conversation." },
             base: {
               type: "string",
-              description: "Where a new branch starts (a branch or commit). Default: the remote's default branch.",
+              description:
+                "Where a new branch starts (a branch or commit). Default: the configured base, usually the remote's default branch.",
             },
             context: {
               type: "string",
@@ -347,7 +280,7 @@ export default Plugin.define({
         name: "status",
         description:
           "Show how this project's worktrees are doing: for each, its branch, uncommitted changes, commits " +
-          "ahead of the default branch, whether it has a Zellij tab, and its latest OpenCode conversation " +
+          "ahead of the configured base, whether it has a tab, and its latest OpenCode conversation " +
           "(working, waiting for the user, idle, failed) with the start of its last answer. Read-only. Use it " +
           "when the user asks about other worktrees, tabs or delegated tasks. For another repository's " +
           "worktrees, set `directory` to a folder in it.",

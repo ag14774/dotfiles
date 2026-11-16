@@ -1,25 +1,26 @@
-// A choice from the config -> an adapter, checked. A built-in name loads
-// the built-in module; a path (starting with "/", "./", "../", "~/" or
-// "file:") loads that file, relative paths from the config's folder. The
-// module's default export gets the kit and returns the adapter.
-import { existsSync } from "node:fs"
+// A choice from the config -> an adapter, checked. A built-in name takes the
+// built-in (builtins.ts); a path (starting with "/", "./", "../", "~/" or
+// "file:") loads that file, relative paths from the config's folder, and its
+// default export is the function. The function gets the kit and returns the
+// adapter.
 import { homedir } from "node:os"
 import { dirname, join, resolve } from "node:path"
-import { fileURLToPath, pathToFileURL } from "node:url"
+import { pathToFileURL } from "node:url"
+import { builtins } from "./builtins.ts"
+import type { Kind } from "./builtins.ts"
 import { configPath } from "./config.ts"
 import type { Agent, Editor, Kit, Layout, Multiplexer, MultiplexerAdapter, Reviewer } from "./types.ts"
 
 export const API = 1
 
-type Kind = "multiplexer" | "editor" | "agent" | "reviewer" | "layout"
-// Per kind: the folder of the built-ins, the operations an adapter needs, and
-// the other fields it needs, with their types.
-const KINDS: Record<Kind, { dir: string; required: string[]; fields?: Record<string, "array" | "object"> }> = {
-  multiplexer: { dir: "multiplexers", required: ["here", "connect"] },
-  editor: { dir: "editors", required: ["start", "open"], fields: { programs: "array", supports: "object" } },
-  agent: { dir: "agents", required: ["start", "insert", "submit"] },
-  reviewer: { dir: "reviewers", required: ["command"] },
-  layout: { dir: "layouts", required: ["path"] },
+// Per kind: the operations an adapter needs, and the other fields it needs,
+// with their types.
+const KINDS: Record<Kind, { required: string[]; fields?: Record<string, "array" | "object"> }> = {
+  multiplexer: { required: ["here", "connect"] },
+  editor: { required: ["start", "open"], fields: { programs: "array", supports: "object" } },
+  agent: { required: ["start", "insert", "submit"] },
+  reviewer: { required: ["command"] },
+  layout: { required: ["path"] },
 }
 // What a connected multiplexer must do (the rest is optional).
 const MULTIPLEXER_REQUIRED = ["panes", "tabs", "start", "type", "paste", "focus"]
@@ -28,14 +29,24 @@ export type LoadOptions = { base?: string } // the folder relative paths start f
 
 const isPath = (value: string) => /^(\/|\.\.?\/|~\/|file:)/.test(value)
 
-const urlOf = (kind: Kind, value: string, base: string) => {
-  if (value.startsWith("file:")) return value
-  if (value.startsWith("~/")) return pathToFileURL(join(homedir(), value.slice(2))).href
-  if (isPath(value)) return pathToFileURL(resolve(base, value)).href
-  if (!/^[a-z0-9][a-z0-9-]*$/.test(value)) throw new Error(`ade: "${value}" is neither a built-in ${kind} nor a path`)
-  const url = new URL(`./${KINDS[kind].dir}/${value}.ts`, import.meta.url)
-  if (!existsSync(fileURLToPath(url))) throw new Error(`ade: there is no built-in ${kind} named "${value}"`)
-  return url.href
+// The function that makes the adapter: the built-in's, or the default export
+// of the module at the path.
+async function factoryOf(kind: Kind, value: string, base: string, what: string): Promise<unknown> {
+  if (!isPath(value)) {
+    if (!/^[a-z0-9][a-z0-9-]*$/.test(value)) throw new Error(`ade: "${value}" is neither a built-in ${kind} nor a path`)
+    const adapters: Record<string, unknown> = builtins(kind)
+    if (!Object.hasOwn(adapters, value)) throw new Error(`ade: there is no built-in ${kind} named "${value}"`)
+    return adapters[value]
+  }
+  const file = value.startsWith("~/") ? join(homedir(), value.slice(2)) : resolve(base, value)
+  const url = value.startsWith("file:") ? value : pathToFileURL(file).href
+  let module: { default?: unknown }
+  try {
+    module = await import(url)
+  } catch (error) {
+    throw new Error(`ade: cannot load ${what}: ${(error as Error).message}`)
+  }
+  return module.default
 }
 
 const missing = (object: Record<string, unknown>, operations: string[]) =>
@@ -45,23 +56,20 @@ const wrongFields = (object: Record<string, unknown>, fields: Record<string, "ar
   Object.entries(fields)
     .filter(([field, type]) => {
       const value = object[field]
-      return type === "array" ? !Array.isArray(value) : typeof value !== "object" || value === null || Array.isArray(value)
+      return type === "array"
+        ? !Array.isArray(value)
+        : typeof value !== "object" || value === null || Array.isArray(value)
     })
     .map(([field]) => field)
 
 export async function loadAdapter(kit: Kit, kind: Kind, value: string, o: LoadOptions = {}): Promise<unknown> {
   const what = isPath(value) ? `the ${kind} ${value}` : `the ${kind} "${value}"`
-  const url = urlOf(kind, value, o.base ?? dirname(configPath()))
-  let module: { default?: unknown }
-  try {
-    module = await import(url)
-  } catch (error) {
-    throw new Error(`ade: cannot load ${what}: ${(error as Error).message}`)
-  }
-  if (typeof module.default !== "function") throw new Error(`ade: ${what} must export a function (kit => adapter)`)
-  const adapter = (await module.default(kit)) as Record<string, unknown>
+  const make = await factoryOf(kind, value, o.base ?? dirname(configPath()), what)
+  if (typeof make !== "function") throw new Error(`ade: ${what} must export a function (kit => adapter)`)
+  const adapter = (await make(kit)) as Record<string, unknown>
   if (typeof adapter !== "object" || adapter === null) throw new Error(`ade: ${what} returned no adapter`)
-  if (adapter.api !== API) throw new Error(`ade: ${what} is written for api ${adapter.api}; this ade-kit has api ${API}`)
+  if (adapter.api !== API)
+    throw new Error(`ade: ${what} is written for api ${adapter.api}; this ade-kit has api ${API}`)
   const lacks = [
     ...(typeof adapter.name === "string" ? [] : ["name"]),
     ...missing(adapter, KINDS[kind].required),

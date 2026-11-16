@@ -49,6 +49,7 @@ test("keys: Escape, Enter and text", () => {
 
 test("the built-in adapters, by name, to start from", () => {
   const kit = makeKit({ config: DEFAULTS })
+  assert.equal(kit.builtin.multiplexer("zellij").name, "zellij")
   assert.equal(kit.builtin.editor("helix").name, "helix")
   assert.deepEqual(kit.builtin.editor("mitos").programs, ["ms"])
   assert.throws(() => kit.builtin.editor("toString"), /there is no built-in editor named "toString"/)
@@ -73,12 +74,18 @@ test("tabName: {worktree} is the worktree folder's name, {project} its repositor
   assert.equal(await tabName(run, grouped, join(temp, "dotfiles")), "dotfiles: dotfiles")
   assert.equal(await tabName(run, grouped, join(temp, "dotfiles", "fix")), "dotfiles: fix")
   assert.equal(await tabName(run, grouped, join(temp, "project", "ade-phase3")), "project: ade-phase3")
-  assert.equal(await tabName(run, "{worktree} ({project}) {other}", join(temp, "project", "ade-phase3")), "ade-phase3 (project) {other}")
+  assert.equal(
+    await tabName(run, "{worktree} ({project}) {other}", join(temp, "project", "ade-phase3")),
+    "ade-phase3 (project) {other}",
+  )
   // Outside a repository, the worktree's name alone; without {project}, no git at all.
   mkdirSync(join(temp, "plain"))
   assert.equal(await tabName(run, grouped, join(temp, "plain")), "plain")
   const asked: string[][] = []
-  assert.equal(await tabName(async (argv) => (asked.push(argv), { ok: false, stdout: "", stderr: "" }), "{worktree}", "/p/feat"), "feat")
+  assert.equal(
+    await tabName(async (argv) => (asked.push(argv), { ok: false, stdout: "", stderr: "" }), "{worktree}", "/p/feat"),
+    "feat",
+  )
   assert.deepEqual(asked, [])
   assert.equal(await makeKit({ config: DEFAULTS }).tabName("x-{worktree}", "/p/feat/"), "x-feat")
 })

@@ -16,7 +16,11 @@ const app = (sessions: Record<string, Info>, shown: string[], builtinOff = true)
     {
       on: (type, listener) => {
         listeners.set(type, [...(listeners.get(type) ?? []), listener])
-        return () => listeners.set(type, (listeners.get(type) ?? []).filter((l) => l !== listener))
+        return () =>
+          listeners.set(
+            type,
+            (listeners.get(type) ?? []).filter((l) => l !== listener),
+          )
       },
       session: {
         get: (id) => sessions[id],
@@ -80,7 +84,12 @@ test("a subagent of a shown conversation: subagent_done, without a system notifi
   const a = app({ s1: { title: "Main" }, c1: { parentID: "s1", title: "Explore" } }, ["s1"])
   a.send("session.execution.succeeded", { sessionID: "c1" })
   assert.deepEqual(a.notices, [
-    { title: "Explore", message: "Session done", notification: false, sound: { name: "subagent_done", when: "always" } },
+    {
+      title: "Explore",
+      message: "Session done",
+      notification: false,
+      sound: { name: "subagent_done", when: "always" },
+    },
   ])
 })
 
@@ -88,7 +97,7 @@ test("not done while one of its subagents still runs", () => {
   const sessions: Record<string, Info> = { s1: {}, c1: { parentID: "s1", status: "running" } }
   const a = app(sessions, ["s1"])
   a.send("session.execution.succeeded", { sessionID: "s1" })
-  assert.deepEqual(a.notices, [])
+  assert.equal(a.notices.length, 0)
   sessions.c1.status = "idle"
   a.send("session.execution.succeeded", { sessionID: "s1" })
   assert.equal(a.notices[0]?.sound.name, "done")

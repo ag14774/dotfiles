@@ -4,7 +4,7 @@
 #   git clone <repo> ~/dotfiles && ~/dotfiles/install.sh && exec zsh
 #
 # It installs platform packages + developer tools/language servers and the Yazi flavor,
-# symlinks config/ into ~/.config and ~/.local/bin via stow, sets up zoxide (replacing autojump),
+# symlinks config/ into ~/.config and ~/.local/bin via stow, and
 # maintains small idempotent blocks at the start and end of ~/.zshrc. (The top
 # bar, ade-zjstatus, is loaded by dev.kdl directly from its release URL.)
 # Shell expressions written into ~/.zshrc must remain literal until zsh loads it.
@@ -117,7 +117,7 @@ npm install --global --prefix "$HOME/.local" --allow-scripts=core-js \
   bash-language-server typescript typescript-language-server \
   yaml-language-server vscode-langservers-extracted >/dev/null
 
-echo "==> OpenCode 2 (official installer + V1 migration)"
+echo "==> OpenCode 2 (official installer and app settings)"
 export PATH="$HOME/.opencode/bin:$PATH"
 bash "$DOTFILES/install/opencode.sh"
 
@@ -134,21 +134,13 @@ cargo install jinja-lsp >/dev/null
 
 echo "==> Symlink config/ into ~/.config and ~/.local/bin (stow)"
 mkdir -p "$HOME/.config"
-# Remove superseded BTW plugins so only btw-v2 remains. A link to the whole
-# btw-v2 directory (not created by stow) would make stow abort with a conflict.
-OPENCODE_TUI_PLUGINS="$HOME/.config/opencode/tui-plugins"
-rm -f -- "$OPENCODE_TUI_PLUGINS/btw.tsx" "$OPENCODE_TUI_PLUGINS/btw-v2.tsx"
-if [ -L "$OPENCODE_TUI_PLUGINS/btw-v2" ]; then
-  rm -- "$OPENCODE_TUI_PLUGINS/btw-v2"
-fi
-# Restow, so links to files the repository no longer has go too.
+# Restow, so links to files removed from the repository go too.
 stow --no-folding --restow -d "$DOTFILES" -t "$HOME" config
-# The ADE plugin's old app part (now inside its package, plugins/ade): stow
-# doesn't look into a folder the repository no longer has, so its links stay.
-if [ -d "$OPENCODE_TUI_PLUGINS/ade" ]; then
-  find "$OPENCODE_TUI_PLUGINS/ade" -maxdepth 1 -type l -delete
-  rmdir "$OPENCODE_TUI_PLUGINS/ade" 2>/dev/null || true
-fi
+
+echo "==> Link the packages in packages/ for the OpenCode plugins (npm workspaces)"
+# Makes node_modules/ade-kit a link to packages/ade-kit; downloads nothing
+# (OpenCode provides the plugins' optional peers; the rest is for development).
+(cd "$DOTFILES" && npm install --omit=dev --omit=optional --omit=peer --no-audit --no-fund >/dev/null)
 
 echo "==> Yazi flavor (catppuccin-mocha, from package.toml)"
 if ! YAZI_PACKAGE_OUTPUT="$(ya pkg install 2>&1)"; then
@@ -158,7 +150,7 @@ if ! YAZI_PACKAGE_OUTPUT="$(ya pkg install 2>&1)"; then
     exit 1
   fi
 
-  echo "==> Refresh legacy Yazi package cache"
+  echo "==> Rebuild the Yazi package cache"
   if [[ ${XDG_CACHE_HOME:-} = /* ]]; then
     YAZI_PACKAGE_CACHE="$XDG_CACHE_HOME/yazi/packages"
   else
@@ -166,19 +158,6 @@ if ! YAZI_PACKAGE_OUTPUT="$(ya pkg install 2>&1)"; then
   fi
   rm -rf -- "$YAZI_PACKAGE_CACHE"
   ya pkg install >/dev/null
-fi
-
-echo "==> zoxide: seed from autojump history (one-time, if present)"
-if [ "$(uname -s)" = "Darwin" ]; then
-  AUTOJUMP_HISTORY="$HOME/Library/autojump/autojump.txt"
-else
-  AUTOJUMP_HISTORY="${XDG_DATA_HOME:-$HOME/.local/share}/autojump/autojump.txt"
-fi
-if [ -f "$AUTOJUMP_HISTORY" ] &&
-  [ "$(zoxide query -l 2>/dev/null | wc -l | tr -d ' ')" = "0" ]; then
-  if ! zoxide import autojump <"$AUTOJUMP_HISTORY"; then
-    echo "Warning: could not import autojump history from $AUTOJUMP_HISTORY" >&2
-  fi
 fi
 
 echo "==> secrets.zsh (from example, if missing)"
@@ -225,17 +204,17 @@ fi
   printf '%s\n' "$B"
   printf 'typeset -U path PATH\n'
   printf 'export PATH="$HOME/.local/bin:$HOME/.opencode/bin:$HOME/.cargo/bin:$PATH"\n'
-  printf 'source "%s/shell/init.zsh"\n' "$DOTFILES"        # zsh framework: options, compinit, keybinds, starship, plugins (replaces oh-my-zsh)
+  printf 'source "%s/shell/init.zsh"\n' "$DOTFILES"        # zsh framework: options, compinit, keybinds, starship, plugins
   printf 'source "%s/shell/completions.zsh"\n' "$DOTFILES" # CLI completions that need compinit (opencode, ...)
-  printf 'eval "$(zoxide init zsh --cmd j)"\n'             # zoxide replaces autojump (j / ji); also feeds yazi's z
+  printf 'eval "$(zoxide init zsh --cmd j)"\n'             # zoxide (j / ji); also feeds yazi's z
   printf 'source "$HOME/.config/fzf/fzf.env"\n'            # fzf file list: respect .gitignore (Alt-g toggles); also sourced by yazi-picker.sh
   printf '[ -f "$HOME/.config/zsh/secrets.zsh" ] && source "$HOME/.config/zsh/secrets.zsh"\n'
   printf '[ -f "$HOME/.config/zsh/local.zsh" ] && source "$HOME/.config/zsh/local.zsh"\n' # machine-local, gitignored (e.g. work fns, tool completions); after compinit
-  printf 'source "%s/shell/aliases.zsh"\n' "$DOTFILES"                                    # rm/cp/mv -i (we don't load omz's common-aliases plugin)
+  printf 'source "%s/shell/aliases.zsh"\n' "$DOTFILES"                                    # rm/cp/mv -i, coloured ls and grep
   printf 'source "%s/shell/worktree.zsh"\n' "$DOTFILES"
   printf 'source "%s/shell/ocreload.zsh"\n' "$DOTFILES"
   printf 'source "%s/shell/cheatsheet.zsh"\n' "$DOTFILES"
-  printf 'source "%s/shell/git.zsh"\n' "$DOTFILES" # ggpush/ggpull + gcai (we don't load omz's git plugin)
+  printf 'source "%s/shell/git.zsh"\n' "$DOTFILES" # ggpush/ggpull + gcai
   printf 'source "%s/shell/reset.zsh"\n' "$DOTFILES"
   printf 'dotfiles_load_syntax_highlighting\n' # MUST stay last: highlighting wraps every widget/keybinding defined above
   printf '%s\n' "$E"
@@ -248,7 +227,7 @@ zellij_version="$(zellij --version 2>/dev/null | awk '{print $2}' || true)"
 IFS=. read -r zellij_major zellij_minor _ <<<"$zellij_version"
 if [[ $zellij_major =~ ^[0-9]+$ && $zellij_minor =~ ^[0-9]+$ ]] && ((zellij_major == 0 && zellij_minor < 46)); then
   echo "WARNING: Zellij $zellij_version is older than 0.46, so the top bar shows no agent statuses." >&2
-  echo "  Upgrade Zellij, then restart it (see \"Upgrading Zellij\" in README.md)." >&2
+  echo "  Upgrade Zellij, then restart it (see \"Keeping it running\" in README.md)." >&2
 fi
 
 # A resurrected tab keeps the top bar it was saved with: give saved sessions
