@@ -31,7 +31,9 @@ const USAGE = `usage: ade open FILE[:LINE[:COLUMN]]...
        ade restart-agent [DIR]
          start this tab's agent afresh in DIR (default: here), in place of its pane
        ade where
-         the folder of the pane you were in (for a key's floating pane)
+         the folder of the focused tiled pane of its own tab (if that pane reports none: the tab's
+         agent pane, then its shell pane); outside a multiplexer, or when that folder is gone, the
+         folder it was started in
        ade worktree [--cwd-file FILE] COMMAND [ARGS...]
          create, open, list and remove worktrees (see: ade worktree help)`
 

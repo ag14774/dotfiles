@@ -32,7 +32,7 @@ everything.
 | `ade review` | Review the worktree of the pane you were in with the reviewer, in the terminal it runs in (a key can start it in a floating pane), then give the agent your comments (`review.deliver`). One review per tab: a second one shows the open review. |
 | `ade review --scope` | What a review here covers: `-r BASE..HEAD` for the commits since `worktrees.base`, `-w` for uncommitted changes. |
 | `ade restart-agent [DIR]` | Start the tab's agent afresh in `DIR` (default: here), in place of its agent pane; focus stays where it is. |
-| `ade where` | The folder of the pane you were in (a key's floating pane starts in the session's folder). |
+| `ade where` | The folder of the focused tiled pane of its own tab (found from its pane); if that pane reports no folder, the tab's agent pane's, then its shell pane's. Outside a multiplexer, or when that folder no longer exists, the folder it was started in. In a tiled pane that is its own folder; in a floating pane opened by a key (which starts in the session's folder), the folder of the focused tiled pane underneath. |
 | `ade worktree COMMAND` | `clone`, `open`, `rm`, `ls [--json]`, `prune`, `convert`: below. |
 
 Set `ADE_LOG=FILE` to append each command `ade` runs to a file, and

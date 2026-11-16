@@ -264,8 +264,11 @@ export async function send(kit: Kit, what: Sending, caller: Caller) {
   await mux.focus(pane.id)
 }
 
-// The folder of the pane you were in (see callerDir), else the caller's: for
-// a key's floating pane, which starts in the session's folder.
+// The folder of the focused tiled pane of the caller's own tab (if that pane
+// reports none, of the tab's agent pane, then its shell pane; see callerDir).
+// Outside a multiplexer, or when that folder no longer exists, the caller's
+// folder. For a floating pane, which starts in the session's folder, that is
+// the focused tiled pane underneath.
 export async function where(kit: Kit, caller: Caller) {
   const at = await located(kit, caller.env)
   return callerFolder(at && (await at.mux.panes()), at?.where, caller.cwd)
