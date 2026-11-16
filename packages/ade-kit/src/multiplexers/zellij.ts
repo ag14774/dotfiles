@@ -4,10 +4,18 @@
 // `zellij action` acts on whichever session is running.
 import type { Key, Kit, Multiplexer, MultiplexerAdapter, OpenedTab, Pane, Role, Tab } from "../types.ts"
 
+export type Direction = "right" | "down" | "left" | "up"
+const DIRECTIONS: readonly unknown[] = ["right", "down", "left", "up"]
+const ROLES: readonly string[] = ["agent", "editor", "shell", "review"]
+
 // The config's "zellij" section.
 export type ZellijOptions = {
   layout: string // the layout new tabs are opened with
   panes: Record<Role, string> // pane names, by role
+  // Where a new pane of a role opens: beside the pane that has focus, in that
+  // direction. null or left out: where Zellij puts it (for the editor, above
+  // the shell pane, as the layout's swap layout does).
+  newPanes: Partial<Record<Role, Direction | null>>
   // The name of a worktree's tab (see Kit's tabName): "{project}: {worktree}"
   // groups each project's tabs in ade-zjstatus. Names are only shown: tabs
   // are found by their panes' folders.
@@ -17,6 +25,7 @@ export type ZellijOptions = {
 export const DEFAULTS: ZellijOptions = {
   layout: "dev",
   panes: { agent: "opencode", shell: "main", editor: "editor", review: "review" },
+  newPanes: { agent: "right" },
   tabName: "{worktree}",
 }
 
@@ -35,6 +44,14 @@ export function optionsOf(kit: Kit): ZellijOptions {
   }
   const wrong = Object.keys(values).filter((key) => typeof values[key] !== "string")
   if (wrong.length) throw new Error(`ade: in the ADE config, these must be strings: ${wrong.join(", ")}`)
+  const placed: [string, unknown][] = isObject(zellij.newPanes) ? Object.entries(zellij.newPanes) : [["", undefined]]
+  const misplaced = placed
+    .filter(([role, direction]) => !ROLES.includes(role) || !(direction === null || DIRECTIONS.includes(direction)))
+    .map(([role]) => `zellij.newPanes${role ? `.${role}` : ""}`)
+  if (misplaced.length)
+    throw new Error(
+      `ade: in the ADE config, zellij.newPanes takes roles (${ROLES.join(", ")}), each right, down, left, up or null: ${misplaced.join(", ")}`,
+    )
   return options as ZellijOptions
 }
 
@@ -174,9 +191,11 @@ export default (kit: Kit): MultiplexerAdapter => {
         // New panes and swap layouts apply to the tab in front: show this one
         // first (it usually is in front already).
         await action("go-to-tab-by-id", tab)
-        const started = await action("new-pane", "--close-on-exit", "-n", name, ...folder, "--", ...argv)
+        const direction = options.newPanes[role]
+        const placed = direction ? ["--direction", direction] : []
+        const started = await action("new-pane", ...placed, "--close-on-exit", "-n", name, ...folder, "--", ...argv)
         const pane = await paneStarted(started, tab, name)
-        if (role === "editor") await placeEditor(tab, pane).catch(() => {})
+        if (role === "editor" && !direction) await placeEditor(tab, pane).catch(() => {})
         await focusPane(pane)
         return pane
       }

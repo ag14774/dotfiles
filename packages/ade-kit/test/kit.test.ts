@@ -49,6 +49,7 @@ test("keys: Escape, Enter and text", () => {
 
 test("the built-in adapters, by name, to start from", () => {
   const kit = makeKit({ config: DEFAULTS })
+  assert.equal(kit.builtin.multiplexer("zellij").name, "zellij")
   assert.equal(kit.builtin.editor("helix").name, "helix")
   assert.deepEqual(kit.builtin.editor("mitos").programs, ["ms"])
   assert.throws(() => kit.builtin.editor("toString"), /there is no built-in editor named "toString"/)

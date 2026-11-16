@@ -31,7 +31,7 @@ everything.
 | `ade send --text [--submit] < TEXT` | Puts the text in the agent's prompt as it is; with `--submit`, sends it. |
 | `ade review` | Reviews what the worktree changed since `worktrees.base`, committed or not, in the configured reviewer (tuicr by default), in the terminal it runs in. When you end the review, your comments go to the tab's agent: filled in for you to send, or sent (`review.deliver`). With nothing to review, it says so. If the tab already has a review open, it shows that one. The worktree is that of the folder `ade where` prints. |
 | `ade review --scope` | Prints what a review here covers: `-r BASE..HEAD` for the commits since `worktrees.base`, `-w` for uncommitted changes. |
-| `ade restart-agent [DIR]` | Replaces the tab's agent with a fresh one started in `DIR` (default: the current folder), in the same place; a tab without an agent gets one. Focus stays where it is. |
+| `ade restart-agent [DIR]` | Replaces the tab's agent with a fresh one started in `DIR` (default: the current folder), in the same place; a tab without an agent gets one (with Zellij, on the right: `zellij.newPanes`). Focus stays where it is. |
 | `ade where` | Prints the folder of the focused tiled pane of its own tab; if that pane reports no folder, the tab's agent pane's, then its shell pane's. Outside a multiplexer, or when that folder no longer exists, it prints the folder it was started in. So in a tiled pane you get your own folder, and in a floating pane opened by a key (which starts in the session's folder) the folder of the focused tiled pane underneath. |
 | `ade worktree COMMAND` | Creates, opens, lists and removes worktrees: below. |
 
@@ -110,6 +110,7 @@ optional, read on every call. Objects merge into the defaults key by key.
   "zellij": {
     "layout": "dev",
     "panes": { "agent": "opencode", "shell": "main", "editor": "editor", "review": "review" },
+    "newPanes": { "agent": "right" },
     "tabName": "{worktree}"
   },
   "opencode": { "command": ["opencode"] }
@@ -121,10 +122,13 @@ optional, read on every call. Objects merge into the defaults key by key.
   its own remote control, and there are no tabs).
 - `review.deliver`: `"insert"` fills in the agent's prompt for you to send,
   `"submit"` sends the comments.
-- Each adapter reads its own section: `zellij` (the layout new tabs open with,
-  the pane names that give panes their roles, and the tab name, where
-  `{project}` and `{worktree}` are the repository's and the worktree's folder
-  names), `opencode` (the command that starts it).
+- Each adapter reads its own section. `zellij`: the layout new tabs open with;
+  the pane names that give panes their roles; `newPanes`, where a new pane of
+  a role opens, beside the pane that has focus (`right`, `down`, `left`, `up`;
+  `null`: where Zellij puts it, which for the editor means above the shell
+  pane, as the layout's swap layout does); and the tab name, where `{project}`
+  and `{worktree}` are the repository's and the worktree's folder names.
+  `opencode`: the command that starts it.
 
 ## Adapters
 
@@ -137,8 +141,10 @@ kit gives adapters what they need without imports: `run`, quoting, keys, the
 config and their options (`kit.options("mine", defaults)`), git (`kit.git`)
 and the error that ends a command (`kit.fail`), the helpers `typedEditor` (an
 editor reached by typing into its pane) and `pasteAgent`, and the built-ins to
-start from. An adapter of your own lives outside the repository and is named
-in the config by its path, so most changes need no fork.
+start from (`kit.builtin.multiplexer("zellij")` and the like: wrap one and
+change only what you need). An adapter of your own lives outside the
+repository and is named in the config by its path, so most changes need no
+fork.
 
 Programs are reached through the worktree: an editor or agent without its own
 remote control through its pane in the worktree's tab (so it needs a

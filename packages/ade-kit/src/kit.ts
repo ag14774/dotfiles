@@ -74,6 +74,7 @@ export function makeKit(o: { config?: Config; env?: Record<string, string | unde
     typedEditor,
     pasteAgent,
     builtin: {
+      multiplexer: (name) => builtin("multiplexer", name, kit),
       editor: (name) => builtin("editor", name, kit),
       agent: (name) => builtin("agent", name, kit),
       reviewer: (name) => builtin("reviewer", name, kit),

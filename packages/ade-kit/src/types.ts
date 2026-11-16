@@ -244,6 +244,7 @@ export type Kit = {
   pasteAgent(o: PasteAgentOptions): Agent
   // The built-in adapters, to start from.
   builtin: {
+    multiplexer(name: string): MultiplexerAdapter
     editor(name: string): Editor
     agent(name: string): Agent
     reviewer(name: string): Reviewer

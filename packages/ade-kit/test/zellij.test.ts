@@ -4,7 +4,7 @@ import { test } from "node:test"
 import { DEFAULTS } from "../src/config.ts"
 import { makeKit } from "../src/kit.ts"
 import zellij, { DEFAULTS as ZELLIJ, optionsOf, parsePanes, parseTabs } from "../src/multiplexers/zellij.ts"
-import type { RunResult } from "../src/types.ts"
+import type { Config, RunResult } from "../src/types.ts"
 
 const fixture = (name: string) => readFileSync(new URL(`fixtures/${name}`, import.meta.url), "utf8")
 
@@ -45,13 +45,17 @@ test("here: inside Zellij with its session, and the pane when Zellij names it", 
 // The adapter with a kit whose run() records the commands and answers from
 // `answers` (by the zellij arguments after the session; a list answers in
 // turn, its last answer repeating).
-const recording = (answers: Record<string, string | string[]>, failing: string[] | Record<string, string> = []) => {
+const recording = (
+  answers: Record<string, string | string[]>,
+  failing: string[] | Record<string, string> = [],
+  config: Config = DEFAULTS,
+) => {
   const failures: Record<string, string> = Array.isArray(failing)
     ? Object.fromEntries(failing.map((key) => [key, "boom\n"]))
     : failing
   const calls: string[][] = []
   const kit = makeKit({
-    config: DEFAULTS,
+    config,
     run: async (argv): Promise<RunResult> => {
       calls.push(argv)
       const key = argv.slice(3).join(" ")
@@ -167,6 +171,31 @@ test("a new editor beside or below the shell pane: the swap layout again, and if
     "move-pane --pane-id terminal_9 up",
     "focus-pane-id terminal_9",
   ])
+})
+
+test("newPanes: a new agent pane opens on the right; a direction for the editor replaces its swap layout", async () => {
+  const agent = recording({ "action new-pane --direction right --close-on-exit -n opencode -- oc": "terminal_9\n" })
+  assert.equal(await agent.mux.start({ tab: "1", role: "agent", argv: ["oc"], focus: true }), "9")
+  assert.deepEqual(actions(agent.calls), [
+    "go-to-tab-by-id 1",
+    "new-pane --direction right --close-on-exit -n opencode -- oc",
+    "focus-pane-id terminal_9",
+  ])
+  const below = { ...DEFAULTS, zellij: { newPanes: { editor: "down", agent: null } } } as Config
+  const editor = recording(
+    { "action new-pane --direction down --close-on-exit -n editor -- hx a.md": "terminal_9\n" },
+    [],
+    below,
+  )
+  assert.equal(await editor.mux.start({ tab: "1", role: "editor", argv: ["hx", "a.md"], focus: true }), "9")
+  assert.deepEqual(actions(editor.calls), [
+    "go-to-tab-by-id 1",
+    "new-pane --direction down --close-on-exit -n editor -- hx a.md",
+    "focus-pane-id terminal_9",
+  ])
+  const free = recording({ "action new-pane --close-on-exit -n opencode -- oc": "terminal_9\n" }, [], below)
+  await free.mux.start({ tab: "1", role: "agent", argv: ["oc"], focus: true })
+  assert.ok(actions(free.calls).includes("new-pane --close-on-exit -n opencode -- oc"))
 })
 
 test("a new pane that new-pane doesn't name is found by its name in the tab", async () => {
@@ -314,9 +343,10 @@ test("the zellij section merges over the defaults key by key; wrong types are re
   const kitWith = (zellij: unknown) =>
     makeKit({ config: { ...DEFAULTS, zellij }, run: async () => ({ ok: true, stdout: "", stderr: "" }) })
   assert.deepEqual(optionsOf(kitWith(undefined)), ZELLIJ)
-  assert.deepEqual(optionsOf(kitWith({ panes: { agent: "claude" } })), {
+  assert.deepEqual(optionsOf(kitWith({ panes: { agent: "claude" }, newPanes: { editor: "down" } })), {
     layout: "dev",
     panes: { agent: "claude", shell: "main", editor: "editor", review: "review" },
+    newPanes: { agent: "right", editor: "down" },
     tabName: "{worktree}",
   })
   assert.equal(ZELLIJ.panes.agent, "opencode")
@@ -327,4 +357,10 @@ test("the zellij section merges over the defaults key by key; wrong types are re
   assert.throws(() => optionsOf(kitWith({ panes: [] })), /strings: zellij\.panes$/)
   assert.throws(() => optionsOf(kitWith({ tabName: null, layout: 1 })), /strings: zellij\.layout, zellij\.tabName$/)
   assert.throws(() => optionsOf(kitWith("dev")), /strings: zellij\.layout, zellij\.tabName, zellij\.panes$/)
+  assert.equal(optionsOf(kitWith({ newPanes: { agent: null } })).newPanes.agent, null)
+  assert.throws(
+    () => optionsOf(kitWith({ newPanes: { agent: "middle", bogus: "up" } })),
+    /each right, down, left, up or null: zellij\.newPanes\.agent, zellij\.newPanes\.bogus$/,
+  )
+  assert.throws(() => optionsOf(kitWith({ newPanes: "right" })), /: zellij\.newPanes$/)
 })
