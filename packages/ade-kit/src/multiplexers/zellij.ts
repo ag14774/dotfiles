@@ -73,7 +73,11 @@ export function parsePanes(json: string, names: Record<Role, string>): Pane[] {
 }
 
 export const parseTabs = (json: string): Tab[] =>
-  (JSON.parse(json) as RawTab[]).map((tab) => ({ id: String(tab.tab_id), name: String(tab.name), active: Boolean(tab.active) }))
+  (JSON.parse(json) as RawTab[]).map((tab) => ({
+    id: String(tab.tab_id),
+    name: String(tab.name),
+    active: Boolean(tab.active),
+  }))
 
 const SETTLE_MS = 150 // for a swap layout to apply
 const APPEAR_MS = 10_000 // for a new pane to be listed
@@ -151,8 +155,18 @@ export default (kit: Kit): MultiplexerAdapter => {
         if (replace !== undefined) {
           const unfocused = focus ? [] : ["--no-focus"]
           const output = await action(
-            "new-pane", "--in-place", "--pane-id", id(replace), "--close-replaced-pane", "--close-on-exit",
-            ...unfocused, "-n", name, ...folder, "--", ...argv,
+            "new-pane",
+            "--in-place",
+            "--pane-id",
+            id(replace),
+            "--close-replaced-pane",
+            "--close-on-exit",
+            ...unfocused,
+            "-n",
+            name,
+            ...folder,
+            "--",
+            ...argv,
           )
           return paneStarted(output, tab, name)
         }
@@ -173,7 +187,9 @@ export default (kit: Kit): MultiplexerAdapter => {
       const startAgent = async (tab: string, dir: string, agent: string[]): Promise<OpenedTab["agent"]> => {
         let pane: string | undefined
         for (let look = 1; look <= LAYOUT_LOOKS && pane === undefined; look++) {
-          const found = (await listed().catch(() => [])).find((p) => String(p.tab_id) === tab && p.title === options.panes.agent)
+          const found = (await listed().catch(() => [])).find(
+            (p) => String(p.tab_id) === tab && p.title === options.panes.agent,
+          )
           pane = found && String(found.id)
           if (pane === undefined) await sleep(50)
         }

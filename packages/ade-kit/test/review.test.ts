@@ -65,8 +65,19 @@ test("the scope in words, as ade review --scope prints it", () => {
 
 test("tuicr: the commits as a range, -w for uncommitted changes, comments on stdout", () => {
   const command = tuicr().command
-  assert.deepEqual(command({ dir: "/w", base: "abc", commits: true, uncommitted: true }), ["tuicr", "-r", "abc..HEAD", "-w", "--stdout"])
-  assert.deepEqual(command({ dir: "/w", base: "abc", commits: true, uncommitted: false }), ["tuicr", "-r", "abc..HEAD", "--stdout"])
+  assert.deepEqual(command({ dir: "/w", base: "abc", commits: true, uncommitted: true }), [
+    "tuicr",
+    "-r",
+    "abc..HEAD",
+    "-w",
+    "--stdout",
+  ])
+  assert.deepEqual(command({ dir: "/w", base: "abc", commits: true, uncommitted: false }), [
+    "tuicr",
+    "-r",
+    "abc..HEAD",
+    "--stdout",
+  ])
   assert.deepEqual(command({ dir: "/w", base: "abc", commits: false, uncommitted: true }), ["tuicr", "-w", "--stdout"])
 })
 

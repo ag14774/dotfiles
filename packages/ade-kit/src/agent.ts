@@ -5,7 +5,8 @@ import type { Agent, PasteAgentOptions, Reach } from "./types.ts"
 export function pasteAgent(o: PasteAgentOptions): Agent {
   const label = o.label ?? o.name
   const pane = (reach: Reach) => {
-    if (!reach.mux || reach.pane === undefined) throw new Error(`${label} is reached through its pane, which needs a multiplexer`)
+    if (!reach.mux || reach.pane === undefined)
+      throw new Error(`${label} is reached through its pane, which needs a multiplexer`)
     return { mux: reach.mux, pane: reach.pane }
   }
   return {

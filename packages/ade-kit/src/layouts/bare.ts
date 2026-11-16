@@ -24,9 +24,14 @@ export default (kit: Kit): Layout => {
   const finish = async (io: Io, root: string) => {
     const said = await query(io, ["remote", "set-head", "origin", "--auto"], root)
     for (const text of (said ?? "").split("\n")) if (text) io.say(text)
-    const head = await value(io, ["--git-dir", join(root, ".bare"), "symbolic-ref", "--quiet", "refs/remotes/origin/HEAD"], root)
+    const head = await value(
+      io,
+      ["--git-dir", join(root, ".bare"), "symbolic-ref", "--quiet", "refs/remotes/origin/HEAD"],
+      root,
+    )
     const branch = head?.replace(/^refs\/remotes\/origin\//, "")
-    if (branch) await query(io, ["--git-dir", join(root, ".bare"), "symbolic-ref", "HEAD", `refs/heads/${branch}`], root)
+    if (branch)
+      await query(io, ["--git-dir", join(root, ".bare"), "symbolic-ref", "HEAD", `refs/heads/${branch}`], root)
   }
 
   // clone: origin's branches as remote-tracking ones, no worktree yet.
@@ -54,13 +59,16 @@ export default (kit: Kit): Layout => {
     const branch = await value(io, ["symbolic-ref", "--quiet", "--short", "HEAD"])
     if (!branch) throw kit.fail(`ade worktree convert: detached HEAD -- check out a branch first`)
     const name = branch.replaceAll("/", "-")
-    if ((await query(io, ["remote", "get-url", "origin"], root)) === undefined) throw kit.fail(`ade worktree convert: no 'origin' remote found`)
-    if (!isDirectory(join(root, ".git"))) throw kit.fail(`ade worktree convert: ${root}/.git is not a repo dir (already converted?)`)
+    if ((await query(io, ["remote", "get-url", "origin"], root)) === undefined)
+      throw kit.fail(`ade worktree convert: no 'origin' remote found`)
+    if (!isDirectory(join(root, ".git")))
+      throw kit.fail(`ade worktree convert: ${root}/.git is not a repo dir (already converted?)`)
     // The clone's other worktrees; those inside it (where open puts them in a
     // normal clone) show in its status as untracked folders.
     const linked = (await worktrees(io, root)).slice(1).map((r) => r.path)
     const nested = linked.filter((path) => path.startsWith(`${root}/`)).map((path) => relative(root, path))
-    if (nested.includes(name)) throw kit.fail(`ade worktree convert: the worktree ${root}/${name} is where ${branch}'s would go; move it first`)
+    if (nested.includes(name))
+      throw kit.fail(`ade worktree convert: the worktree ${root}/${name} is where ${branch}'s would go; move it first`)
     const theirs = (rel: string) => nested.some((path) => rel === path || path.startsWith(`${rel}/`))
     const dirty = ((await query(io, ["status", "--porcelain", "--untracked-files=all"], root)) ?? "")
       .split("\n")
@@ -93,7 +101,8 @@ export default (kit: Kit): Layout => {
     renameSync(join(root, ".git"), join(root, ".bare"))
     writeFileSync(join(root, ".git"), "gitdir: ./.bare\n")
     await setUp(io, root)
-    if ((await query(io, ["fetch", "origin"], root)) === undefined) io.say(`ade worktree convert: warning: fetch failed (using existing refs)`)
+    if ((await query(io, ["fetch", "origin"], root)) === undefined)
+      io.say(`ade worktree convert: warning: fetch failed (using existing refs)`)
     await finish(io, root)
     if (linked.length) {
       await query(io, ["worktree", "repair"], root)
@@ -104,7 +113,9 @@ export default (kit: Kit): Layout => {
     const final = join(root, name)
     const dir = existsSync(final) ? join(root, `.ade-convert-${name}`) : final
     if (!(await loud(io, ["worktree", "add", dir, branch], root)))
-      throw kit.fail(`ade worktree convert: 'worktree add' failed; repo is bare at ${root} (your files are still there)`)
+      throw kit.fail(
+        `ade worktree convert: 'worktree add' failed; repo is bare at ${root} (your files are still there)`,
+      )
     // 3. The ignored files move into it; one that is there already (made by a
     // checkout hook, say) is kept beside it.
     for (const rel of ignored) {
@@ -123,7 +134,8 @@ export default (kit: Kit): Layout => {
     // 4. The top level's tracked files go (committed, so recoverable), but
     // not the folders holding worktrees.
     const keep = new Set([".bare", ".git", relative(root, dir), ...nested.map((path) => path.split("/")[0])])
-    for (const entry of readdirSync(root)) if (!keep.has(entry)) rmSync(join(root, entry), { recursive: true, force: true })
+    for (const entry of readdirSync(root))
+      if (!keep.has(entry)) rmSync(join(root, entry), { recursive: true, force: true })
     if (dir !== final && !(await loud(io, ["worktree", "move", dir, final], root)))
       throw kit.fail(`ade worktree convert: could not move the worktree from ${dir} to ${final}`)
     io.say(`done -> ${final}   (try: ade worktree ls, or ade worktree open <other-branch>)`)

@@ -122,7 +122,8 @@ export default Plugin.define({
         request.finish = finish
         pending.set(id, request)
         const claimTimer = setTimeout(() => {
-          if (!request.claimed) refuse("No OpenCode pane in a multiplexer is showing this conversation, so nothing was done.")
+          if (!request.claimed)
+            refuse("No OpenCode pane in a multiplexer is showing this conversation, so nothing was done.")
         }, CLAIM_TIMEOUT_MS)
         const timeout = TIMEOUT_MS[action] + (copy?.compact ? COMPACT_TIMEOUT_MS : 0)
         const resultTimer = setTimeout(
@@ -235,7 +236,7 @@ export default Plugin.define({
           "or tab; never on your own initiative. The new conversation sees nothing of this one, so write a " +
           "complete brief: the goal, what you already know (files, findings, decisions), constraints, and how " +
           "to check the result. Set `context` when the user wants the new conversation to keep this one's " +
-          "history (\"with the context\": full; \"with a summary\": compact). It returns once the tab is open " +
+          'history ("with the context": full; "with a summary": compact). It returns once the tab is open ' +
           "and does not wait for the work. It works in the repository of this conversation's folder; for " +
           "another repository, set `directory` to a folder in it.",
         input: {

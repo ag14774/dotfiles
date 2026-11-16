@@ -14,7 +14,11 @@ export class Failed extends Error {}
 // A git query: its output, or undefined when it fails. In English, as it is
 // parsed ("[gone]"). No timeout: a status in a big repository can be slow.
 export async function query(kit: Runs, io: Io, args: string[], cwd = io.cwd) {
-  const result = await kit.run(["git", ...args], { cwd: resolve(io.cwd, cwd), env: { ...io.env, LC_ALL: "C" }, timeout: 0 })
+  const result = await kit.run(["git", ...args], {
+    cwd: resolve(io.cwd, cwd),
+    env: { ...io.env, LC_ALL: "C" },
+    timeout: 0,
+  })
   return result.ok ? result.stdout : undefined
 }
 export const line = (text: string | undefined) => text?.replace(/\n$/, "")
@@ -24,7 +28,11 @@ export const line = (text: string | undefined) => text?.replace(/\n$/, "")
 export async function loud(kit: Runs, io: Io, args: string[], cwd = io.cwd): Promise<boolean> {
   if (io.passthrough)
     return new Promise((done) => {
-      const child = spawn("git", args, { cwd: resolve(io.cwd, cwd), env: io.env as NodeJS.ProcessEnv, stdio: ["inherit", 2, 2] })
+      const child = spawn("git", args, {
+        cwd: resolve(io.cwd, cwd),
+        env: io.env as NodeJS.ProcessEnv,
+        stdio: ["inherit", 2, 2],
+      })
       child.on("error", () => done(false))
       child.on("close", (code) => done(code === 0))
     })

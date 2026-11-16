@@ -7,7 +7,8 @@ import { fileURLToPath } from "node:url"
 import { test } from "node:test"
 
 const cli = fileURLToPath(new URL("../src/cli.ts", import.meta.url))
-const ade = (...args: string[]) => spawnSync(process.execPath, [cli, ...args], { encoding: "utf8", env: { ...process.env, ZELLIJ: "" } })
+const ade = (...args: string[]) =>
+  spawnSync(process.execPath, [cli, ...args], { encoding: "utf8", env: { ...process.env, ZELLIJ: "" } })
 
 test("ade help names every command", () => {
   const help = ade("help")
@@ -17,7 +18,14 @@ test("ade help names every command", () => {
 })
 
 test("wrong usage: the usage on stderr, exit status 2", () => {
-  for (const args of [["nonsense"], ["open"], ["review", "x"], ["restart-agent", "a", "b"], ["where", "x"], ["tabs", "."]]) {
+  for (const args of [
+    ["nonsense"],
+    ["open"],
+    ["review", "x"],
+    ["restart-agent", "a", "b"],
+    ["where", "x"],
+    ["tabs", "."],
+  ]) {
     const result = ade(...args)
     assert.equal(result.status, 2, args.join(" "))
     assert.match(result.stderr, /^usage: ade open/)
@@ -32,9 +40,13 @@ test("the actions in a tab need a multiplexer session: exit status 1, saying so"
 
 test("ade works from a folder that is gone (ade worktree rm run inside the worktree it removes)", () => {
   const gone = mkdtempSync(join(realpathSync(tmpdir()), "ade-gone-"))
-  const result = spawnSync("sh", ["-c", 'cd "$1" && rmdir "$1" && exec "$2" "$3" restart-agent /', "sh", gone, process.execPath, cli], {
-    encoding: "utf8",
-    env: { ...process.env, ZELLIJ: "" },
-  })
+  const result = spawnSync(
+    "sh",
+    ["-c", 'cd "$1" && rmdir "$1" && exec "$2" "$3" restart-agent /', "sh", gone, process.execPath, cli],
+    {
+      encoding: "utf8",
+      env: { ...process.env, ZELLIJ: "" },
+    },
+  )
   assert.equal(result.stderr, "ade restart-agent: not inside Zellij\n")
 })

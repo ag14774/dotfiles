@@ -37,7 +37,8 @@ export default Plugin.define({
     // reload.
     const warn = (message: string) =>
       context.ui.toast.show({ variant: "warning", title: "ADE plugin", message, duration: 15_000 })
-    const stale = "The OpenCode service runs an older version of this plugin. Run `opencode service restart` " +
+    const stale =
+      "The OpenCode service runs an older version of this plugin. Run `opencode service restart` " +
       "(it interrupts running conversations)."
     const checkServer = async () => {
       const expected = serverDigest()

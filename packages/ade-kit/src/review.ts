@@ -12,7 +12,12 @@ export async function scopeOf(kit: Kit, dir: string): Promise<Scope> {
     git("merge-base", base, "HEAD"),
     git("status", "--porcelain"),
   ])
-  return { dir, ...(start ? { base: start } : {}), commits: start !== "" && start !== head, uncommitted: changes !== "" }
+  return {
+    dir,
+    ...(start ? { base: start } : {}),
+    commits: start !== "" && start !== head,
+    uncommitted: changes !== "",
+  }
 }
 
 // The scope as `ade review --scope` prints it, in tuicr's notation: -r

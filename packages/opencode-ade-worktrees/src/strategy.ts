@@ -43,7 +43,12 @@ export function strategy(o: StrategyOptions): Strategy {
   // English, as remove reads its messages.
   const env = { ...o.env, LC_ALL: "C" }
   const kit = () => makeKit({ env, config: { ...readConfig(o.env), multiplexer: "none" } })
-  const io = (cwd: string, said: string[]) => ({ env, cwd, say: (line: string) => void said.push(line), passthrough: false })
+  const io = (cwd: string, said: string[]) => ({
+    env,
+    cwd,
+    say: (line: string) => void said.push(line),
+    passthrough: false,
+  })
   const why = (said: string[], error: Failed) => [...said, error.message].filter(Boolean).join("\n")
   return {
     id: "git",
@@ -64,7 +69,9 @@ export function strategy(o: StrategyOptions): Strategy {
       } catch (error) {
         if (!(error instanceof Failed)) throw error
         const message = why(said, error)
-        throw /modified or untracked files|use --force|is dirty/i.test(message) ? o.forceRequired(message) : new Error(message)
+        throw /modified or untracked files|use --force|is dirty/i.test(message)
+          ? o.forceRequired(message)
+          : new Error(message)
       }
     },
     // The repository's worktrees; the first one git lists (the main checkout,

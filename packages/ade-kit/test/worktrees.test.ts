@@ -10,11 +10,28 @@ import type { Config, Kit, Pane } from "../src/types.ts"
 import { worktreeCommand } from "../src/worktree-cli.ts"
 import type { Io } from "../src/worktrees.ts"
 import { Failed, query, records } from "../src/git.ts"
-import { clone, convert, globIn, layoutFor, list, open, parseLanding, prune, remove, repositoryOf, seedsFor, worktreeFor } from "../src/worktrees.ts"
+import {
+  clone,
+  convert,
+  globIn,
+  layoutFor,
+  list,
+  open,
+  parseLanding,
+  prune,
+  remove,
+  repositoryOf,
+  seedsFor,
+  worktreeFor,
+} from "../src/worktrees.ts"
 
 const temp = realpathSync(mkdtempSync(join(tmpdir(), "ade-worktrees-")))
 const git = (cwd: string, ...args: string[]) =>
-  execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@t", ...args], { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] })
+  execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@t", ...args], {
+    cwd,
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "ignore"],
+  })
 
 // An origin with one commit, and a clone of it in the bare layout with a
 // worktree for main.
@@ -38,7 +55,8 @@ const panes = (feat: string, detached: string): Pane[] => [
   { id: "3", tab: "2", running: true, floating: false, focused: false },
 ]
 const fake = join(temp, "fake.ts")
-const kitWith = (multiplexer = "none"): Kit => makeKit({ config: { ...structuredClone(DEFAULTS), multiplexer } as Config, run })
+const kitWith = (multiplexer = "none"): Kit =>
+  makeKit({ config: { ...structuredClone(DEFAULTS), multiplexer } as Config, run })
 
 const ioIn = (cwd: string, env: Record<string, string | undefined> = {}) => {
   const said: string[] = []
@@ -54,7 +72,8 @@ const ioIn = (cwd: string, env: Record<string, string | undefined> = {}) => {
 }
 
 test("records: git's porcelain list, with branches and the bare repository", () => {
-  const porcelain = "worktree /p/.bare\nbare\n\nworktree /p/main\nHEAD abc\nbranch refs/heads/main\n\nworktree /p/x\nHEAD def\ndetached\n"
+  const porcelain =
+    "worktree /p/.bare\nbare\n\nworktree /p/main\nHEAD abc\nbranch refs/heads/main\n\nworktree /p/x\nHEAD def\ndetached\n"
   assert.deepEqual(records(porcelain), [
     { path: "/p/.bare", bare: true },
     { path: "/p/main", branch: "main", bare: false },
@@ -63,7 +82,11 @@ test("records: git's porcelain list, with branches and the bare repository", () 
 })
 
 test("repositoryOf: the common folder, and the folder worktrees go in", async () => {
-  assert.deepEqual(await repositoryOf(kitWith(), ioIn(join(project, "main")).io), { common: join(project, ".bare"), root: project, bare: true })
+  assert.deepEqual(await repositoryOf(kitWith(), ioIn(join(project, "main")).io), {
+    common: join(project, ".bare"),
+    root: project,
+    bare: true,
+  })
   assert.equal(await repositoryOf(kitWith(), ioIn(temp).io), undefined)
 })
 
@@ -83,27 +106,50 @@ test("list: each worktree's branch, changes, commits and tab", async () => {
         tabs: async () => [], start: async () => "", type: async () => {}, paste: async () => {}, focus: async () => {} }),
     })`,
   )
-  const entry = (path: string, branch: string | null, changed: number, ahead: number, tab: string | null) =>
-    ({ path: join(project, path), branch, base: "origin/HEAD", changed, ahead, behind: 0, tab })
+  const entry = (path: string, branch: string | null, changed: number, ahead: number, tab: string | null) => ({
+    path: join(project, path),
+    branch,
+    base: "origin/HEAD",
+    changed,
+    ahead,
+    behind: 0,
+    tab,
+  })
   assert.deepEqual(await list(kitWith(fake), ioIn(join(project, "main"), { FAKE: "1" }).io), [
     entry("detached", null, 0, 0, "unsure"),
     entry("feat", "feat", 1, 1, "sure"),
     entry("main", "main", 0, 0, null),
   ])
   // Counted from worktrees.base.
-  const fromFeat = makeKit({ config: { ...structuredClone(DEFAULTS), multiplexer: "none", worktrees: { ...DEFAULTS.worktrees, base: "feat" } } as Config, run })
+  const fromFeat = makeKit({
+    config: {
+      ...structuredClone(DEFAULTS),
+      multiplexer: "none",
+      worktrees: { ...DEFAULTS.worktrees, base: "feat" },
+    } as Config,
+    run,
+  })
   assert.deepEqual(
     (await list(fromFeat, ioIn(join(project, "main")).io)).map((w) => [w.base, w.ahead, w.behind]),
-    [["feat", 0, 1], ["feat", 0, 0], ["feat", 0, 1]],
+    [
+      ["feat", 0, 1],
+      ["feat", 0, 0],
+      ["feat", 0, 1],
+    ],
   )
   // Outside the multiplexer, no tabs.
-  assert.deepEqual((await list(kitWith(fake), ioIn(join(project, "main")).io)).map((w) => w.tab), [null, null, null])
+  assert.deepEqual(
+    (await list(kitWith(fake), ioIn(join(project, "main")).io)).map((w) => w.tab),
+    [null, null, null],
+  )
   // Without origin/HEAD, no counts.
   const local = join(temp, "local")
   mkdirSync(local)
   git(local, "init", "-q", "-b", "main")
   git(local, "commit", "-q", "--allow-empty", "-m", "one")
-  assert.deepEqual(await list(kitWith(), ioIn(local).io), [{ path: local, branch: "main", base: "origin/HEAD", changed: 0, ahead: null, behind: null, tab: null }])
+  assert.deepEqual(await list(kitWith(), ioIn(local).io), [
+    { path: local, branch: "main", base: "origin/HEAD", changed: 0, ahead: null, behind: null, tab: null },
+  ])
   await assert.rejects(list(kitWith(), ioIn(temp).io), new Failed("ade worktree ls: not inside a git repo"))
 })
 
@@ -134,7 +180,17 @@ test("ade worktree: ls, its exit statuses and messages", async () => {
 
 test("globIn: names, classes, folders at any depth; no leading dots for wildcards", () => {
   const root = join(temp, "glob")
-  for (const file of [".env", ".env.local", ".envrc", "a.txt", "b.txt", "sub/.env", "sub/c.txt", ".hidden/.env", "d/e/.env"]) {
+  for (const file of [
+    ".env",
+    ".env.local",
+    ".envrc",
+    "a.txt",
+    "b.txt",
+    "sub/.env",
+    "sub/c.txt",
+    ".hidden/.env",
+    "d/e/.env",
+  ]) {
     mkdirSync(join(root, file, ".."), { recursive: true })
     writeFileSync(join(root, file), "")
   }
@@ -154,24 +210,45 @@ test("seedsFor: ADE_SEED_FILE, the repository's manifest, ADE_SEED, the defaults
   const common = join(temp, "seeds")
   mkdirSync(common)
   const repo = { common, root: temp, bare: false }
-  assert.deepEqual(seedsFor(repo, {}, DEFAULTS.worktrees.seed), { patterns: [".env", ".env.*", ".envrc", "pyrightconfig.json"], label: "default seed list" })
-  assert.deepEqual(seedsFor(repo, { ADE_SEED: "a\n\nb" }, DEFAULTS.worktrees.seed), { patterns: ["a", "b"], label: "ADE_SEED" })
+  assert.deepEqual(seedsFor(repo, {}, DEFAULTS.worktrees.seed), {
+    patterns: [".env", ".env.*", ".envrc", "pyrightconfig.json"],
+    label: "default seed list",
+  })
+  assert.deepEqual(seedsFor(repo, { ADE_SEED: "a\n\nb" }, DEFAULTS.worktrees.seed), {
+    patterns: ["a", "b"],
+    label: "ADE_SEED",
+  })
   assert.deepEqual(seedsFor(repo, { ADE_SEED: "" }, DEFAULTS.worktrees.seed), { patterns: [], label: "ADE_SEED" })
   writeFileSync(join(common, "ade-seed"), "# local\n\n  .env  \r\nconfig/*.toml\n")
-  assert.deepEqual(seedsFor(repo, { ADE_SEED: "a" }, DEFAULTS.worktrees.seed), { patterns: [".env", "config/*.toml"], label: join(common, "ade-seed") })
+  assert.deepEqual(seedsFor(repo, { ADE_SEED: "a" }, DEFAULTS.worktrees.seed), {
+    patterns: [".env", "config/*.toml"],
+    label: join(common, "ade-seed"),
+  })
   for (const unsafe of ["/etc/passwd", "..", "../x", "a/../b", "a/.."]) {
     writeFileSync(join(common, "ade-seed"), `${unsafe}\n`)
-    assert.throws(() => seedsFor(repo, {}, DEFAULTS.worktrees.seed), new Failed(`ade worktree open: unsafe seed pattern in ${join(common, "ade-seed")}: ${unsafe}`))
+    assert.throws(
+      () => seedsFor(repo, {}, DEFAULTS.worktrees.seed),
+      new Failed(`ade worktree open: unsafe seed pattern in ${join(common, "ade-seed")}: ${unsafe}`),
+    )
   }
   writeFileSync(join(common, "other"), "x\n")
   assert.deepEqual(seedsFor(repo, { ADE_SEED_FILE: join(common, "other") }, DEFAULTS.worktrees.seed).patterns, ["x"])
-  assert.throws(() => seedsFor(repo, { ADE_SEED_FILE: join(common, "missing") }, DEFAULTS.worktrees.seed), new Failed(`ade worktree open: ADE_SEED_FILE is not readable: ${join(common, "missing")}`))
+  assert.throws(
+    () => seedsFor(repo, { ADE_SEED_FILE: join(common, "missing") }, DEFAULTS.worktrees.seed),
+    new Failed(`ade worktree open: ADE_SEED_FILE is not readable: ${join(common, "missing")}`),
+  )
 })
 
 test("parseLanding: the options before the branch", () => {
   assert.deepEqual(parseLanding("ade worktree open", ["x"]), { landing: { mode: "cd" }, rest: ["x"] })
-  assert.deepEqual(parseLanding("ade worktree open", ["-t", "-t", "x", "-s"]), { landing: { mode: "tab" }, rest: ["x", "-s"] })
-  assert.deepEqual(parseLanding("ade worktree open", ["-p", "go", "x"]), { landing: { mode: "background", prompt: "go" }, rest: ["x"] })
+  assert.deepEqual(parseLanding("ade worktree open", ["-t", "-t", "x", "-s"]), {
+    landing: { mode: "tab" },
+    rest: ["x", "-s"],
+  })
+  assert.deepEqual(parseLanding("ade worktree open", ["-p", "go", "x"]), {
+    landing: { mode: "background", prompt: "go" },
+    rest: ["x"],
+  })
   assert.deepEqual(parseLanding("ade worktree open", ["--prompt=go", "-t", "--session", "s1", "--", "-x"]), {
     landing: { mode: "tab", prompt: "go", session: "s1" },
     rest: ["-x"],
@@ -191,19 +268,32 @@ test("open: a new branch from origin/HEAD, seeded, reused; git's output as messa
   writeFileSync(join(main, ".env"), "secret\n")
   let r = ioIn(main)
   assert.deepEqual(await open(kitWith(), r.io, ["-s", "topic/one"]), { dir: join(project, "topic-one"), cd: false })
-  assert.ok(r.said.some((said) => said.startsWith("Preparing worktree")), r.said.join("\n"))
+  assert.ok(
+    r.said.some((said) => said.startsWith("Preparing worktree")),
+    r.said.join("\n"),
+  )
   assert.equal(r.said.at(-1), "ade worktree open: seeded 1 local file(s) from main/ (default seed list)")
   assert.equal(git(join(project, "topic-one"), "symbolic-ref", "--short", "HEAD"), "topic/one\n")
   r = ioIn(join(project, "feat"))
   assert.deepEqual(await open(kitWith(), r.io, ["topic/one"]), { dir: join(project, "topic-one"), cd: true })
   assert.deepEqual(r.said, [])
-  await assert.rejects(open(kitWith(), ioIn(main).io, []), new Failed("usage: ade worktree open [-s|-t|-b] [-p PROMPT] [--session ID] <branch> [base]   (options before the branch)"))
+  await assert.rejects(
+    open(kitWith(), ioIn(main).io, []),
+    new Failed(
+      "usage: ade worktree open [-s|-t|-b] [-p PROMPT] [--session ID] <branch> [base]   (options before the branch)",
+    ),
+  )
   await assert.rejects(open(kitWith(), ioIn(temp).io, ["x"]), new Failed("ade worktree open: not inside a git repo"))
   // Without a multiplexer: -t changes directory, -p refuses before anything is made.
   r = ioIn(main)
   assert.deepEqual(await open(kitWith(), r.io, ["-t", "topic/one"]), { dir: join(project, "topic-one"), cd: true })
-  assert.deepEqual(r.said, ["ade worktree open: no multiplexer is configured; changing directory instead of opening a tab"])
-  await assert.rejects(open(kitWith(), ioIn(main).io, ["-p", "go", "never"]), new Failed("ade worktree open: -p/--session start OpenCode in a new tab; no multiplexer is configured"))
+  assert.deepEqual(r.said, [
+    "ade worktree open: no multiplexer is configured; changing directory instead of opening a tab",
+  ])
+  await assert.rejects(
+    open(kitWith(), ioIn(main).io, ["-p", "go", "never"]),
+    new Failed("ade worktree open: -p/--session start OpenCode in a new tab; no multiplexer is configured"),
+  )
 })
 
 test("worktreeFor: by branch, by folder name or by path; a name both ways is ambiguous", async () => {
@@ -227,31 +317,53 @@ test("remove and prune: the worktree goes, with their messages", async () => {
   r = ioIn(main)
   await remove(kitWith(), r.io, ["clash"]) // now only a branch's name: its worktree is elsewhere
   assert.deepEqual(r.said, ["removed elsewhere"])
-  await assert.rejects(remove(kitWith(), ioIn(main).io, ["clash"]), new Failed("ade worktree rm: no worktree found for 'clash'"))
-  await assert.rejects(remove(kitWith(), ioIn(main).io, []), new Failed("usage: ade worktree rm [-f|--force] <branch|worktree>"))
+  await assert.rejects(
+    remove(kitWith(), ioIn(main).io, ["clash"]),
+    new Failed("ade worktree rm: no worktree found for 'clash'"),
+  )
+  await assert.rejects(
+    remove(kitWith(), ioIn(main).io, []),
+    new Failed("usage: ade worktree rm [-f|--force] <branch|worktree>"),
+  )
   // A pushed branch whose remote branch was deleted.
   git(project, "worktree", "add", "-q", "-b", "done", "done", "main")
   git(join(project, "done"), "push", "-q", "-u", "origin", "done")
   git(origin, "branch", "-q", "-D", "done")
   r = ioIn(main)
-  await assert.rejects(prune(kitWith(), r.io, []), new Failed("ade worktree prune: no terminal to confirm; rerun with -y"))
-  assert.deepEqual(r.said.filter((said) => said.startsWith("ade worktree prune:") || said.startsWith(" ")), [
-    "ade worktree prune: git fetch --all --prune ...",
-    "ade worktree prune: worktrees to remove:",
-    `  ${"done".padEnd(38)} (remote branch deleted)`,
-  ])
+  await assert.rejects(
+    prune(kitWith(), r.io, []),
+    new Failed("ade worktree prune: no terminal to confirm; rerun with -y"),
+  )
+  assert.deepEqual(
+    r.said.filter((said) => said.startsWith("ade worktree prune:") || said.startsWith(" ")),
+    [
+      "ade worktree prune: git fetch --all --prune ...",
+      "ade worktree prune: worktrees to remove:",
+      `  ${"done".padEnd(38)} (remote branch deleted)`,
+    ],
+  )
   r = ioIn(main)
   await prune(kitWith(), { ...r.io, confirm: async () => true }, ["-n"])
   assert.equal(r.said.at(-1), "removed done")
   r = ioIn(main)
   await prune(kitWith(), r.io, ["-n", "-y"])
   assert.deepEqual(r.said, ["ade worktree prune: nothing to remove."])
-  await assert.rejects(prune(kitWith(), ioIn(main).io, ["-x"]), new Failed("usage: ade worktree prune [-y] [-n|--no-fetch] [-m|--merged]"))
+  await assert.rejects(
+    prune(kitWith(), ioIn(main).io, ["-x"]),
+    new Failed("usage: ade worktree prune [-y] [-n|--no-fetch] [-m|--merged]"),
+  )
 })
 
 // A kit whose config has these worktree options.
 const kitLaid = (worktrees: Partial<Config["worktrees"]>): Kit =>
-  makeKit({ config: { ...structuredClone(DEFAULTS), multiplexer: "none", worktrees: { ...DEFAULTS.worktrees, ...worktrees } } as Config, run })
+  makeKit({
+    config: {
+      ...structuredClone(DEFAULTS),
+      multiplexer: "none",
+      worktrees: { ...DEFAULTS.worktrees, ...worktrees },
+    } as Config,
+    run,
+  })
 const layoutOf = (dir: string) => git(dir, "config", "--get", "ade.layout").trim()
 
 test("layouts: where each puts a worktree, in a normal clone and in a bare repository", () => {
@@ -259,7 +371,10 @@ test("layouts: where each puts a worktree, in a normal clone and in a bare repos
   const plain = { common: "/code/repo/.git", root: "/code/repo", bare: false }
   const bare = { common: "/code/proj/.bare", root: "/code/proj", bare: true }
   assert.deepEqual(
-    ["bare", "sibling", "inside"].map((name) => [kit.builtin.layout(name).path(plain, "feat-x"), kit.builtin.layout(name).path(bare, "feat-x")]),
+    ["bare", "sibling", "inside"].map((name) => [
+      kit.builtin.layout(name).path(plain, "feat-x"),
+      kit.builtin.layout(name).path(bare, "feat-x"),
+    ]),
     [
       ["/code/repo/feat-x", "/code/proj/feat-x"],
       ["/code/repo.feat-x", "/code/proj/feat-x"],
@@ -289,8 +404,20 @@ test("a new repository takes the configured layout and keeps it when the config 
   // which is then recorded.
   git(cloned, "clone", "-q", origin, "old")
   git(join(cloned, "old"), "worktree", "add", "-q", "-b", "nested", "nested")
-  assert.equal((await layoutFor(kitLaid({ layout: "sibling" }), ioIn(join(cloned, "old")).io, (await repositoryOf(kitWith(), ioIn(join(cloned, "old")).io))!)).choice, "bare")
-  assert.deepEqual(await open(kitLaid({ layout: "sibling" }), ioIn(join(cloned, "old")).io, ["-s", "three"]), { dir: join(cloned, "old", "three"), cd: false })
+  assert.equal(
+    (
+      await layoutFor(
+        kitLaid({ layout: "sibling" }),
+        ioIn(join(cloned, "old")).io,
+        (await repositoryOf(kitWith(), ioIn(join(cloned, "old")).io))!,
+      )
+    ).choice,
+    "bare",
+  )
+  assert.deepEqual(await open(kitLaid({ layout: "sibling" }), ioIn(join(cloned, "old")).io, ["-s", "three"]), {
+    dir: join(cloned, "old", "three"),
+    cd: false,
+  })
   assert.equal(layoutOf(join(cloned, "old")), "bare")
   // A repository without worktrees: the configured layout; yours to set by hand.
   git(cloned, "clone", "-q", origin, "fresh")
@@ -301,9 +428,15 @@ test("a new repository takes the configured layout and keeps it when the config 
   })
   // A layout of your own, from the config.
   const mine = join(temp, "mine.ts")
-  writeFileSync(mine, `export default (kit) => ({ ...kit.builtin.layout("sibling"), name: "mine", path: (repo, name) => repo.root + "-wt/" + name })`)
+  writeFileSync(
+    mine,
+    `export default (kit) => ({ ...kit.builtin.layout("sibling"), name: "mine", path: (repo, name) => repo.root + "-wt/" + name })`,
+  )
   git(cloned, "clone", "-q", origin, "custom")
-  assert.deepEqual(await open(kitLaid({ layout: mine }), ioIn(join(cloned, "custom")).io, ["-s", "five"]), { dir: join(cloned, "custom-wt", "five"), cd: false })
+  assert.deepEqual(await open(kitLaid({ layout: mine }), ioIn(join(cloned, "custom")).io, ["-s", "five"]), {
+    dir: join(cloned, "custom-wt", "five"),
+    cd: false,
+  })
   assert.equal(layoutOf(join(cloned, "custom")), mine)
 })
 
@@ -342,11 +475,16 @@ test("convert into bare: the clone's worktrees stay and work; a folder named lik
   git(c3, "commit", "-q", "-m", "ignore")
   mkdirSync(join(c3, ".venv"))
   writeFileSync(join(c3, ".venv", "old"), "mine\n")
-  writeFileSync(join(c3, ".git", "hooks", "post-checkout"), "#!/bin/sh\nmkdir -p .venv && : > .venv/made\n", { mode: 0o755 })
+  writeFileSync(join(c3, ".git", "hooks", "post-checkout"), "#!/bin/sh\nmkdir -p .venv && : > .venv/made\n", {
+    mode: 0o755,
+  })
   r = ioIn(c3)
   await convert(kitLaid({}), r.io, ["-y"])
   assert.ok(r.said.includes("  kept (already in the worktree): .venv -> .venv.ade-convert-kept"), r.said.join("\n"))
-  assert.deepEqual([readdirSync(join(c3, "main", ".venv")), readdirSync(join(c3, "main", ".venv.ade-convert-kept"))], [["made"], ["old"]])
+  assert.deepEqual(
+    [readdirSync(join(c3, "main", ".venv")), readdirSync(join(c3, "main", ".venv.ade-convert-kept"))],
+    [["made"], ["old"]],
+  )
 })
 
 test("convert into sibling or inside: worktrees move where the layout puts them; refused when done already", async () => {
@@ -356,20 +494,32 @@ test("convert into sibling or inside: worktrees move where the layout puts them;
   git(dir, "clone", "-q", origin, "s1")
   git(s1, "worktree", "add", "-q", "-b", "nested", "nested")
   writeFileSync(join(s1, "nested", "wip.txt"), "wip\n")
-  await assert.rejects(convert(kitLaid({ layout: "sibling" }), ioIn(s1).io, []), new Failed("ade worktree convert: no terminal to confirm; rerun with -y"))
+  await assert.rejects(
+    convert(kitLaid({ layout: "sibling" }), ioIn(s1).io, []),
+    new Failed("ade worktree convert: no terminal to confirm; rerun with -y"),
+  )
   // From inside the worktree that moves: you land in its new place.
   let r = ioIn(join(s1, "nested"))
-  assert.deepEqual(await convert(kitLaid({ layout: "sibling" }), r.io, ["-y"]), { dir: join(dir, "s1.nested"), cd: true })
-  assert.deepEqual(r.said.filter((said) => !said.startsWith("HEAD")), [
-    "convert to the sibling layout:",
-    `  repo:   ${s1}`,
-    `  move:   ${join(s1, "nested")}  ->  ${join(dir, "s1.nested")}`,
-    `done: ${s1} uses the sibling layout`,
-  ])
+  assert.deepEqual(await convert(kitLaid({ layout: "sibling" }), r.io, ["-y"]), {
+    dir: join(dir, "s1.nested"),
+    cd: true,
+  })
+  assert.deepEqual(
+    r.said.filter((said) => !said.startsWith("HEAD")),
+    [
+      "convert to the sibling layout:",
+      `  repo:   ${s1}`,
+      `  move:   ${join(s1, "nested")}  ->  ${join(dir, "s1.nested")}`,
+      `done: ${s1} uses the sibling layout`,
+    ],
+  )
   assert.equal(git(join(dir, "s1.nested"), "status", "--porcelain"), "?? wip.txt\n")
   assert.equal(git(s1, "status", "--porcelain"), "")
   assert.equal(layoutOf(s1), "sibling")
-  await assert.rejects(convert(kitLaid({ layout: "sibling" }), ioIn(s1).io, ["-y"]), new Failed(`ade worktree convert: ${s1} uses the sibling layout already`))
+  await assert.rejects(
+    convert(kitLaid({ layout: "sibling" }), ioIn(s1).io, ["-y"]),
+    new Failed(`ade worktree convert: ${s1} uses the sibling layout already`),
+  )
   // inside: into .worktrees, which git status doesn't show.
   const i1 = join(dir, "i1")
   git(dir, "clone", "-q", origin, "i1")
@@ -378,12 +528,18 @@ test("convert into sibling or inside: worktrees move where the layout puts them;
   assert.equal(git(join(i1, ".worktrees", "nested"), "symbolic-ref", "--short", "HEAD"), "nested\n")
   assert.equal(git(i1, "status", "--porcelain"), "")
   // A bare repository was converted already.
-  await assert.rejects(convert(kitLaid({ layout: "sibling" }), ioIn(join(project, "main")).io, ["-y"]), new Failed(`ade worktree convert: ${project} is a bare repository (already converted?)`))
+  await assert.rejects(
+    convert(kitLaid({ layout: "sibling" }), ioIn(join(project, "main")).io, ["-y"]),
+    new Failed(`ade worktree convert: ${project} is a bare repository (already converted?)`),
+  )
 })
 
 test("query: git's output in English, as it is parsed", async () => {
   const seen: (Record<string, string | undefined> | undefined)[] = []
-  const recording = makeKit({ config: structuredClone(DEFAULTS), run: async (_argv, o) => (seen.push(o?.env), { ok: true, stdout: "x\n", stderr: "" }) })
+  const recording = makeKit({
+    config: structuredClone(DEFAULTS),
+    run: async (_argv, o) => (seen.push(o?.env), { ok: true, stdout: "x\n", stderr: "" }),
+  })
   assert.equal(await query(recording, ioIn("/", { LANG: "de_DE.UTF-8", KEEP: "1" }).io, ["status"]), "x\n")
   assert.deepEqual([seen[0]?.LC_ALL, seen[0]?.LANG, seen[0]?.KEEP], ["C", "de_DE.UTF-8", "1"])
 })
@@ -408,5 +564,8 @@ test("a layout of your own clones and fails with the kit alone, no imports", asy
   await clone(kitLaid({ layout: mine }), r.io, [origin, "mine"])
   assert.deepEqual(r.said.slice(-2), ["on main", "worktrees: 1"])
   assert.equal(layoutOf(join(cloned, "mine")), mine)
-  await assert.rejects(clone(kitLaid({ layout: mine }), ioIn(cloned).io, [join(temp, "missing"), "none"]), new Failed("cloning: clone failed"))
+  await assert.rejects(
+    clone(kitLaid({ layout: mine }), ioIn(cloned).io, [join(temp, "missing"), "none"]),
+    new Failed("cloning: clone failed"),
+  )
 })

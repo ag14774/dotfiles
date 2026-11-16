@@ -11,7 +11,17 @@ import { labelOf, loadAgent, loadEditor, loadReviewer } from "./load.ts"
 import { isActive, paneWith, tabOf, tabsIn } from "./multiplexer.ts"
 import { reviewerEnv, scopeOf } from "./review.ts"
 import type { Agent, FileRef, Kit, Multiplexer, MultiplexerAdapter, OpenedTab, Workspace } from "./types.ts"
-import { callerFolder, isDirectory, located, multiplexerAt, outside, realPath, sessionOf, workspaceOf, worktreesOf } from "./workspace.ts"
+import {
+  callerFolder,
+  isDirectory,
+  located,
+  multiplexerAt,
+  outside,
+  realPath,
+  sessionOf,
+  workspaceOf,
+  worktreesOf,
+} from "./workspace.ts"
 
 type Env = Record<string, string | undefined>
 export type Caller = { env: Env; cwd: string }
@@ -50,7 +60,11 @@ async function callerSession(kit: Kit, caller: Caller) {
 }
 
 // An optional operation of the multiplexer, which an action needs.
-function needs<K extends "openTab" | "showTab" | "closeTab">(mux: Multiplexer, operation: K, adapter: MultiplexerAdapter) {
+function needs<K extends "openTab" | "showTab" | "closeTab">(
+  mux: Multiplexer,
+  operation: K,
+  adapter: MultiplexerAdapter,
+) {
   const call = mux[operation]
   if (typeof call !== "function") throw new Error(`the multiplexer "${adapter.name}" lacks: ${operation}`)
   return call.bind(mux) as NonNullable<Multiplexer[K]>
@@ -98,7 +112,12 @@ function agentCommand(agent: Agent, o: { session?: string; prompt?: string }, en
 // didn't say where it is counts: going to it is harmless, a duplicate is not.
 // With a conversation or a prompt, the new tab's agent starts on them, and a
 // worktree that has a tab is refused. `tell` gets what happened, to show.
-export async function workspace(kit: Kit, o: WorkspaceOptions, caller: Caller, tell: (message: string) => void = () => {}) {
+export async function workspace(
+  kit: Kit,
+  o: WorkspaceOptions,
+  caller: Caller,
+  tell: (message: string) => void = () => {},
+) {
   const { adapter, mux } = await callerSession(kit, caller)
   const given = resolve(caller.cwd, o.dir)
   if (!isDirectory(given)) throw new Error(`${given} is not a folder`)
@@ -124,7 +143,8 @@ export async function workspace(kit: Kit, o: WorkspaceOptions, caller: Caller, t
   if (!o.focus) tell(`opened tab ${name} in the background`)
   if (agent && opened.agent === "no pane")
     throw new Error(`no ${agent.name} pane in tab ${name}; prompt not sent (the tab stays open)`)
-  if (agent && opened.agent !== "started") throw new Error(`could not start ${labelOf(agent)} with the prompt in tab ${name}`)
+  if (agent && opened.agent !== "started")
+    throw new Error(`could not start ${labelOf(agent)} with the prompt in tab ${name}`)
   if (agent) tell(`${labelOf(agent)} in tab ${name} is working on the prompt`)
   return { tab: opened.tab, opened: true }
 }
@@ -147,7 +167,8 @@ export async function closeTabs(
   const closing = found ?? (await tabs(kit, [dir], caller))[dir]
   if (!closing.length) return
   const agent = await loadAgent(kit)
-  if (agent.ranByAgent?.(caller.env)) return tell(`left the tabs of ${name} open (${labelOf(agent)} agents don't close tabs)`)
+  if (agent.ranByAgent?.(caller.env))
+    return tell(`left the tabs of ${name} open (${labelOf(agent)} agents don't close tabs)`)
   const own = where.pane === undefined ? undefined : tabOf(await mux.panes().catch(() => []), where.pane)
   if (own === undefined) return tell(`left the tabs of ${name} open (could not tell which tab you are in)`)
   const closeTab = needs(mux, "closeTab", adapter)

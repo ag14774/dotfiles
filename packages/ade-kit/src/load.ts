@@ -56,7 +56,9 @@ const wrongFields = (object: Record<string, unknown>, fields: Record<string, "ar
   Object.entries(fields)
     .filter(([field, type]) => {
       const value = object[field]
-      return type === "array" ? !Array.isArray(value) : typeof value !== "object" || value === null || Array.isArray(value)
+      return type === "array"
+        ? !Array.isArray(value)
+        : typeof value !== "object" || value === null || Array.isArray(value)
     })
     .map(([field]) => field)
 
@@ -66,7 +68,8 @@ export async function loadAdapter(kit: Kit, kind: Kind, value: string, o: LoadOp
   if (typeof make !== "function") throw new Error(`ade: ${what} must export a function (kit => adapter)`)
   const adapter = (await make(kit)) as Record<string, unknown>
   if (typeof adapter !== "object" || adapter === null) throw new Error(`ade: ${what} returned no adapter`)
-  if (adapter.api !== API) throw new Error(`ade: ${what} is written for api ${adapter.api}; this ade-kit has api ${API}`)
+  if (adapter.api !== API)
+    throw new Error(`ade: ${what} is written for api ${adapter.api}; this ade-kit has api ${API}`)
   const lacks = [
     ...(typeof adapter.name === "string" ? [] : ["name"]),
     ...missing(adapter, KINDS[kind].required),

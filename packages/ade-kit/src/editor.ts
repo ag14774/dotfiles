@@ -28,7 +28,8 @@ export const listed = (items: readonly string[]) =>
 export function typedEditor(o: TypedEditorOptions): Editor {
   const label = o.label ?? o.name
   const typing = async (reach: Reach, keys: Key[]) => {
-    if (!reach.mux || reach.pane === undefined) throw new Error(`${label} is reached through its pane, which needs a multiplexer`)
+    if (!reach.mux || reach.pane === undefined)
+      throw new Error(`${label} is reached through its pane, which needs a multiplexer`)
     await reach.mux.type(reach.pane, keys)
   }
   const reload = o.reload
@@ -45,7 +46,11 @@ export function typedEditor(o: TypedEditorOptions): Editor {
         if (!program) throw new Error(`${label} executable not found (tried ${listed(o.programs)})`)
         return [program, ...files.map((file) => file.path)]
       }),
-    open: (files, reach) => typing(reach, files.flatMap((file) => o.open(file))),
+    open: (files, reach) =>
+      typing(
+        reach,
+        files.flatMap((file) => o.open(file)),
+      ),
     ...(reload ? { reload: (reach: Reach) => typing(reach, reload()) } : {}),
   }
 }

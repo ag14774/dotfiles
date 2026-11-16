@@ -16,7 +16,11 @@ const app = (sessions: Record<string, Info>, shown: string[], builtinOff = true)
     {
       on: (type, listener) => {
         listeners.set(type, [...(listeners.get(type) ?? []), listener])
-        return () => listeners.set(type, (listeners.get(type) ?? []).filter((l) => l !== listener))
+        return () =>
+          listeners.set(
+            type,
+            (listeners.get(type) ?? []).filter((l) => l !== listener),
+          )
       },
       session: {
         get: (id) => sessions[id],
@@ -80,7 +84,12 @@ test("a subagent of a shown conversation: subagent_done, without a system notifi
   const a = app({ s1: { title: "Main" }, c1: { parentID: "s1", title: "Explore" } }, ["s1"])
   a.send("session.execution.succeeded", { sessionID: "c1" })
   assert.deepEqual(a.notices, [
-    { title: "Explore", message: "Session done", notification: false, sound: { name: "subagent_done", when: "always" } },
+    {
+      title: "Explore",
+      message: "Session done",
+      notification: false,
+      sound: { name: "subagent_done", when: "always" },
+    },
   ])
 })
 

@@ -13,8 +13,8 @@ alias grep='grep --color=auto'
 export CLICOLOR=1
 export LSCOLORS='Gxfxcxdxbxegedabagacad'
 if ls --color=auto -d . >/dev/null 2>&1; then
-	alias ls='ls --color=auto'
-	(( $+commands[dircolors] )) && eval "$(dircolors -b)"
+  alias ls='ls --color=auto'
+  (( $+commands[dircolors] )) && eval "$(dircolors -b)"
 else
-	alias ls='ls -G'
+  alias ls='ls -G'
 fi

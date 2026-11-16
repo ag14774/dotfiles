@@ -14,13 +14,18 @@ export type Conversation = { id: string; title?: string; state: string; last?: s
 
 // The parts of a conversation's record and last answer read here.
 export type Record = { outcome?: string; time: { busy?: number; idle?: number } }
-export type Answer = { error?: unknown; content?: { type: string; name?: string; text?: string; state?: { status?: string } }[] }
+export type Answer = {
+  error?: unknown
+  content?: { type: string; name?: string; text?: string; state?: { status?: string } }[]
+}
 
 // What a conversation is doing: `waiting` when a permission request or
 // question of it is pending.
 export function stateOf(info: Record, last: Answer | undefined, waiting: boolean) {
   // A question asked before this plugin loaded shows only in the answer.
-  const asking = last?.content?.some((part) => part.type === "tool" && part.name === "question" && part.state?.status === "running")
+  const asking = last?.content?.some(
+    (part) => part.type === "tool" && part.name === "question" && part.state?.status === "running",
+  )
   const busy = info.time.busy !== undefined && (info.time.idle === undefined || info.time.busy > info.time.idle)
   if (waiting || asking) return "waiting for the user"
   if (busy) return "working"
@@ -50,6 +55,8 @@ export function describe(worktree: Worktree & { conversation: Conversation | nul
   if (worktree.ahead !== null) parts.push(`${worktree.ahead} ahead, ${worktree.behind} behind ${worktree.base}`)
   parts.push(worktree.tab === "sure" ? "tab open" : worktree.tab === "unsure" ? "tab probably open" : "no tab")
   const conversation = worktree.conversation
-  const talk = conversation ? `conversation ${conversation.state}${conversation.last ? `: "${conversation.last}"` : ""}` : "no conversation"
+  const talk = conversation
+    ? `conversation ${conversation.state}${conversation.last ? `: "${conversation.last}"` : ""}`
+    : "no conversation"
   return `- ${worktree.path}${here ? " (this conversation)" : ""}: ${parts.join(", ")}; ${talk}`
 }

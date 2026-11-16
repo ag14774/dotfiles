@@ -42,7 +42,8 @@ export const worktreeOf = async (kit: Kit, io: Io, repo: Repository, branch: str
 // The worktree of the default branch (origin/HEAD's, else HEAD's): where new
 // worktrees are seeded from when you are not in one.
 export async function defaultWorktree(kit: Kit, io: Io, repo: Repository) {
-  const ref = async (name: string) => line(await query(kit, io, ["--git-dir", repo.common, "symbolic-ref", "--quiet", name]))
+  const ref = async (name: string) =>
+    line(await query(kit, io, ["--git-dir", repo.common, "symbolic-ref", "--quiet", name]))
   const branch =
     (await ref("refs/remotes/origin/HEAD"))?.replace(/^refs\/remotes\/origin\//, "") ||
     (await ref("HEAD"))?.replace(/^refs\/heads\//, "")
@@ -83,7 +84,8 @@ export function seedsFor(repo: Repository, env: Env, defaults: string[]): Seeds 
     for (const raw of text.split("\n")) {
       const pattern = raw.replace(/\r$/, "").trim()
       if (!pattern || pattern.startsWith("#")) continue
-      if (/^\/|^\.\.(\/|$)|\/\.\.(\/|$)/.test(pattern)) throw new Failed(`${COMMAND.open}: unsafe seed pattern in ${file}: ${pattern}`)
+      if (/^\/|^\.\.(\/|$)|\/\.\.(\/|$)/.test(pattern))
+        throw new Failed(`${COMMAND.open}: unsafe seed pattern in ${file}: ${pattern}`)
       patterns.push(pattern)
     }
     return { patterns, label: file }
@@ -129,7 +131,8 @@ export function globIn(root: string, pattern: string): string[] {
     const into = (name: string) => [join(dir, name), rel ? `${rel}/${name}` : name] as const
     if (part === "**" && after.length) {
       walk(dir, rel, after)
-      for (const entry of entries(dir)) if (entry.isDirectory() && !entry.name.startsWith(".")) walk(...into(entry.name), rest)
+      for (const entry of entries(dir))
+        if (entry.isDirectory() && !entry.name.startsWith(".")) walk(...into(entry.name), rest)
       return
     }
     if (!/[*?[]/.test(part)) {
@@ -233,12 +236,19 @@ export async function land(kit: Kit, io: Io, dir: string, name: string, landing:
       throw new Failed(`${name}: ${message(error)}`)
     })
     if (!at.where) {
-      io.say(`${name}: ${outside(at.adapter)}; ${mode === "tab" ? "changing directory" : "staying here"} instead of opening a tab`)
+      io.say(
+        `${name}: ${outside(at.adapter)}; ${mode === "tab" ? "changing directory" : "staying here"} instead of opening a tab`,
+      )
       mode = mode === "tab" ? "cd" : "stay"
     }
   }
   if (mode === "cd" || mode === "stay") return { dir, cd: mode === "cd" }
-  const o = { dir, focus: mode === "tab", ...(landing.session ? { session: landing.session } : {}), ...(landing.prompt ? { prompt: landing.prompt } : {}) }
+  const o = {
+    dir,
+    focus: mode === "tab",
+    ...(landing.session ? { session: landing.session } : {}),
+    ...(landing.prompt ? { prompt: landing.prompt } : {}),
+  }
   try {
     await workspace(kit, o, { env: io.env, cwd: io.cwd }, (said) => io.say(`${name}: ${said}`))
   } catch (error) {
@@ -263,7 +273,9 @@ export async function layoutFor(kit: Kit, io: Io, repo: Repository) {
   let best = { choice: configured, explains: 0 }
   for (const choice of [configured, ...Object.keys(builtins("layout")).filter((name) => name !== configured)]) {
     const layout = await loadLayout(kit, choice)
-    const explains = worktrees.filter((r) => realPath(layout.path(repo, (r.branch ?? "").replaceAll("/", "-"))) === realPath(r.path)).length
+    const explains = worktrees.filter(
+      (r) => realPath(layout.path(repo, (r.branch ?? "").replaceAll("/", "-"))) === realPath(r.path),
+    ).length
     if (explains > best.explains) best = { choice, explains }
   }
   return { layout: await loadLayout(kit, best.choice), choice: best.choice, recorded: false }
@@ -293,7 +305,8 @@ export async function open(kit: Kit, io: Io, args: string[]): Promise<Landed> {
   if (!isDirectory(dir)) {
     const seeds = seedsFor(repo, io.env, kit.config.worktrees.seed)
     await loud(kit, io, ["fetch", "-q", "origin"], repo.root)
-    const has = async (ref: string) => (await query(kit, io, ["show-ref", "-q", "--verify", ref], repo.root)) !== undefined
+    const has = async (ref: string) =>
+      (await query(kit, io, ["show-ref", "-q", "--verify", ref], repo.root)) !== undefined
     const add = (await has(`refs/heads/${branch}`))
       ? ["worktree", "add", dir, branch]
       : (await has(`refs/remotes/origin/${branch}`))
@@ -313,7 +326,12 @@ export async function open(kit: Kit, io: Io, args: string[]): Promise<Landed> {
 // The worktree `arg` names: a branch's, a folder's (by its name), or an
 // absolute path. "ambiguous" when it is a branch of one worktree and the
 // folder of another.
-export async function worktreeFor(kit: Kit, io: Io, repo: Repository, arg: string): Promise<string | "ambiguous" | undefined> {
+export async function worktreeFor(
+  kit: Kit,
+  io: Io,
+  repo: Repository,
+  arg: string,
+): Promise<string | "ambiguous" | undefined> {
   const found = await worktreeRecords(kit, io, repo.root)
   if (arg.startsWith("/")) return found.find((r) => r.path === arg || realPath(r.path) === realPath(arg))?.path
   const byBranch = found.find((r) => r.branch === arg)?.path
@@ -328,7 +346,9 @@ export async function worktreeFor(kit: Kit, io: Io, repo: Repository, arg: strin
 async function tabsOf(kit: Kit, io: Io, dir: string) {
   if (!(await multiplexerAt(kit, io.env).catch(() => undefined))?.where) return []
   const path = realPath(dir)
-  return (await tabs(kit, [path], { env: io.env, cwd: io.cwd }).catch(() => ({}) as Record<string, TabIn[]>))[path] ?? []
+  return (
+    (await tabs(kit, [path], { env: io.env, cwd: io.cwd }).catch(() => ({}) as Record<string, TabIn[]>))[path] ?? []
+  )
 }
 
 // rm: remove a worktree (-f: even with changes), then close the tabs working
@@ -340,15 +360,19 @@ export async function remove(kit: Kit, io: Io, args: string[]) {
   const repo = await repositoryOf(kit, io)
   if (!repo) throw new Failed(`${COMMAND.rm}: not inside a git repo`)
   const target = await worktreeFor(kit, io, repo, arg)
-  if (target === "ambiguous") throw new Failed(`${COMMAND.rm}: '${arg}' matches both a branch and a worktree directory; use the absolute path`)
+  if (target === "ambiguous")
+    throw new Failed(`${COMMAND.rm}: '${arg}' matches both a branch and a worktree directory; use the absolute path`)
   if (!target) throw new Failed(`${COMMAND.rm}: no worktree found for '${arg}'`)
   // Their shells would be left in a deleted folder. Found now: once it is
   // removed, their panes' folders are gone.
   const found = await tabsOf(kit, io, target)
-  if (!(await loud(kit, io, ["worktree", "remove", ...(force ? ["--force"] : []), target], repo.root))) throw new Failed()
+  if (!(await loud(kit, io, ["worktree", "remove", ...(force ? ["--force"] : []), target], repo.root)))
+    throw new Failed()
   io.say(`removed ${basename(target)}`)
   if (found.length)
-    await closeTabs(kit, target, found, { env: io.env, cwd: io.cwd }, io.say).catch((error) => io.say(`${COMMAND.rm}: ${message(error)}`))
+    await closeTabs(kit, target, found, { env: io.env, cwd: io.cwd }, io.say).catch((error) =>
+      io.say(`${COMMAND.rm}: ${message(error)}`),
+    )
 }
 
 // Whether `branch` was merged through a GitHub PR: one whose head is exactly
@@ -389,7 +413,13 @@ export async function prune(kit: Kit, io: Io, args: string[]) {
   }
   const head = line(await query(kit, io, ["symbolic-ref", "--quiet", "refs/remotes/origin/HEAD"], repo.root))
   const defaultBranch = head?.replace(/^refs\/remotes\/origin\//, "")
-  const refs = (await query(kit, io, ["for-each-ref", "--format=%(refname:short)%09%(upstream)%09%(upstream:track)", "refs/heads"], repo.root)) ?? ""
+  const refs =
+    (await query(
+      kit,
+      io,
+      ["for-each-ref", "--format=%(refname:short)%09%(upstream)%09%(upstream:track)", "refs/heads"],
+      repo.root,
+    )) ?? ""
   const gone = new Set(
     refs
       .split("\n")
@@ -398,7 +428,8 @@ export async function prune(kit: Kit, io: Io, args: string[]) {
       .map(([branch]) => branch),
   )
   const gh = merged && onPath(["gh"], io.env.PATH ?? "")
-  if (merged && !gh) io.say(`${COMMAND.prune}: --merged needs gh (GitHub CLI); without it, only deleted-remote branches are removed`)
+  if (merged && !gh)
+    io.say(`${COMMAND.prune}: --merged needs gh (GitHub CLI); without it, only deleted-remote branches are removed`)
   const here = line(await query(kit, io, ["rev-parse", "--show-toplevel"]))
   const targets: { path: string; why: string }[] = []
   for (const { path, branch } of await worktreeRecords(kit, io, repo.root)) {
@@ -518,7 +549,8 @@ export type Listed = {
 // The repository's worktrees (no bare repository, no folder deleted by hand),
 // for `ls --json` and the plugin's status.
 export async function list(kit: Kit, io: Io): Promise<Listed[]> {
-  if ((await query(kit, io, ["rev-parse", "--git-dir"])) === undefined) throw new Failed(`${COMMAND.ls}: not inside a git repo`)
+  if ((await query(kit, io, ["rev-parse", "--git-dir"])) === undefined)
+    throw new Failed(`${COMMAND.ls}: not inside a git repo`)
   const base = line(await query(kit, io, ["rev-parse", "--verify", "--quiet", kit.config.worktrees.base]))
   const found = (await worktreeRecords(kit, io, io.cwd)).filter((r) => !r.bare && isDirectory(r.path))
   const paths = found.map((r) => r.path)
@@ -527,7 +559,9 @@ export async function list(kit: Kit, io: Io): Promise<Listed[]> {
     tabsOf = await tabs(kit, paths, { env: io.env, cwd: io.cwd }).catch(() => ({}))
   return Promise.all(
     found.map(async ({ path, branch }) => {
-      const counts = base ? line(await query(kit, io, ["rev-list", "--left-right", "--count", `${base}...HEAD`], path)) : undefined
+      const counts = base
+        ? line(await query(kit, io, ["rev-list", "--left-right", "--count", `${base}...HEAD`], path))
+        : undefined
       const [behind, ahead] = counts ? counts.split("\t").map(Number) : [null, null]
       const status = (await query(kit, io, ["status", "--porcelain"], path)) ?? ""
       const first = tabsOf[path]?.[0]

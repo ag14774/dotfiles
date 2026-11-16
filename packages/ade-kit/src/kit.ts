@@ -61,9 +61,7 @@ export async function tabName(run: Kit["run"], template: string, dir: string) {
   return template.replace(/\{(worktree|project)\}/g, (_, key: string) => (key === "worktree" ? worktree : project))
 }
 
-export function makeKit(
-  o: { config?: Config; env?: Record<string, string | undefined>; run?: Kit["run"] } = {},
-): Kit {
+export function makeKit(o: { config?: Config; env?: Record<string, string | undefined>; run?: Kit["run"] } = {}): Kit {
   const kit: Kit = {
     config: o.config ?? readConfig(o.env),
     run: o.run ?? run,

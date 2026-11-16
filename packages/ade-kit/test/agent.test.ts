@@ -23,9 +23,16 @@ test("pasteAgent: insert pastes into the agent's pane; submit pastes, then press
   const { mux, calls } = recorder()
   await agent.insert("a question", { workspace, mux, pane: "3" })
   await agent.submit("comments", { workspace, mux, pane: "3" })
-  assert.deepEqual(calls, [["paste", "3", "a question"], ["paste", "3", "comments"], ["type", "3", [{ key: "enter" }]]])
+  assert.deepEqual(calls, [
+    ["paste", "3", "a question"],
+    ["paste", "3", "comments"],
+    ["type", "3", [{ key: "enter" }]],
+  ])
   assert.deepEqual(agent.start({}), ["claude"])
-  await assert.rejects(agent.insert("x", { workspace }), /^Error: Claude Code is reached through its pane, which needs a multiplexer$/)
+  await assert.rejects(
+    agent.insert("x", { workspace }),
+    /^Error: Claude Code is reached through its pane, which needs a multiplexer$/,
+  )
 })
 
 test("OpenCode: pasted into; started with the configured command, on a conversation or a prompt; marks its agents' commands", () => {
@@ -34,11 +41,18 @@ test("OpenCode: pasted into; started with the configured command, on a conversat
   assert.deepEqual(plain.start({}), ["opencode"])
   const config = { ...DEFAULTS, opencode: { command: ["opencode-pane"] } } as Config
   assert.deepEqual(opencode(makeKit({ config })).start({ session: "ses_1", prompt: "go" }), [
-    "opencode-pane", "--session", "ses_1", "--prompt", "go",
+    "opencode-pane",
+    "--session",
+    "ses_1",
+    "--prompt",
+    "go",
   ])
   assert.equal(plain.ranByAgent?.({ OPENCODE_TERMINAL: "1" }), true)
   assert.equal(plain.ranByAgent?.({ OPENCODE_TERMINAL: "" }), false)
   assert.equal(plain.ranByAgent?.({}), false)
   for (const command of ["opencode", [], [1]])
-    assert.throws(() => opencode(makeKit({ config: { ...DEFAULTS, opencode: { command } } as Config })), /opencode\.command must be a list of strings/)
+    assert.throws(
+      () => opencode(makeKit({ config: { ...DEFAULTS, opencode: { command } } as Config })),
+      /opencode\.command must be a list of strings/,
+    )
 })

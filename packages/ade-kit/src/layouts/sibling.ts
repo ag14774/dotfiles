@@ -7,5 +7,6 @@ import type { Layout } from "../types.ts"
 export default (): Layout => ({
   api: 1,
   name: "sibling",
-  path: (repo, name) => (repo.bare ? join(repo.root, name) : join(dirname(repo.root), `${basename(repo.root)}.${name}`)),
+  path: (repo, name) =>
+    repo.bare ? join(repo.root, name) : join(dirname(repo.root), `${basename(repo.root)}.${name}`),
 })

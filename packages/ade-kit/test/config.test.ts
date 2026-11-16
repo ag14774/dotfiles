@@ -42,9 +42,17 @@ test("the config file is found through XDG_CONFIG_HOME, else ~/.config", () => {
 })
 
 test("settings merge into the defaults key by key, and other sections are kept", () => {
-  const settings = { worktrees: { base: "origin/develop" }, zellij: { panes: { agent: "claude" } }, opencode: { command: ["opencode-pane"] } }
+  const settings = {
+    worktrees: { base: "origin/develop" },
+    zellij: { panes: { agent: "claude" } },
+    opencode: { command: ["opencode-pane"] },
+  }
   const config = readConfig({ XDG_CONFIG_HOME: configHome(JSON.stringify(settings)) })
-  assert.deepEqual(config.worktrees, { layout: "bare", base: "origin/develop", seed: [".env", ".env.*", ".envrc", "pyrightconfig.json"] })
+  assert.deepEqual(config.worktrees, {
+    layout: "bare",
+    base: "origin/develop",
+    seed: [".env", ".env.*", ".envrc", "pyrightconfig.json"],
+  })
   assert.deepEqual(config.zellij, { panes: { agent: "claude" } })
   assert.equal(config.multiplexer, "zellij")
   assert.deepEqual(config.opencode, { command: ["opencode-pane"] })
@@ -52,15 +60,30 @@ test("settings merge into the defaults key by key, and other sections are kept",
 
 test("a broken config file is refused, naming the file and the problem", () => {
   const broken = configHome("{ multiplexer: zellij }")
-  assert.throws(() => readConfig({ XDG_CONFIG_HOME: broken }), (error: Error) =>
-    error.message.includes(join(broken, "ade", "config.json")) && error.message.includes("not valid JSON"))
+  assert.throws(
+    () => readConfig({ XDG_CONFIG_HOME: broken }),
+    (error: Error) =>
+      error.message.includes(join(broken, "ade", "config.json")) && error.message.includes("not valid JSON"),
+  )
   assert.throws(() => readConfig({ XDG_CONFIG_HOME: configHome("[1, 2]") }), /must hold a JSON object/)
   assert.throws(
     () => readConfig({ XDG_CONFIG_HOME: configHome('{"multiplexer": 1, "editor": [], "agent": {}, "reviewer": 2}') }),
     /these must be strings: multiplexer, editor, agent, reviewer$/,
   )
-  assert.throws(() => readConfig({ XDG_CONFIG_HOME: configHome('{"review": {"deliver": "send"}}') }), /review\.deliver must be "insert" or "submit"$/)
-  assert.throws(() => readConfig({ XDG_CONFIG_HOME: configHome('{"worktrees": {"layout": 1, "base": null}}') }), /strings: worktrees\.layout, worktrees\.base$/)
-  assert.throws(() => readConfig({ XDG_CONFIG_HOME: configHome('{"worktrees": {"seed": ".env"}}') }), /worktrees\.seed must be a list of strings$/)
-  assert.equal(readConfig({ XDG_CONFIG_HOME: configHome('{"review": {"deliver": "submit"}}') }).review.deliver, "submit")
+  assert.throws(
+    () => readConfig({ XDG_CONFIG_HOME: configHome('{"review": {"deliver": "send"}}') }),
+    /review\.deliver must be "insert" or "submit"$/,
+  )
+  assert.throws(
+    () => readConfig({ XDG_CONFIG_HOME: configHome('{"worktrees": {"layout": 1, "base": null}}') }),
+    /strings: worktrees\.layout, worktrees\.base$/,
+  )
+  assert.throws(
+    () => readConfig({ XDG_CONFIG_HOME: configHome('{"worktrees": {"seed": ".env"}}') }),
+    /worktrees\.seed must be a list of strings$/,
+  )
+  assert.equal(
+    readConfig({ XDG_CONFIG_HOME: configHome('{"review": {"deliver": "submit"}}') }).review.deliver,
+    "submit",
+  )
 })

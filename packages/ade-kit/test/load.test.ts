@@ -18,12 +18,16 @@ const kitWith = (multiplexer: string, more: Partial<Config> = {}): Kit =>
 // A module of your own in the temporary folder, as a user would write one.
 const adapter = (name: string, body: string) => {
   const path = join(dir, `${name}.ts`)
-  writeFileSync(path, `import type { Kit } from "${pathToFileURL(join(import.meta.dirname, "../src/types.ts"))}"\n${body}\n`)
+  writeFileSync(
+    path,
+    `import type { Kit } from "${pathToFileURL(join(import.meta.dirname, "../src/types.ts"))}"\n${body}\n`,
+  )
   return path
 }
-const fake = (fields: string) =>
-  `export default (kit: Kit) => ({ name: "fake", here: () => undefined, ${fields} })`
-const operations = ["panes", "tabs", "start", "type", "paste", "focus"].map((name) => `${name}: async () => []`).join(", ")
+const fake = (fields: string) => `export default (kit: Kit) => ({ name: "fake", here: () => undefined, ${fields} })`
+const operations = ["panes", "tabs", "start", "type", "paste", "focus"]
+  .map((name) => `${name}: async () => []`)
+  .join(", ")
 const mux = `connect: () => ({ ${operations} })`
 
 test("a built-in name loads the built-in adapter", async () => {
@@ -65,17 +69,24 @@ test("relative paths start from the config's folder; ~/ and file: work too", asy
 
 test("an adapter for another api version is refused", async () => {
   const path = adapter("future", fake(`api: 2, ${mux}`))
-  await assert.rejects(loadMultiplexer(kitWith(path)), (error: Error) =>
-    error.message === `ade: the multiplexer ${path} is written for api 2; this ade-kit has api 1`)
+  await assert.rejects(
+    loadMultiplexer(kitWith(path)),
+    (error: Error) => error.message === `ade: the multiplexer ${path} is written for api 2; this ade-kit has api 1`,
+  )
 })
 
 test("an adapter missing a required operation is refused, naming what is missing", async () => {
   const path = adapter("partial", "export default () => ({ api: 1 })")
-  await assert.rejects(loadMultiplexer(kitWith(path)), (error: Error) =>
-    error.message === `ade: the multiplexer ${path} lacks: name, here, connect`)
+  await assert.rejects(
+    loadMultiplexer(kitWith(path)),
+    (error: Error) => error.message === `ade: the multiplexer ${path} lacks: name, here, connect`,
+  )
   const lazy = adapter("lazy", fake("api: 1, connect: () => ({ panes: async () => [] })"))
   const loaded = await loadMultiplexer(kitWith(lazy))
-  assert.throws(() => loaded?.connect({ session: "s", pane: "1" }), /the multiplexer "fake" lacks: tabs, start, type, paste, focus$/)
+  assert.throws(
+    () => loaded?.connect({ session: "s", pane: "1" }),
+    /the multiplexer "fake" lacks: tabs, start, type, paste, focus$/,
+  )
 })
 
 test("a module that doesn't export a function, or can't be loaded, is refused", async () => {
@@ -88,32 +99,50 @@ test("the editor: a built-in name, or a module of your own that starts from a bu
   const helix = await loadEditor(kitWith("zellij"))
   assert.equal(helix.name, "helix")
   assert.deepEqual(helix.programs, ["hx", "helix"])
-  const path = adapter("my-helix", 'export default (kit: Kit) => ({ ...kit.builtin.editor("helix"), programs: ["helix"] })')
+  const path = adapter(
+    "my-helix",
+    'export default (kit: Kit) => ({ ...kit.builtin.editor("helix"), programs: ["helix"] })',
+  )
   const mine = await loadEditor(kitWith("zellij", { editor: path }))
   assert.equal(mine.name, "helix")
   assert.deepEqual(mine.programs, ["helix"])
   assert.equal(typeof mine.open, "function")
-  await assert.rejects(loadEditor(kitWith("zellij", { editor: "vscode" })), /there is no built-in editor named "vscode"/)
+  await assert.rejects(
+    loadEditor(kitWith("zellij", { editor: "vscode" })),
+    /there is no built-in editor named "vscode"/,
+  )
 })
 
 test("an editor without its programs or what it supports is refused", async () => {
-  const path = adapter("bare", 'export default () => ({ api: 1, name: "bare", programs: "bare", start: () => [], open: async () => {} })')
-  await assert.rejects(loadEditor(kitWith("zellij", { editor: path })), (error: Error) =>
-    error.message === `ade: the editor ${path} lacks: programs, supports`)
+  const path = adapter(
+    "bare",
+    'export default () => ({ api: 1, name: "bare", programs: "bare", start: () => [], open: async () => {} })',
+  )
+  await assert.rejects(
+    loadEditor(kitWith("zellij", { editor: path })),
+    (error: Error) => error.message === `ade: the editor ${path} lacks: programs, supports`,
+  )
 })
 
 test("the agent: a built-in name, or a module of your own; one that can't insert or submit is refused", async () => {
   assert.equal((await loadAgent(kitWith("zellij"))).name, "opencode")
-  const path = adapter("my-agent", 'export default (kit: Kit) => ({ ...kit.builtin.agent("opencode"), start: () => ["oc"] })')
+  const path = adapter(
+    "my-agent",
+    'export default (kit: Kit) => ({ ...kit.builtin.agent("opencode"), start: () => ["oc"] })',
+  )
   assert.deepEqual((await loadAgent(kitWith("zellij", { agent: path }))).start({}), ["oc"])
   const lazy = adapter("lazy-agent", 'export default () => ({ api: 1, name: "lazy", start: () => [] })')
-  await assert.rejects(loadAgent(kitWith("zellij", { agent: lazy })), (error: Error) =>
-    error.message === `ade: the agent ${lazy} lacks: insert, submit`)
+  await assert.rejects(
+    loadAgent(kitWith("zellij", { agent: lazy })),
+    (error: Error) => error.message === `ade: the agent ${lazy} lacks: insert, submit`,
+  )
 })
 
 test("the reviewer: a built-in name, or a module of your own; one without a command is refused", async () => {
   assert.equal((await loadReviewer(kitWith("zellij"))).name, "tuicr")
   const path = adapter("no-command", 'export default () => ({ api: 1, name: "mine", editorVariable: "EDITOR" })')
-  await assert.rejects(loadReviewer(kitWith("zellij", { reviewer: path })), (error: Error) =>
-    error.message === `ade: the reviewer ${path} lacks: command`)
+  await assert.rejects(
+    loadReviewer(kitWith("zellij", { reviewer: path })),
+    (error: Error) => error.message === `ade: the reviewer ${path} lacks: command`,
+  )
 })
