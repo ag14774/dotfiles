@@ -92,17 +92,32 @@ if [[ $LOGIN_SHELL != */zsh ]]; then
 fi
 
 command -v curl >/dev/null 2>&1 || {
-  echo "curl is required to install OpenCode." >&2
+  echo "curl is required to install uv, OpenCode, and rustup." >&2
   exit 1
 }
 
-# uv and rustup come from the package manager (on Debian, uv from apt.sh).
-# Copies from their own installers, in ~/.local/bin and ~/.cargo/bin, come
-# first on PATH; rustup's is used as it is.
-export PATH="$HOME/.local/bin:$PATH"
-if [ "$PACKAGE_INSTALLER" != apt ] && [ -x "$HOME/.local/bin/uv" ]; then
-  echo "note: ~/.local/bin/uv, from uv's own installer, comes before the package manager's uv; remove it and ~/.local/bin/uvx to use that one" >&2
+# uv and rustup come from their own installers, the same on every platform.
+# uv's is pinned: bump UV_VERSION with the SHA-256 of that release's
+# uv-installer.sh.
+UV_VERSION="0.13.8"
+UV_INSTALLER_SHA256="4d8fa56e00f16b66feecacbd943773c61d61ab768b13856de350d86fd8740e2f"
+if [ "$("$HOME/.local/bin/uv" --version 2>/dev/null | awk '{print $2}')" != "$UV_VERSION" ]; then
+  echo "==> uv $UV_VERSION (its installer)"
+  UV_INSTALLER="$(mktemp)"
+  curl -fsSL "https://github.com/astral-sh/uv/releases/download/$UV_VERSION/uv-installer.sh" -o "$UV_INSTALLER"
+  if command -v sha256sum >/dev/null 2>&1; then
+    UV_INSTALLER_GOT="$(sha256sum "$UV_INSTALLER")"
+  else
+    UV_INSTALLER_GOT="$(shasum -a 256 "$UV_INSTALLER")"
+  fi
+  [ "${UV_INSTALLER_GOT%% *}" = "$UV_INSTALLER_SHA256" ] || {
+    echo "uv-installer.sh $UV_VERSION does not have the expected SHA-256" >&2
+    exit 1
+  }
+  UV_NO_MODIFY_PATH=1 sh "$UV_INSTALLER"
+  rm -f "$UV_INSTALLER"
 fi
+export PATH="$HOME/.local/bin:$PATH"
 
 echo "==> pyright (uv tool)"
 uv tool install --upgrade pyright >/dev/null
@@ -122,19 +137,15 @@ echo "==> OpenCode 2 (official installer and app settings)"
 export PATH="$HOME/.opencode/bin:$PATH"
 bash "$DOTFILES/install/opencode.sh"
 
-echo "==> Rust toolchain (rustup) and Cargo-based language servers"
-if [ -x "$HOME/.cargo/bin/rustup" ]; then
-  RUSTUP="$HOME/.cargo/bin/rustup"
-elif [ "$PACKAGE_INSTALLER" = brew ]; then
-  RUSTUP="$(brew --prefix rustup)/bin/rustup" # keg-only
-else
-  RUSTUP=rustup
+echo "==> Rust toolchain (rustup's installer) and Cargo-based language servers"
+if [ ! -x "$HOME/.cargo/bin/rustup" ]; then
+  curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --no-modify-path
 fi
-"$RUSTUP" update stable >/dev/null
-"$RUSTUP" default stable >/dev/null
-# Into ~/.cargo/bin, with the versions its lock file names.
-"$RUSTUP" run stable cargo install --locked jinja-lsp >/dev/null
 export PATH="$HOME/.cargo/bin:$PATH"
+rustup update stable >/dev/null
+rustup default stable >/dev/null
+# With the versions its lock file names.
+cargo install --locked jinja-lsp >/dev/null
 
 echo "==> Symlink config/ into ~/.config and ~/.local/bin (stow)"
 mkdir -p "$HOME/.config"

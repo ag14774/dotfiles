@@ -30,10 +30,10 @@ It:
 - installs the packages: `Brewfile` (macOS), `install/apt.sh` (Debian;
   tools Debian lacks come from upstream, pinned with their SHA-256),
   `install/pacman.sh` (Arch; a full `pacman -Syu`);
-- installs into your home: language servers (npm in `~/.local`, `uv tool`,
-  `cargo install`), the Rust toolchain (`rustup`), OpenCode 2
-  (`~/.opencode/bin`; `OPENCODE_VERSION=2.x.y` picks one) and its
-  `cli.json`;
+- installs into your home, the same way on every platform: uv and rustup
+  from their own installers (uv pinned), language servers (npm in
+  `~/.local`, `uv tool`, `cargo install`), OpenCode 2 (`~/.opencode/bin`;
+  `OPENCODE_VERSION=2.x.y` picks one) and its `cli.json`;
 - links `config/` into `~/.config`, `~/.local/bin` and `~/.editorconfig` with
   GNU Stow (it stops on a file already there: move that away and rerun);
 - clones ade into `~/.local/share/ade`, at the latest commit of its `main`
@@ -121,8 +121,9 @@ latest commit, and says if ade moved: ade's
 else that needs (often `opencode service restart`, which interrupts running
 conversations, then `ocreload` in each tab).
 
-Pinned on purpose, bumped by hand: the Debian downloads (versions and
-SHA-256s at the top of `install/apt.sh`), the top bar's release URL in
+Pinned on purpose, bumped by hand: uv (`UV_VERSION` and its installer's
+SHA-256 in `install.sh`), the Debian downloads (versions and SHA-256s at the
+top of `install/apt.sh`), the top bar's release URL in
 `config/.config/zellij/layouts/dev.kdl` (then `zellij-sync-bars --restart`
 inside Zellij), Yazi's packages in `config/.config/yazi/package.toml`, and
 Helix's Python query in `config/.config/helix/runtime/` (copied from Helix:

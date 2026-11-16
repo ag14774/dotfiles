@@ -29,7 +29,6 @@ PACKAGES=(
   # Language servers and formatters
   shellcheck
   shfmt
-  rustup
 
   # Tooling
   curl
@@ -112,8 +111,6 @@ TAPLO_VERSION="0.10.0"
 TAPLO_SHA256="8fe196b894ccf9072f98d4e1013a180306e17d244830b03986ee5e8eabeb6156"
 MARKSMAN_VERSION="2026-02-08"
 MARKSMAN_SHA256="be5098e8213219269c47fc0d916a66fa31ce0602ec967475c722260aabf26087"
-UV_VERSION="0.13.8"
-UV_INSTALLER_SHA256="4d8fa56e00f16b66feecacbd943773c61d61ab768b13856de350d86fd8740e2f"
 
 # download URL SHA256 FILE: fails unless the file has that SHA-256.
 download() {
@@ -187,11 +184,3 @@ download "$GITHUB/artempyanykh/marksman/releases/download/$MARKSMAN_VERSION/mark
   "$MARKSMAN_SHA256" "$TMP_DIR/marksman"
 chmod +x "$TMP_DIR/marksman"
 mv "$TMP_DIR/marksman" "$HOME/.local/bin/marksman"
-
-# uv is not in Debian 13: its own installer, into ~/.local/bin.
-if [ "$("$HOME/.local/bin/uv" --version 2>/dev/null | awk '{print $2}')" != "$UV_VERSION" ]; then
-  echo "==> uv $UV_VERSION (upstream installer)"
-  download "$GITHUB/astral-sh/uv/releases/download/$UV_VERSION/uv-installer.sh" \
-    "$UV_INSTALLER_SHA256" "$TMP_DIR/uv-installer.sh"
-  UV_NO_MODIFY_PATH=1 sh "$TMP_DIR/uv-installer.sh"
-fi
