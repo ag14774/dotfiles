@@ -83,7 +83,7 @@ bar shows the agents' statuses; `zsh tests/run.zsh` passes.
 |                                         |                                                                                                    |
 | --------------------------------------- | -------------------------------------------------------------------------------------------------- |
 | one session, `main`                     | every terminal attaches to it (`ZELLIJ_AUTO_START=false`: a plain shell); Ghostty's tabs are off   |
-| `ocreload`                              | `ade restart-agent --reload`: the tab's OpenCode, restarted after its service reloads              |
+| `ocreload [DIR]`                        | `ade restart-agent`: a fresh OpenCode, on a new conversation, in this folder, in place of the tab's |
 | `zreset`                                | end the session and delete its saved copy; the next terminal starts afresh                         |
 | `zellij-sync-bars [--restart]`          | give saved sessions the bar from `dev.kdl`, after a new bar release or a Zellij upgrade            |
 | `gcai`, `ggpush`, `ggpull`              | a commit message drafted by OpenCode from the staged diff; push or pull the branch's upstream      |
@@ -119,7 +119,9 @@ Pull, then rerun `install.sh`: it relinks `config/` and moves ade to its
 latest commit, and says if ade moved: ade's
 [CHANGELOG](https://github.com/ag14774/ade/blob/main/CHANGELOG.md) says what
 else that needs (often `opencode service restart`, which interrupts running
-conversations, then `ocreload` in each tab).
+conversations, then `ocreload` in each tab). After changing OpenCode's own
+configuration, `opencode reload` (it cancels the questions waiting in every
+tab; `ade forget-gone` first if it fails on folders that are gone).
 
 Pinned on purpose, bumped by hand: uv (`UV_VERSION` and its installer's
 SHA-256 in `install.sh`), the Debian downloads (versions and SHA-256s at the

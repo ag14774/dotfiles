@@ -1,5 +1,5 @@
 # ocreload.zsh
-# ocreload: restart this tab's OpenCode in the current folder, after its
-# service has let go of folders that are gone and reloaded its configuration.
+# ocreload [DIR]: a fresh OpenCode, on a new conversation, in this folder (or
+# DIR), in place of this tab's. The old one's conversation goes on.
 
-ocreload() { command ade restart-agent --reload "$@"; }
+ocreload() { command ade restart-agent "$@"; }

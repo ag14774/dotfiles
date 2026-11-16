@@ -1,9 +1,8 @@
 #!/usr/bin/env zsh
 # The wt* functions (shell/worktree.zsh) and ocreload (shell/ocreload.zsh),
 # with a stand-in for ade: wt cds where ade reports, passes a zsh ADE_SEED
-# array along and returns ade's status; ocreload is ade restart-agent
-# --reload, with its status. What ade itself does is tested in its
-# repository.
+# array along and returns ade's status; ocreload is ade restart-agent, with
+# its status. What ade itself does is tested in its repository.
 
 set -eu
 
@@ -20,12 +19,12 @@ mkdir -p "$TMP/bin" "$TMP/tmp" "$TMP/repo/feat"
 export LOG=$TMP/log TMPDIR=$TMP/tmp WT_DIR=$TMP/repo/feat PATH="$TMP/bin:$PATH"
 # ade: logs its arguments and ADE_SEED; `worktree --cwd-file FILE open NAME`
 # reports $WT_DIR unless -s is given; `worktree --cwd-file FILE rm bad` fails,
-# and so does restart-agent with RELOAD_FAILS set.
+# and so does restart-agent with RESTART_FAILS set.
 cat > "$TMP/bin/ade" <<'EOF'
 #!/bin/sh
 printf 'ade %s\n' "$*" >> "$LOG"
 [ -n "${ADE_SEED+x}" ] && printf 'ADE_SEED=%s\n' "$ADE_SEED" >> "$LOG"
-[ "$1" = restart-agent ] && [ -n "${RELOAD_FAILS:-}" ] && exit 4
+[ "$1" = restart-agent ] && [ -n "${RESTART_FAILS:-}" ] && exit 4
 [ "$1 $2" = "worktree --cwd-file" ] || exit 0
 file=$3
 shift 3
@@ -65,8 +64,8 @@ wtrm bad || rc=$?
 
 : > "$LOG"
 ocreload || fail "ocreload failed"
-[[ $(<"$LOG") == "ade restart-agent --reload" ]] || fail "ocreload should run ade restart-agent --reload: $(<"$LOG")"
+[[ $(<"$LOG") == "ade restart-agent" ]] || fail "ocreload should run ade restart-agent: $(<"$LOG")"
 rc=0
-RELOAD_FAILS=1 ocreload || rc=$?
+RESTART_FAILS=1 ocreload || rc=$?
 (( rc == 4 )) || fail "ocreload should return ade's status (4), not $rc"
 print "wt test: ok"
