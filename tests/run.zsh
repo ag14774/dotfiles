@@ -25,7 +25,7 @@ check() { # $1 = name, then the command
 for package in "$ROOT"/packages/*(/); do
   check "${package:t}: node --test" zsh -c 'cd "$1" && node --test test/*.test.ts' zsh "$package"
 done
-for test in ade_open ade_send ade_review_scope worktree resurrect_command gcai; do
+for test in ade_open ade_send ade_review_scope worktree resurrect_command gcai gh; do
   check "$test.zsh" zsh "$ROOT/tests/$test.zsh"
 done
 check zellij_sync_bars.py python3 "$ROOT/tests/zellij_sync_bars.py"

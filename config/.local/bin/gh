@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+# gh -- the GitHub CLI, as the account a repository's git config names.
+#
+# In a repository whose git config sets gh.user, gh runs as that account (one
+# added with `gh auth login`); elsewhere, as gh's active account. ~/.gitconfig
+# can set it by remote, e.g. for repositories cloned through an SSH host alias:
+#
+#   [includeIf "hasconfig:remote.*.url:git@github_personal:*/**"]
+#     path = ~/.gitconfig-personal    # which has: [gh] user = NAME
+#
+# GH_ACCOUNT=NAME picks the account for one command, and a GH_TOKEN or
+# GITHUB_TOKEN already set wins. If the account isn't logged in, gh stops
+# rather than run as another one. `gh auth ...` runs as is, so it sees the
+# stored accounts.
+set -u
+
+# The real gh: the next one on PATH (this script may be reached through a link).
+real=
+IFS=: read -ra dirs <<<"$PATH"
+for dir in "${dirs[@]}"; do
+  if [ -f "$dir/gh" ] && [ -x "$dir/gh" ] && ! [ "$dir/gh" -ef "$0" ]; then
+    real=$dir/gh
+    break
+  fi
+done
+if [ -z "$real" ]; then
+  printf 'gh: no GitHub CLI on PATH besides %s\n' "$0" >&2
+  exit 127
+fi
+
+account=${GH_ACCOUNT:-$(git config --get gh.user 2>/dev/null)}
+if [ -n "$account" ] && [ -z "${GH_TOKEN:-}${GITHUB_TOKEN:-}" ] && [ "${1:-}" != auth ]; then
+  if ! GH_TOKEN=$("$real" auth token --user "$account" 2>/dev/null) || [ -z "$GH_TOKEN" ]; then
+    printf 'gh: %s is not logged in (gh auth login), so gh did not run\n' "$account" >&2
+    exit 1
+  fi
+  export GH_TOKEN
+fi
+exec "$real" "$@"

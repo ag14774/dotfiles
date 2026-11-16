@@ -93,8 +93,10 @@ change: `Ctrl-r` reloads them all, dropping unsaved edits.
     `opencode-pane`, tabs named `{project}: {worktree}`).
 - `config/.local/bin/`: `ade` (a link to `packages/ade-kit/src/cli.ts`),
   `opencode-pane` (OpenCode in a pane that continues its conversation after a
-  restart) and `zellij-sync-bars` (gives saved sessions the bar from
-  `dev.kdl`).
+  restart), `zellij-sync-bars` (gives saved sessions the bar from
+  `dev.kdl`) and `gh` (runs the GitHub CLI as the account a repository's git
+  config names in `gh.user`; its header shows how to set that in
+  `~/.gitconfig`).
 - `shell/*.zsh`: the zsh setup, the `wt*` functions (short names for `ade
   worktree`), `ocreload`, `zreset`, `gcai`, `mdview` and `cheat`.
 - [`packages/`](packages), npm workspaces:
