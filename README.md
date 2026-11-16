@@ -98,11 +98,11 @@ change: `Ctrl-r` reloads them all, dropping unsaved edits.
   `dev.kdl`) and `gh` (runs the GitHub CLI as the account a repository's git
   config names in `gh.user`; its header shows how to set that in
   `~/.gitconfig`).
-- `shell/*.zsh`: the zsh setup, `zreset`, `gcai`, `mdview` and `cheat`.
+- `shell/*.zsh`: the zsh setup, the `wt*` functions (short names for `ade
+  worktree`), `ocreload`, `zreset`, `gcai`, `mdview` and `cheat`.
 - [ade](https://github.com/ag14774/ade): the `ade` command, the OpenCode
   plugins (`show_file`, `delegate`, `status`; tab statuses and sounds;
-  OpenCode's worktrees through ade), and from its starter the `wt*` functions
-  (short names for `ade worktree`) and `ocreload`. `install.sh` keeps a clone
+  OpenCode's worktrees through ade). `install.sh` keeps a clone
   in `~/.local/share/ade`; to work on ade, export `ADE_HOME` (your checkout)
   in `~/.config/zsh/local.zsh` and rerun `install.sh`: that checkout is then
   the live one, linked and never changed by the installer.

@@ -5,9 +5,9 @@ only how things are now; this file is where the changes live. Newest first.
 
 ## 2026-11-16: ade in its own repository
 
-The `ade` command, the OpenCode plugins, the `wt*` functions and `ocreload`
-now come from [ag14774/ade](https://github.com/ag14774/ade). They work as
-before.
+The `ade` command and the OpenCode plugins now come from
+[ag14774/ade](https://github.com/ag14774/ade). They work as before; the
+`wt*` functions and `ocreload` stay here and run `ade` from `PATH`.
 
 **After pulling, in this order** (until `install.sh` has run, `ade` and the
 OpenCode plugins point at files that are gone):
@@ -15,9 +15,8 @@ OpenCode plugins point at files that are gone):
 1. To work on ade, set `export ADE_HOME=<your ade checkout>` in
    `~/.config/zsh/local.zsh` first, and `exec zsh`. Otherwise the installer
    keeps its own clone in `~/.local/share/ade`.
-2. Rerun `install.sh`. It clones ade (or checks your `ADE_HOME`), links `ade`
-   and the plugins from there, and rewrites the `~/.zshrc` block to load the
-   `wt*` functions and `ocreload` from ade.
+2. Rerun `install.sh`. It clones ade (or checks your `ADE_HOME`), and links
+   `ade` and the plugins from there (ade's `install.sh`).
 3. `opencode service restart`, then `zellij-sync-bars --restart` inside
    Zellij, and `exec zsh` in open shells.
 4. `rm -rf node_modules` in the checkout: nothing uses it any more.

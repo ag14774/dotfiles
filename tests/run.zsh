@@ -22,7 +22,7 @@ check() { # $1 = name, then the command
   rm -f "$log"
 }
 
-for test in resurrect_command gcai gh git; do
+for test in resurrect_command gcai gh git wt; do
   check "$test.zsh" zsh "$ROOT/tests/$test.zsh"
 done
 check zellij_sync_bars.py python3 "$ROOT/tests/zellij_sync_bars.py"

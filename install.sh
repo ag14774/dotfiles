@@ -142,9 +142,9 @@ echo "==> ade (github.com/ag14774/ade): the ade command and the OpenCode plugins
 # The ade commit these dotfiles are tested with. Without ADE_HOME, the
 # installer keeps its own clone there; with ADE_HOME set (say in
 # ~/.config/zsh/local.zsh), that checkout is yours: it is linked, never changed.
-ADE_REF=1d7f86155a98884bd47bd5fcd30ee36990c3cee7
+ADE_REF=83797e295e3e180ec518e76abcc5c7ed0a910487
 if [[ -n ${ADE_HOME:-} ]]; then
-  [[ -x $ADE_HOME/starter/link.sh ]] || {
+  [[ -x $ADE_HOME/install.sh ]] || {
     echo "ADE_HOME=$ADE_HOME is not a checkout of ade" >&2
     exit 1
   }
@@ -158,7 +158,7 @@ else
 fi
 # npm links ade's packages (downloading nothing), then ade and the plugins are
 # linked into ~/.local/bin and ~/.config/opencode/plugins.
-"$ADE_HOME/starter/link.sh" --core
+"$ADE_HOME/install.sh"
 
 echo "==> Yazi flavor (catppuccin-mocha, from package.toml)"
 if ! YAZI_PACKAGE_OUTPUT="$(ya pkg install 2>&1)"; then
@@ -229,7 +229,8 @@ fi
   printf '[ -f "$HOME/.config/zsh/secrets.zsh" ] && source "$HOME/.config/zsh/secrets.zsh"\n'
   printf '[ -f "$HOME/.config/zsh/local.zsh" ] && source "$HOME/.config/zsh/local.zsh"\n' # machine-local, gitignored (e.g. work fns, tool completions); after compinit
   printf 'source "%s/shell/aliases.zsh"\n' "$DOTFILES"                                    # rm/cp/mv -i, coloured ls and grep
-  printf '[ -r "${ADE_HOME:-$HOME/.local/share/ade}/starter/shell/ade.zsh" ] && source "${ADE_HOME:-$HOME/.local/share/ade}/starter/shell/ade.zsh"\n' # wt*, ocreload
+  printf 'source "%s/shell/worktree.zsh"\n' "$DOTFILES" # wt*: short names for ade worktree
+  printf 'source "%s/shell/ocreload.zsh"\n' "$DOTFILES"
   printf 'source "%s/shell/cheatsheet.zsh"\n' "$DOTFILES"
   printf 'source "%s/shell/git.zsh"\n' "$DOTFILES" # ggpush/ggpull + gcai
   printf 'source "%s/shell/reset.zsh"\n' "$DOTFILES"

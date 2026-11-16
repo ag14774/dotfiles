@@ -12,16 +12,18 @@ Yazi, tuicr and zsh, glued together with
 
 - `config/`: stowed into `$HOME` (Zellij, Helix, Yazi, tuicr, OpenCode, the
   ADE config, `config/.local/bin/`).
-- `shell/*.zsh`: the zsh setup. The `wt*` functions and `ocreload` come from
-  ade's starter (`$ADE_HOME/starter/shell/ade.zsh`).
+- `shell/*.zsh`: the zsh setup, with the `wt*` functions and `ocreload`
+  (this setup's own copy of what ade's starter has; nothing here uses the
+  starter, which is an example).
 - `install.sh`, `install/`: the installer. It keeps ade in
-  `~/.local/share/ade` at `ADE_REF`, or links your own checkout (`ADE_HOME`).
+  `~/.local/share/ade` at `ADE_REF`, or uses your own checkout (`ADE_HOME`),
+  and runs ade's `install.sh` to link `ade` and the plugins.
 - `tests/`: zsh and python tests.
 
 ## Where changes belong
 
-- The `ade` command, the OpenCode plugins, the `wt*` functions, `ocreload`,
-  and anything a user of ade without these dotfiles would want: in
+- The `ade` command, the OpenCode plugins, and anything a user of ade
+  without these dotfiles would want: in
   [ade](https://github.com/ag14774/ade) (its AGENTS.md has its conventions).
   Then bump `ADE_REF` in `install.sh`, with a CHANGELOG entry.
 - ade's settings for this setup: `config/.config/ade/config.json`, or an
