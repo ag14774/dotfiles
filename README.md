@@ -68,7 +68,7 @@ the shell once a file is opened.
 | `Alt-v`                                                | review everything the worktree changed, committed or not, in tuicr; `y` hands your comments to OpenCode, `e` opens a file in Helix                                                                               |
 | "delegate this", `/delegate`                           | OpenCode starts the work in a new worktree tab ("with the context" carries the conversation over)                                                                                                                |
 | "how are the other worktrees doing?"                   | OpenCode's `status` tool                                                                                                                                                                                         |
-| `ocreload`                                             | restart the tab's OpenCode in the current folder, after reloading the OpenCode service's config                                                                                                                  |
+| `ocreload`                                             | restart the tab's OpenCode in the current folder, after reloading the OpenCode service's config (once it has let go of folders that are gone: its reload fails on them)                                          |
 | `zreset`                                               | end the session and delete its saved copy; the next terminal starts a fresh one                                                                                                                                  |
 | `mdview [FILE]`, Helix `+` `m`                         | Markdown in the browser                                                                                                                                                                                          |
 | `cheat`, `Alt-/`                                       | the cheatsheet ([CHEATSHEET.md](CHEATSHEET.md): all the keys)                                                                                                                                                    |
@@ -160,7 +160,7 @@ service.
 | Zellij, Helix, Yazi or tuicr (upgrade), the keys and their scripts                      | `zsh tests/keys_smoke.zsh` (a stand-in for OpenCode)      |
 | `opencode-ade`, `opencode-ade-status`, OpenCode (upgrade)                               | `zsh tests/ade_plugin_smoke.zsh` (nine short model calls) |
 | `opencode-ade-status`'s sounds, OpenCode (upgrade)                                      | `zsh tests/opencode_attention_smoke.zsh`                  |
-| `opencode-ade-worktrees`, `ade worktree`                                                | `zsh tests/opencode_worktrees_smoke.zsh` (no Zellij)      |
+| `opencode-ade-worktrees`, `ade worktree`, `ade forget-gone`, `ocreload`                 | `zsh tests/opencode_worktrees_smoke.zsh` (no Zellij)      |
 
 ## Changing the theme
 

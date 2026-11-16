@@ -4,10 +4,11 @@
 # itself, through its API as the TUI's "New worktree" and the agents'
 # worktree_remove do, follow the repository's layout, get a real branch and
 # seeded files, and need force when they have changes. The service lets go of
-# the worktrees OpenCode or `ade worktree rm` removed (its reload fails on
-# them). OpenCode runs a private background service (its own HOME, XDG folders
-# and port; stopped by its pid), with this checkout's packages; no Zellij, no
-# model calls.
+# the folders that are gone (its reload fails on them): those removed by
+# OpenCode or `ade worktree rm`, and those deleted by hand, before ocreload
+# reloads it. OpenCode runs a private background service (its own HOME, XDG
+# folders and port; stopped by its pid), with this checkout's packages; no
+# Zellij, no model calls.
 
 set -u
 
@@ -123,5 +124,16 @@ step "ade worktree rm: the service lets go of the worktree"
 location "$P/feat-x" >/dev/null
 out=$(cd "$P/main" && node "$ade" worktree rm feat-x 2>&1) || fail "ade worktree rm feat-x failed: $out"
 ! loaded "$P/feat-x" || fail "the service should have let go of feat-x: $out"
+
+# ocreload's opencode is the test's: HOME and the XDG folders are the test's,
+# with the private port. Its restart-agent needs Zellij, which is not here.
+step "a worktree deleted by hand: ocreload lets go of it, then the reload works"
+location "$dir" >/dev/null
+rm -rf "$dir"
+source "$ROOT/shell/ocreload.zsh"
+out=$(cd "$P/main" && ocreload 2>&1)
+[[ $out == *"Configuration reloaded"* && $out == *"ade restart-agent: not inside Zellij"* ]] \
+  || fail "ocreload should reload the service, then try to restart the agent: $out"
+! loaded "$dir" || fail "the service should have let go of $dir"
 
 print "opencode worktrees smoke test: ok"
