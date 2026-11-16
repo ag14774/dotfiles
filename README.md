@@ -33,7 +33,8 @@ It:
 - installs into your home, the same way on every platform: uv and rustup
   from their own installers (uv pinned), language servers (npm in
   `~/.local`, `uv tool`, `cargo install`), OpenCode 2 (`~/.opencode/bin`;
-  `OPENCODE_VERSION=2.x.y` picks one) and its `cli.json`;
+  `OPENCODE_VERSION=2.x.y` picks one; where a proxy blocks opencode.ai, an
+  OpenCode 2 already there stays as it is) and its `cli.json`;
 - links `config/` into `~/.config`, `~/.local/bin` and `~/.editorconfig` with
   GNU Stow (it stops on a file already there: move that away and rerun);
 - clones ade into `~/.local/share/ade`, at the latest commit of its `main`

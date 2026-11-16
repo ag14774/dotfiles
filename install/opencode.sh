@@ -33,12 +33,6 @@ if [ -n "$EXISTING" ] && { [ "$EXISTING" != "$BIN" ] || [ -L "$BIN" ]; }; then
   exit 1
 fi
 
-VERSION="${OPENCODE_VERSION:-$(curl -fsSL https://opencode.ai/update/api/latest/cli/npm | jq -er '.version')}"
-VERSION="${VERSION#v}"
-[[ $VERSION =~ ^2\.[0-9]+\.[0-9]+$ ]] || {
-  echo "Expected an OpenCode 2 stable version, got: $VERSION" >&2
-  exit 1
-}
 CURRENT=""
 if [ -x "$BIN" ]; then
   CURRENT="$("$BIN" --version)"
@@ -46,14 +40,38 @@ if [ -x "$BIN" ]; then
   CURRENT="${CURRENT#v}"
 fi
 
+# opencode.ai serves the latest version, the settings' schema and the
+# installer, and a network's proxy may block it (Zscaler answers scripts with
+# 403). An OpenCode 2 already installed then stays, with its settings.
+unreachable() {
+  if [[ $CURRENT == 2.* ]]; then
+    echo "warning: opencode.ai is out of reach ($1); OpenCode $CURRENT and its settings stay as they are" >&2
+    exit 0
+  fi
+  echo "opencode.ai is out of reach ($1), and it has OpenCode's installer: try another network" >&2
+  exit 1
+}
+
+if [ -n "${OPENCODE_VERSION:-}" ]; then
+  VERSION="$OPENCODE_VERSION"
+else
+  VERSION="$(curl -fsSL https://opencode.ai/update/api/latest/cli/npm | jq -er '.version')" ||
+    unreachable "the latest version"
+fi
+VERSION="${VERSION#v}"
+[[ $VERSION =~ ^2\.[0-9]+\.[0-9]+$ ]] || {
+  echo "Expected an OpenCode 2 stable version, got: $VERSION" >&2
+  exit 1
+}
+
 TMP="$(mktemp -d)"
 trap 'rm -rf -- "$TMP"' EXIT
-curl -fsSL https://opencode.ai/v2/cli.json -o "$TMP/cli-schema.json"
+curl -fsSL https://opencode.ai/v2/cli.json -o "$TMP/cli-schema.json" || unreachable "the settings' schema"
 uv run --no-project --with json5 --with jsonschema python "$DOTFILES/install/opencode-cli-config.py" \
   "$CONFIG" "$TMP/cli-schema.json" "$TMP/cli.json"
 
 if [ "$CURRENT" != "$VERSION" ]; then
-  curl --retry 3 -fsSL https://opencode.ai/v2/install -o "$TMP/install.sh"
+  curl --retry 3 -fsSL https://opencode.ai/v2/install -o "$TMP/install.sh" || unreachable "the installer"
   # The official script uses HOME for its destination; stage in isolation first.
   env HOME="$TMP" VERSION="$VERSION" bash "$TMP/install.sh" --version "$VERSION" --no-modify-path
   STAGED="$TMP/.opencode/bin/opencode"
