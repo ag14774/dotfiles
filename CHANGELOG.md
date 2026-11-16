@@ -3,6 +3,33 @@
 What changed, and what to do after pulling. The code and the README describe
 only how things are now; this file is where the changes live. Newest first.
 
+## 2026-11-16: ade in its own repository
+
+The `ade` command, the OpenCode plugins, the `wt*` functions and `ocreload`
+now come from [ag14774/ade](https://github.com/ag14774/ade). They work as
+before.
+
+**After pulling, in this order** (until `install.sh` has run, `ade` and the
+OpenCode plugins point at files that are gone):
+
+1. To work on ade, set `export ADE_HOME=<your ade checkout>` in
+   `~/.config/zsh/local.zsh` first, and `exec zsh`. Otherwise the installer
+   keeps its own clone in `~/.local/share/ade`.
+2. Rerun `install.sh`. It clones ade (or checks your `ADE_HOME`), links `ade`
+   and the plugins from there, and rewrites the `~/.zshrc` block to load the
+   `wt*` functions and `ocreload` from ade.
+3. `opencode service restart`, then `zellij-sync-bars --restart` inside
+   Zellij, and `exec zsh` in open shells.
+4. `rm -rf node_modules` in the checkout: nothing uses it any more.
+
+**What changes for you:**
+
+- `packages/`, `npm run check` and the package tests are gone from this
+  repository; `npm test` runs the dotfiles' own tests.
+- `install.sh` pins ade at `ADE_REF`; bump it to take a newer ade.
+- `tests/keys_smoke.zsh` and `tests/zellij_restore_smoke.zsh` use ade's
+  sandbox (and `keys_smoke` is ade's test, run on this config).
+
 ## 2026-11-16 (#2)
 
 `ocreload` no longer fails after a worktree is removed.

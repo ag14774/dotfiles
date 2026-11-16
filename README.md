@@ -2,14 +2,14 @@
 
 A terminal-only agentic development environment (ADE) for macOS (iTerm2) and
 Linux (Debian 13, Arch and Manjaro; Ghostty): **Zellij**, **Helix**,
-**OpenCode**, **Yazi** and **tuicr**, glued together with zsh and the packages
-in [`packages/`](packages). Each git worktree gets a Zellij tab with a shell,
+**OpenCode**, **Yazi** and **tuicr**, glued together with zsh and
+[ade](https://github.com/ag14774/ade). Each git worktree gets a Zellij tab with a shell,
 OpenCode and, once you open a file, Helix. Agents can open files in your
 editor, start work in a new worktree tab and report on the others, and the
 top bar shows what every tab's agents are doing. Catppuccin Mocha throughout.
 
 What changed and what to do after pulling: [CHANGELOG.md](CHANGELOG.md).
-Changing the code or forking it: [AGENTS.md](AGENTS.md).
+Changing it or forking it: [AGENTS.md](AGENTS.md).
 
 ## Install
 
@@ -23,9 +23,9 @@ exec zsh
 Linux) and installs the platform packages, the developer tools and language
 servers below, and OpenCode 2 with its app settings (`cli.json`, created from
 `config/.config/opencode/cli.json.example` when missing). It links `config/`
-into `~/.config` and `~/.local/bin` with GNU Stow, links the packages for the
-OpenCode plugins (`npm install`, which downloads nothing), makes zsh the login
-shell, and keeps two blocks in `~/.zshrc`: one at the top starts Zellij, one
+into `~/.config` and `~/.local/bin` with GNU Stow, links ade (the `ade`
+command and the OpenCode plugins, from a clone in `~/.local/share/ade` at the
+commit `ADE_REF` in `install.sh`), makes zsh the login shell, and keeps two blocks in `~/.zshrc`: one at the top starts Zellij, one
 at the end loads `shell/*.zsh`. It is safe to rerun, and rerunning upgrades the
 user-level tools. Run it as your normal user; it uses `sudo` itself where
 needed.
@@ -90,27 +90,22 @@ change: `Ctrl-r` reloads them all, dropping unsaved edits.
   - `zellij/`: `config.kdl` (keys, session `main`), `layouts/dev.kdl` (the tab
     layout and the top bar), `yazi-picker.sh`, `resurrect-command.sh`;
   - `helix/`, `yazi/`, `tuicr/`, `git/`, `ghostty/`, `fzf/`, `glow/`;
-  - `opencode/`: `cli.json.example`, the plugin links in `plugins/`, and
-    `tui-plugins/btw-v2` (`/btw`, adapted from OpenCode's built-in);
+  - `opencode/`: `cli.json.example` and `tui-plugins/btw-v2` (`/btw`, adapted from OpenCode's built-in);
   - `ade/config.json`: what differs from ade-kit's defaults (OpenCode through
     `opencode-pane`, tabs named `{project}: {worktree}`).
-- `config/.local/bin/`: `ade` (a link to `packages/ade-kit/src/cli.ts`),
-  `opencode-pane` (OpenCode in a pane that continues its conversation after a
+- `config/.local/bin/`: `opencode-pane` (OpenCode in a pane that continues its conversation after a
   restart), `zellij-sync-bars` (gives saved sessions the bar from
   `dev.kdl`) and `gh` (runs the GitHub CLI as the account a repository's git
   config names in `gh.user`; its header shows how to set that in
   `~/.gitconfig`).
-- `shell/*.zsh`: the zsh setup, the `wt*` functions (short names for `ade
-worktree`), `ocreload`, `zreset`, `gcai`, `mdview` and `cheat`.
-- [`packages/`](packages), npm workspaces:
-  - [`ade-kit`](packages/ade-kit): the `ade` command and library: adapters
-    for the multiplexer, editor, agent and reviewer, and the worktree commands;
-  - [`opencode-ade`](packages/opencode-ade): the OpenCode plugin with
-    `show_file`, `delegate` and `status`;
-  - [`opencode-ade-status`](packages/opencode-ade-status): done and failed
-    statuses for the tabs, and OpenCode's sounds once, in the right tab;
-  - [`opencode-ade-worktrees`](packages/opencode-ade-worktrees): OpenCode's
-    own worktrees through ade-kit.
+- `shell/*.zsh`: the zsh setup, `zreset`, `gcai`, `mdview` and `cheat`.
+- [ade](https://github.com/ag14774/ade): the `ade` command, the OpenCode
+  plugins (`show_file`, `delegate`, `status`; tab statuses and sounds;
+  OpenCode's worktrees through ade), and from its starter the `wt*` functions
+  (short names for `ade worktree`) and `ocreload`. `install.sh` keeps a clone
+  in `~/.local/share/ade`; to work on ade, export `ADE_HOME` (your checkout)
+  in `~/.config/zsh/local.zsh` and rerun `install.sh`: that checkout is then
+  the live one, linked and never changed by the installer.
 - The top bar is [ade-zjstatus](https://github.com/ag14774/ade-zjstatus), a
   zjstatus fork with agent statuses and tab groups, loaded by `dev.kdl` from
   its release URL.
@@ -135,32 +130,29 @@ terminal windows) and gives the saved tabs the bar from `dev.kdl`; then open a
 terminal. `zellij-sync-bars --check` lists saved sessions with another bar. A
 bar with a new release URL needs its permission granted once (above).
 
-**After pulling.** Rerun `install.sh` (or its stow and `npm install` steps) so
-new links exist. OpenCode's service keeps a plugin's server part until
+**After pulling.** Rerun `install.sh` so new links exist and ade is at the
+commit these dotfiles expect. OpenCode's service keeps a plugin's server part until
 `opencode service restart` (which interrupts running conversations; OpenCode
 panes warn when it runs old code), and an OpenCode app loads the app parts
 when it starts (`ocreload`).
 
 ## Tests
 
-`npm test` runs every test that needs no Zellij session, OpenCode service or
-model: the packages' node tests, and the zsh and python tests with stand-ins
-for Zellij and OpenCode. `npm install && npm run check` type-checks the
-packages, and `npm run format` formats them (Prettier) and the bash scripts
-(shfmt); `.editorconfig` has the rest.
+`npm test` (or `zsh tests/run.zsh`) runs the tests that need no Zellij
+session, OpenCode service or model, with stand-ins. `npm run format` formats
+the shell scripts (shfmt); `.editorconfig` has the rest. ade's own tests are
+in [its repository](https://github.com/ag14774/ade).
 
-The live tests take a few minutes each. They run in a sandbox
-(`tests/lib/zellij-sandbox.zsh`: their own Zellij server, HOME and OpenCode
-service), so they can run from inside Zellij and never reach your session or
-service.
+The live tests take a few minutes each. They run in ade's sandbox
+(`$ADE_HOME/tests/lib/zellij-sandbox.zsh`: their own Zellij server, HOME and
+OpenCode service), with this repository's config, so they never reach your
+session or service.
 
-| After changing                                                                          | Run                                                       |
-| --------------------------------------------------------------------------------------- | --------------------------------------------------------- |
-| Zellij, Helix or OpenCode (upgrade), `dev.kdl`, `opencode-pane`, `resurrect-command.sh` | `zsh tests/zellij_restore_smoke.zsh`                      |
-| Zellij, Helix, Yazi or tuicr (upgrade), the keys and their scripts                      | `zsh tests/keys_smoke.zsh` (a stand-in for OpenCode)      |
-| `opencode-ade`, `opencode-ade-status`, OpenCode (upgrade)                               | `zsh tests/ade_plugin_smoke.zsh` (nine short model calls) |
-| `opencode-ade-status`'s sounds, OpenCode (upgrade)                                      | `zsh tests/opencode_attention_smoke.zsh`                  |
-| `opencode-ade-worktrees`, `ade worktree`, `ade forget-gone`, `ocreload`                 | `zsh tests/opencode_worktrees_smoke.zsh` (no Zellij)      |
+| After changing | Run |
+| --- | --- |
+| Zellij, Helix or OpenCode (upgrade), `dev.kdl`, `opencode-pane`, `resurrect-command.sh` | `zsh tests/zellij_restore_smoke.zsh` |
+| Zellij, Helix, Yazi or tuicr (upgrade), the keys and their scripts | `zsh tests/keys_smoke.zsh` (ade's, on this config; a stand-in for OpenCode) |
+| ade (a new `ADE_REF`) | ade's live tests, in its checkout |
 
 ## Changing the theme
 
