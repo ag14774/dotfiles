@@ -288,6 +288,12 @@ export async function restartAgent(kit: Kit, dir: string, caller: Caller) {
   if (at.pane !== undefined) await mux.focus(at.pane)
 }
 
+// Let the agent forget folders that no longer exist (see Agent's
+// forgetGone); the folders it forgot.
+export async function forgetGone(kit: Kit, caller: Caller) {
+  return (await (await loadAgent(kit)).forgetGone?.(caller.env)) ?? []
+}
+
 // What `review` needs from the terminal it runs in.
 export type Terminal = {
   // Run an interactive command here; its stdout is collected (error: it

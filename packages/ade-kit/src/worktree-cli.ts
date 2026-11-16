@@ -23,8 +23,9 @@ commands:
                             branch from base, default worktrees.base) and copy
                             the seed files into it
   rm [-f] <name>            remove the worktree of a branch, folder name or path
-                            (-f: even with uncommitted changes) and close its
-                            tabs, except yours (none when an agent runs it)
+                            (-f: even with uncommitted changes), close its
+                            tabs, except yours (none when an agent runs it),
+                            and let the agent forget it (ade forget-gone)
   ls [--json]               list the worktrees; --json: each one's branch,
                             changed files, commits ahead of and behind
                             worktrees.base, and whether it has a tab

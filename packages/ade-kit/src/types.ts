@@ -115,6 +115,10 @@ export interface Agent {
   // Whether a command was run by the agent's own tools, which run outside its
   // pane (with a pane ID passed along that may not be theirs).
   ranByAgent?(env: Record<string, string | undefined>): boolean
+  // Let go of what the agent keeps for folders that no longer exist, such as
+  // a removed worktree (ade worktree rm does this after removing one); the
+  // folders it let go of.
+  forgetGone?(env: Record<string, string | undefined>): Promise<string[]>
 }
 
 // pasteAgent (agent.ts): an agent reached by pasting into its pane.

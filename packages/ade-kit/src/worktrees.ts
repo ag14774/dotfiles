@@ -5,7 +5,7 @@
 import { accessSync, constants, cpSync, existsSync, mkdirSync, readdirSync, readFileSync } from "node:fs"
 import { basename, dirname, join, resolve } from "node:path"
 import type { TabIn } from "./actions.ts"
-import { closeTabs, tabs, workspace } from "./actions.ts"
+import { closeTabs, forgetGone, tabs, workspace } from "./actions.ts"
 import { builtins } from "./builtins.ts"
 import { onPath } from "./editor.ts"
 import { Failed, line, loud, query, worktreeRecords } from "./git.ts"
@@ -354,7 +354,9 @@ async function tabsOf(kit: Kit, io: Io, dir: string) {
 }
 
 // rm: remove the worktree of a branch, folder name or path (-f: even with
-// uncommitted changes), then close the tabs working in it, except yours.
+// uncommitted changes), then close the tabs working in it, except yours, and
+// let the agent forget it (OpenCode's service: its location, on which the
+// service's reload would fail).
 export async function remove(kit: Kit, io: Io, args: string[]) {
   const force = args[0] === "-f" || args[0] === "--force"
   const arg = args[force ? 1 : 0]
@@ -375,6 +377,9 @@ export async function remove(kit: Kit, io: Io, args: string[]) {
     await closeTabs(kit, target, found, { env: io.env, cwd: io.cwd }, io.say).catch((error) =>
       io.say(`${COMMAND.rm}: ${message(error)}`),
     )
+  await forgetGone(kit, { env: io.env, cwd: io.cwd }).catch((error) =>
+    io.say(`${COMMAND.rm}: warning: ${message(error)}`),
+  )
 }
 
 // Whether `branch` was merged through a GitHub PR: one whose head is exactly

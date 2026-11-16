@@ -41,6 +41,17 @@ fi
 EOF
 chmod +x "$TMP/bin/gh"
 
+# Stand-in for OpenCode, which ade worktree rm asks to let go of the removed
+# worktree: never your service. Its service is stopped, so nothing more is
+# asked of it.
+cat > "$TMP/bin/opencode" <<'EOF'
+#!/bin/sh
+[ "$1 $2" = "service status" ] && echo stopped && exit 0
+echo "opencode stand-in: unexpected call: $*" >&2
+exit 97
+EOF
+chmod +x "$TMP/bin/opencode"
+
 # Stand-in for the `zellij action` calls ade makes. State lives in $ZJ_STATE:
 # tabs (id, name), panes (id, tab, title, cwd, command[, "exited"]) and the
 # focused tab. An empty cwd is a pane for which Zellij reports no directory.

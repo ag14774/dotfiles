@@ -13,7 +13,7 @@ const ade = (...args: string[]) =>
 test("ade help names every command", () => {
   const help = ade("help")
   assert.equal(help.status, 0)
-  for (const command of ["open", "send", "review", "restart-agent", "where", "worktree"])
+  for (const command of ["open", "send", "review", "restart-agent", "forget-gone", "where", "worktree"])
     assert.match(help.stdout, new RegExp(`^(usage: | {7})ade ${command}( |$)`, "m"))
 })
 
@@ -23,6 +23,7 @@ test("wrong usage: the usage on stderr, exit status 2", () => {
     ["open"],
     ["review", "x"],
     ["restart-agent", "a", "b"],
+    ["forget-gone", "x"],
     ["where", "x"],
     ["tabs", "."],
   ]) {

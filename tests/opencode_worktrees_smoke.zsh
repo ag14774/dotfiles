@@ -3,9 +3,12 @@
 # ade-kit) in the installed OpenCode: worktrees OpenCode makes and removes
 # itself, through its API as the TUI's "New worktree" and the agents'
 # worktree_remove do, follow the repository's layout, get a real branch and
-# seeded files, and need force when they have changes. OpenCode runs a private
-# background service (its own HOME, XDG folders and port; stopped by its pid),
-# with this checkout's packages; no Zellij, no model calls.
+# seeded files, and need force when they have changes. The service lets go of
+# the folders that are gone (its reload fails on them): those removed by
+# OpenCode or `ade worktree rm`, and those deleted by hand, before ocreload
+# reloads it. OpenCode runs a private background service (its own HOME, XDG
+# folders and port; stopped by its pid), with this checkout's packages; no
+# Zellij, no model calls.
 
 set -u
 
@@ -69,6 +72,7 @@ PID=$(jq -r .pid "$XDG_STATE_HOME/opencode/service.json" 2>/dev/null)
 [[ -n $PID && $PID != null ]] || fail "the private OpenCode service did not start: $(tail -n 5 "$TMP/service.log")"
 
 location() { api get "/api/location?location%5Bdirectory%5D=$1"; }
+loaded() { api get /api/debug/location | jq -e --arg d "$1" 'any(.[]; .directory == $d)' >/dev/null; }
 project=$(location "$P/main" | jq -r .project.id)
 [[ -n $project && $project != null ]] || fail "OpenCode found no project in $P/main"
 location "$P/feat-old" >/dev/null
@@ -102,7 +106,9 @@ for d in task-a feat-x feat-old main; do
     || fail "$P/$d should be listed as the git strategy's: $listed"
 done
 
-step "removing: a clean worktree goes; one with changes needs force"
+step "removing: a clean worktree goes; one with changes needs force; the service lets go of both"
+location "$P/task-a" >/dev/null
+loaded "$P/task-a" && loaded "$P/feat-old" || fail "the service should have locations in task-a and feat-old"
 out=$(removing "$P/task-a" false)
 [[ ! -d $P/task-a ]] || fail "task-a should be removed: $out"
 print draft > "$P/feat-old/notes.md"
@@ -112,5 +118,22 @@ out=$(removing "$P/feat-old" false)
 out=$(removing "$P/feat-old" true)
 [[ ! -d $P/feat-old ]] || fail "feat-old should be removed with force: $out"
 git -C "$P" show-ref -q --verify refs/heads/feat-old || fail "the branch should stay (as with wtrm)"
+! loaded "$P/task-a" && ! loaded "$P/feat-old" || fail "the service should have let go of task-a and feat-old"
+
+step "ade worktree rm: the service lets go of the worktree"
+location "$P/feat-x" >/dev/null
+out=$(cd "$P/main" && node "$ade" worktree rm feat-x 2>&1) || fail "ade worktree rm feat-x failed: $out"
+! loaded "$P/feat-x" || fail "the service should have let go of feat-x: $out"
+
+# ocreload's opencode is the test's: HOME and the XDG folders are the test's,
+# with the private port. Its restart-agent needs Zellij, which is not here.
+step "a worktree deleted by hand: ocreload lets go of it, then the reload works"
+location "$dir" >/dev/null
+rm -rf "$dir"
+source "$ROOT/shell/ocreload.zsh"
+out=$(cd "$P/main" && ocreload 2>&1)
+[[ $out == *"Configuration reloaded"* && $out == *"ade restart-agent: not inside Zellij"* ]] \
+  || fail "ocreload should reload the service, then try to restart the agent: $out"
+! loaded "$dir" || fail "the service should have let go of $dir"
 
 print "opencode worktrees smoke test: ok"

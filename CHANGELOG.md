@@ -3,6 +3,24 @@
 What changed, and what to do after pulling. The code and the README describe
 only how things are now; this file is where the changes live. Newest first.
 
+## 2026-11-16 (#2)
+
+`ocreload` no longer fails after a worktree is removed.
+
+**After pulling:** `opencode service restart` (interrupts running
+conversations), for the worktrees OpenCode removes itself.
+
+**What changes for you:**
+
+- OpenCode's service keeps a location for every folder it served, and its
+  reload failed ("Directory not found") once one of those folders was gone,
+  so `ocreload` stopped before restarting the agent. Now `ade worktree rm`,
+  `prune` and OpenCode's own worktree removals have the service let go of
+  the removed worktree, and `ocreload` first has it let go of any folder
+  that is gone (a worktree deleted by hand, say).
+- New: `ade forget-gone` does that on its own and prints the folders. Agent
+  adapters of your own can have a `forgetGone`.
+
 ## 2026-11-16 (`cbf95bd`)
 
 A review: clearer packages, fewer leftovers, the same daily flow.

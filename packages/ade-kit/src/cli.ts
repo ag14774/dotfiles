@@ -10,7 +10,7 @@ import { appendFileSync } from "node:fs"
 import { homedir } from "node:os"
 import { createInterface } from "node:readline"
 import type { Terminal } from "./actions.ts"
-import { open, restartAgent, review, send, where } from "./actions.ts"
+import { forgetGone, open, restartAgent, review, send, where } from "./actions.ts"
 import { makeKit, run } from "./kit.ts"
 import { scopeOf, scopeWords } from "./review.ts"
 import type { RunOptions } from "./types.ts"
@@ -32,6 +32,9 @@ const USAGE = `usage: ade open FILE[:LINE[:COLUMN]]...
          print what a review here covers: -r BASE..HEAD (commits), -w (uncommitted changes)
        ade restart-agent [DIR]
          replace this tab's agent with a fresh one started in DIR (default: here); focus stays
+       ade forget-gone
+         let the agent forget folders that no longer exist, and print them (OpenCode: its
+         service's locations, on which its reload fails); ade worktree rm does it too
        ade where
          print the folder of the focused tiled pane of its own tab (if that pane reports none:
          the tab's agent pane, then its shell pane); outside a multiplexer, or when that folder
@@ -139,6 +142,10 @@ async function main(command: string | undefined, args: string[]) {
     case "restart-agent":
       if (args.length > 1) throw new UsageError()
       return restartAgent(kit(), args[0] ?? caller.cwd, caller)
+    case "forget-gone":
+      if (args.length) throw new UsageError()
+      for (const dir of await forgetGone(kit(), caller)) process.stdout.write(`${dir}\n`)
+      return
     case "where":
       if (args.length) throw new UsageError()
       process.stdout.write(`${await where(kit(), caller)}\n`)
