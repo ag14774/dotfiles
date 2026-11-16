@@ -72,9 +72,9 @@ function needs<K extends "openTab" | "showTab" | "closeTab">(
 
 export type TabIn = { tab: string; sure: boolean }
 
-// The tabs working in each of `dirs` (see tabsIn), by folder as given. Each
-// folder's repository tells which worktrees there are, so that a tab in a
-// nested worktree doesn't count for the outer one.
+// The tabs working in each folder of `dirs`: tabs whose running panes are all
+// inside it ("unsure" when a pane didn't say where it is). A tab in a worktree
+// nested inside another counts only for the inner one.
 export async function tabs(kit: Kit, dirs: string[], caller: Caller): Promise<Record<string, TabIn[]>> {
   const { mux } = await callerSession(kit, caller)
   const panes = await mux.panes()
@@ -107,11 +107,10 @@ function agentCommand(agent: Agent, o: { session?: string; prompt?: string }, en
   return [found, ...args]
 }
 
-// Go to the tab working in the worktree `dir` (see tabsIn), or open the
-// layout's tab there, in front or in the background. A tab with a pane that
-// didn't say where it is counts: going to it is harmless, a duplicate is not.
-// With a conversation or a prompt, the new tab's agent starts on them, and a
-// worktree that has a tab is refused. `tell` gets what happened, to show.
+// Go to the tab working in the worktree `dir`, or open a tab there with the
+// configured layout, in front or in the background. With a conversation or a
+// prompt, the new tab's agent starts on it, and a worktree that already has a
+// tab is refused. `tell` gets the messages to show.
 export async function workspace(
   kit: Kit,
   o: WorkspaceOptions,
@@ -149,12 +148,11 @@ export async function workspace(
   return { tab: opened.tab, opened: true }
 }
 
-// Close the tabs of the removed worktree `dir`: `found`, what tabs() found
-// before it was removed (its panes' folders are gone now), else the tabs
-// working in it now. Your own tab stays, and so does one with a pane that
-// didn't say where it is. Nothing closes for a command the agent's tools ran
-// (outside its pane, with a pane ID passed along that may not be theirs), nor
-// when your tab is unknown. `tell` gets what happened to each tab.
+// Close the tabs working in the removed worktree `dir` (`found`: the tabs
+// found before it was removed). Your own tab stays open, and so does a tab
+// with a pane that didn't say where it is. Nothing closes when an agent runs
+// this, or when it can't tell which tab is yours. `tell` gets what happened
+// to each tab.
 export async function closeTabs(
   kit: Kit,
   dir: string,
@@ -188,9 +186,10 @@ export async function closeTabs(
 const workspaceAt = async (kit: Kit, dir: string): Promise<Workspace> =>
   (await workspaceOf(kit, dir)) ?? { dir, session: sessionOf(dir) }
 
-// Open files in the editor of the caller's tab, then focus it. In a tab you
-// are not on, it only uses an editor that is already there, without focusing
-// it. Lines are dropped for an editor that can't open a file at a line.
+// Open files in the editor of the caller's tab and focus it; with no editor
+// in the tab, start one there. It never switches tabs: in a tab you are not
+// on, only an editor already there is used, and not focused. An editor that
+// can't open a file at a line gets the file without it.
 export async function open(kit: Kit, paths: string[], caller: Caller) {
   const editor = await loadEditor(kit)
   const label = labelOf(editor)
@@ -248,8 +247,9 @@ export function pastes(o: Extract<Sending, { file: string }>, agentDir: string |
   return pieces
 }
 
-// Give the agent of the caller's tab a place in a file (or text), for you to
-// ask about, then focus it. Nothing is sent unless `submit` asks for it.
+// Put a reference to lines of a file and the text selected there (or any
+// text) in the prompt of the caller's tab's agent, then focus the agent.
+// Nothing is sent unless `submit` asks for it.
 export async function send(kit: Kit, what: Sending, caller: Caller) {
   if ("text" in what && !what.text) throw new Error("no text to send")
   const agent = await loadAgent(kit)
@@ -265,17 +265,17 @@ export async function send(kit: Kit, what: Sending, caller: Caller) {
 }
 
 // The folder of the focused tiled pane of the caller's own tab (if that pane
-// reports none, of the tab's agent pane, then its shell pane; see callerDir).
-// Outside a multiplexer, or when that folder no longer exists, the caller's
-// folder. For a floating pane, which starts in the session's folder, that is
-// the focused tiled pane underneath.
+// reports none, the tab's agent pane's, then its shell pane's). Outside a
+// multiplexer, or when that folder no longer exists, the caller's own folder.
+// From a floating pane, which starts in the session's folder, this is the
+// folder of the focused tiled pane underneath.
 export async function where(kit: Kit, caller: Caller) {
   const at = await located(kit, caller.env)
   return callerFolder(at && (await at.mux.panes()), at?.where, caller.cwd)
 }
 
-// Start the agent of the caller's tab afresh in `dir`, in place of its agent
-// pane (a new pane when the tab has none). Focus stays where it is.
+// Replace the agent of the caller's tab with a fresh one started in `dir` (a
+// new agent pane when the tab has none). Focus stays where it is.
 export async function restartAgent(kit: Kit, dir: string, caller: Caller) {
   const agent = await loadAgent(kit)
   const cwd = resolve(caller.cwd, dir)
@@ -297,10 +297,11 @@ export type Terminal = {
   pause(message: string): Promise<void>
 }
 
-// Review the worktree of the pane you were in (see callerDir) with the
-// reviewer, then hand its comments to the tab's agent (review.deliver: filled
-// in for you to send, or sent). One review per tab: if the tab has one open
-// (hidden after opening a file, say), show it instead of starting another.
+// Review what the worktree of the focused tiled pane of the caller's tab
+// (see where) changed since worktrees.base, committed or not, then give your
+// comments to the tab's agent: filled in for you to send, or sent
+// (review.deliver). One review per tab: if the tab has one open (hidden after
+// opening a file, say), show it instead of starting another.
 export async function review(kit: Kit, caller: Caller, terminal: Terminal) {
   const at = await located(kit, caller.env)
   const panes = at && (await at.mux.panes())

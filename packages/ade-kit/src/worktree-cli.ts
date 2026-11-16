@@ -13,32 +13,44 @@ export type CommandIo = Io & { out(text: string): void }
 export const USAGE = `usage: ade worktree [--cwd-file FILE] <command> [args]
 
 commands:
-  clone <url> [dir]         clone a repo laid out for worktrees (worktrees.layout)
+  clone <url> [dir]         clone a repository into dir (default: its name), laid
+                            out for worktrees.layout (bare: the repository in
+                            dir/.bare, with no worktree yet)
   open [LAND] <branch> [base]
-                            create/reuse the worktree for <branch>; base defaults
-                            to worktrees.base (origin/HEAD)
-  rm [-f] <name>            remove a worktree by branch or directory, closing
-                            its tabs, except the tab of the caller
-  ls [--json]               list worktrees; --json for programs
-  prune [-y] [-n] [-m]      remove worktrees whose remote branch was deleted;
-                            -n: no fetch first, -m: also those merged via a
-                            GitHub PR (needs gh)
-  convert [-y]              convert the normal clone in CWD to the configured
-                            layout
+                            the worktree of <branch>; if there is none, make it
+                            where the repository's layout puts it (a local branch
+                            as it is, a branch on origin tracking it, else a new
+                            branch from base, default worktrees.base) and copy
+                            the seed files into it
+  rm [-f] <name>            remove the worktree of a branch, folder name or path
+                            (-f: even with uncommitted changes) and close its
+                            tabs, except yours (none when an agent runs it)
+  ls [--json]               list the worktrees; --json: each one's branch,
+                            changed files, commits ahead of and behind
+                            worktrees.base, and whether it has a tab
+  prune [-y] [-n] [-m]      remove the worktrees whose remote branch was deleted
+                            (-m: also those merged through a GitHub PR; needs
+                            gh), never the one you are in or the default
+                            branch's; fetches first (-n: doesn't), lists them
+                            and asks (-y: doesn't)
+  convert [-y]              turn the normal clone you are in into the
+                            configured layout; shows what it will do and asks
+                            first (-y: doesn't)
   help                      show this help
 
-LAND (open) chooses what happens after the worktree exists:
-  (none)                    report it as the result (for a caller to cd there)
-  -s, --stay                report it as the result
-  -t, --tab                 focus its tab, opening one if needed
-  -b, --background          open its tab without moving focus
-  -p, --prompt PROMPT       start the agent in a new tab with PROMPT (implies -b;
-                            fails if the worktree already has a tab)
-  --session ID              like -p, on the agent's conversation ID (with or
-                            without a prompt)
-  The tab of a worktree is any tab whose panes are all inside the worktree.
-  Outside a multiplexer, -t and -b fall back to changing directory and staying;
-  -p fails.
+LAND (open): what happens once the worktree exists:
+  (none)                    go there: print its path (with --cwd-file, write it
+                            to that file instead, for a shell function to cd)
+  -s, --stay                stay where you are: print its path
+  -t, --tab                 go to its tab, opening one if it has none
+  -b, --background          open its tab without going to it
+  -p, --prompt PROMPT       open a tab in the background whose agent starts on
+                            PROMPT (fails if the worktree already has a tab)
+  --session ID              like -p, with the agent showing conversation ID
+                            (with or without a prompt)
+  A worktree's tab is a tab whose panes are all inside the worktree.
+  Outside a multiplexer, -t goes there instead (as without LAND), -b stays,
+  and -p fails.
 
 prune/convert without -y need a terminal to confirm and fail otherwise.
 

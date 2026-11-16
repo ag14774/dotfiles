@@ -18,22 +18,24 @@ import { workspaceOf } from "./workspace.ts"
 import { worktreeCommand } from "./worktree-cli.ts"
 
 const USAGE = `usage: ade open FILE[:LINE[:COLUMN]]...
-         open files in this tab's editor
+         open the files in this tab's editor and focus it; with no editor in the tab, start one
+         (only in the tab you are on: it never switches tabs)
        ade send FILE [START [END [LANGUAGE]]] [< SELECTION]
-         give this tab's agent a place in a file (and the text selected there), then focus it
+         put a reference to those lines of FILE, and the selected text, in this tab's agent
+         prompt without sending it, and focus the agent
        ade send --text [--submit] < TEXT
-         give it text as it is (with --submit, send it as a message)
+         put TEXT in the agent prompt as it is; with --submit, send it
        ade review
-         review this worktree's changes since worktrees.base (origin/HEAD), then give the agent
-         your comments
+         review what this worktree changed since worktrees.base, committed or not; when you end
+         the review, your comments go to this tab's agent (filled in, or sent: review.deliver)
        ade review --scope
-         what a review here covers: -r BASE..HEAD (commits), -w (uncommitted changes)
+         print what a review here covers: -r BASE..HEAD (commits), -w (uncommitted changes)
        ade restart-agent [DIR]
-         start this tab's agent afresh in DIR (default: here), in place of its pane
+         replace this tab's agent with a fresh one started in DIR (default: here); focus stays
        ade where
-         the folder of the focused tiled pane of its own tab (if that pane reports none: the tab's
-         agent pane, then its shell pane); outside a multiplexer, or when that folder is gone, the
-         folder it was started in
+         print the folder of the focused tiled pane of its own tab (if that pane reports none:
+         the tab's agent pane, then its shell pane); outside a multiplexer, or when that folder
+         is gone, the folder it was started in
        ade worktree [--cwd-file FILE] COMMAND [ARGS...]
          create, open, list and remove worktrees (see: ade worktree help)`
 

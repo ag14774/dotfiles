@@ -26,35 +26,52 @@ everything.
 
 | Command | What it does |
 | --- | --- |
-| `ade open FILE[:LINE[:COLUMN]]...` | Open files in the editor pane of the caller's tab, starting the editor if needed. Never switches you to another tab: in a tab you are not on, it only uses an editor that is already there. Refuses when the caller's pane no longer exists. |
-| `ade send FILE [START [END [LANGUAGE]]] [< SELECTION]` | Paste a reference (`FILE:START-END`) and the selection, as a fenced block, into the tab's agent prompt and focus it. Nothing is submitted. |
-| `ade send --text [--submit] < TEXT` | Paste text as it is; `--submit` also sends it. |
-| `ade review` | Review the worktree of the pane you were in with the reviewer, in the terminal it runs in (a key can start it in a floating pane), then give the agent your comments (`review.deliver`). One review per tab: a second one shows the open review. |
-| `ade review --scope` | What a review here covers: `-r BASE..HEAD` for the commits since `worktrees.base`, `-w` for uncommitted changes. |
-| `ade restart-agent [DIR]` | Start the tab's agent afresh in `DIR` (default: here), in place of its agent pane; focus stays where it is. |
-| `ade where` | The folder of the focused tiled pane of its own tab (found from its pane); if that pane reports no folder, the tab's agent pane's, then its shell pane's. Outside a multiplexer, or when that folder no longer exists, the folder it was started in. In a tiled pane that is its own folder; in a floating pane opened by a key (which starts in the session's folder), the folder of the focused tiled pane underneath. |
-| `ade worktree COMMAND` | `clone`, `open`, `rm`, `ls [--json]`, `prune`, `convert`: below. |
+| `ade open FILE[:LINE[:COLUMN]]...` | Opens the files in the editor of its own tab and focuses it. With no editor in the tab, it starts one there. It never switches tabs: in a tab you are not on, it only uses an editor that is already there, without focusing it. An editor that can't open a file at a line gets the file without it. |
+| `ade send FILE [START [END [LANGUAGE]]] [< SELECTION]` | Puts a reference to those lines of the file (`FILE:START-END`) and the selected text, as a fenced block, in the prompt of the tab's agent, and focuses the agent. Nothing is sent: you add your question. |
+| `ade send --text [--submit] < TEXT` | Puts the text in the agent's prompt as it is; with `--submit`, sends it. |
+| `ade review` | Reviews what the worktree changed since `worktrees.base`, committed or not, in the configured reviewer (tuicr by default), in the terminal it runs in. When you end the review, your comments go to the tab's agent: filled in for you to send, or sent (`review.deliver`). With nothing to review, it says so. If the tab already has a review open, it shows that one. The worktree is that of the folder `ade where` prints. |
+| `ade review --scope` | Prints what a review here covers: `-r BASE..HEAD` for the commits since `worktrees.base`, `-w` for uncommitted changes. |
+| `ade restart-agent [DIR]` | Replaces the tab's agent with a fresh one started in `DIR` (default: the current folder), in the same place; a tab without an agent gets one. Focus stays where it is. |
+| `ade where` | Prints the folder of the focused tiled pane of its own tab; if that pane reports no folder, the tab's agent pane's, then its shell pane's. Outside a multiplexer, or when that folder no longer exists, it prints the folder it was started in. So in a tiled pane you get your own folder, and in a floating pane opened by a key (which starts in the session's folder) the folder of the focused tiled pane underneath. |
+| `ade worktree COMMAND` | Creates, opens, lists and removes worktrees: below. |
 
 Set `ADE_LOG=FILE` to append each command `ade` runs to a file, and
 `ADE_CONFIG=/abs/path.json` to read another config.
 
 ## Worktrees
 
-`ade worktree open BRANCH [BASE]` makes or reuses the branch's worktree (a
-local branch as it is, one only on `origin` tracking it, else a new branch
-from `BASE` or `worktrees.base`), copies the seed files into a new one, and
-prints its path. `-t` goes to its tab (opening one with the layout), `-b`
-opens the tab in the background, `-p PROMPT` / `--session ID` start the agent
-there. Outside a multiplexer `-t` and `-b` fall back to changing directory and
-staying; `-p` fails. With `--cwd-file FILE`, the folder to change to is written
-to `FILE`, for a shell function that `cd`s.
+- `ade worktree open [-s|-t|-b|-p PROMPT|--session ID] BRANCH [BASE]`: the
+  branch's worktree. If there is none, it is made where the repository's
+  layout puts it: a local branch as it is, a branch only on `origin` tracking
+  it, else a new branch from `BASE` (default `worktrees.base`). The seed files
+  are copied into a new worktree. Then: with no option it prints the path, for
+  the caller to go there (`--cwd-file FILE` writes it to a file for a shell
+  function to `cd`); `-s` prints it and stays; `-t` goes to the worktree's tab,
+  opening one; `-b` opens the tab in the background; `-p` and `--session` open
+  a background tab whose agent starts on the prompt or the conversation (and
+  fail if it already has a tab). Outside a multiplexer, `-t` goes there
+  instead, `-b` stays, and `-p` fails.
+- `ade worktree rm [-f] NAME`: removes the worktree of a branch, folder name or
+  path (`-f`: even with uncommitted changes) and closes its tabs, except yours
+  and except when an agent runs it.
+- `ade worktree prune [-y] [-n] [-m]`: removes the worktrees whose remote
+  branch was deleted (`-m`: also those merged through a GitHub PR, matched by
+  the branch's exact last commit), never the one you are in or the default
+  branch's. It fetches first (`-n`: doesn't), lists them and asks (`-y`:
+  doesn't), and closes their tabs as `rm` does.
+- `ade worktree ls [--json]`: lists the worktrees; `--json` gives each one's
+  branch, number of changed files, commits ahead of and behind
+  `worktrees.base`, and whether it has a tab.
+- `ade worktree clone URL [DIR]`: clones a repository laid out for the
+  configured layout.
+- `ade worktree convert [-y]`: turns the normal clone you are in into the
+  configured layout, after showing what will change and asking (`-y`:
+  doesn't). With `bare`, the clone's other worktrees stay where they are and
+  keep working; with `sibling` or `inside`, they move where the layout puts
+  them.
 
-`rm` removes a worktree (by branch, folder name or path) and closes its tabs,
-except yours; `prune` removes those whose remote branch was deleted (`-m`: also
-those merged through a GitHub PR, matched by the exact head commit); `ls
---json` reports each worktree's branch, changes, commits ahead and behind
-`worktrees.base`, and whether it has a tab. `clone` and `convert` set up a
-repository for the configured layout.
+A worktree's tab is a tab whose panes are all inside the worktree, whatever
+its name.
 
 Layouts (`worktrees.layout`):
 
@@ -71,8 +88,6 @@ Layouts (`worktrees.layout`):
 A repository keeps its layout when the config changes: ade records it in the
 repository's git config (`ade.layout`) when it clones or converts it or makes
 its first worktree there, and before that goes by where its worktrees are.
-`convert` turns a normal clone into the configured layout (`bare`: the clone's
-other worktrees stay and keep working; `sibling`, `inside`: its worktrees move).
 
 Seeds, the untracked files copied into new worktrees: `ADE_SEED_FILE` (a
 manifest, one path or glob per line), else the repository's

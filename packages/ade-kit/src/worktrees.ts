@@ -172,11 +172,12 @@ export function seed(io: Io, from: string | undefined, to: string, seeds: Seeds)
   if (copied) io.say(`${COMMAND.open}: seeded ${copied} local file(s) from ${basename(from)}/ (${seeds.label})`)
 }
 
-// --- Landing: what happens once the worktree exists. -s reports it; -t
-// focuses its tab (opening one), -b opens it in the background; -p/--session
-// start the agent in a new background tab. Without either, the caller changes
-// to it (the shell function cds). Outside a multiplexer, -t changes directory,
-// -b stays and -p fails.
+// --- Landing: what happens once the worktree exists. With no option the
+// caller goes there (a shell function cds); -s stays and reports its path; -t
+// goes to its tab, opening one; -b opens its tab in the background; -p and
+// --session open a background tab whose agent starts on the prompt or
+// conversation. Outside a multiplexer, -t goes there instead, -b stays and -p
+// fails.
 export type Landing = { mode: "cd" | "stay" | "tab" | "background"; prompt?: string; session?: string }
 export type Landed = { dir: string; cd: boolean }
 
@@ -286,10 +287,11 @@ export async function layoutFor(kit: Kit, io: Io, repo: Repository) {
 const record = (kit: Kit, io: Io, repo: Repository, choice: string) =>
   query(kit, io, ["--git-dir", repo.common, "config", "ade.layout", choice], repo.root)
 
-// open: the worktree for a branch, created if needed (a local branch as it is;
-// one only on origin, tracking it; else a new branch from `base`, default the
-// config's worktrees.base, origin/HEAD, without an upstream), where the
-// repository's layout puts it, seeded, then landed on.
+// open: the worktree of a branch. If there is none, it is made where the
+// repository's layout puts it (a local branch as it is, a branch only on
+// origin tracking it, else a new branch from `base`, default worktrees.base,
+// without an upstream) and the seed files are copied into it. Then it lands
+// as asked (see Landing).
 const OPEN_USAGE = `usage: ${COMMAND.open} [-s|-t|-b] [-p PROMPT] [--session ID] <branch> [base]   (options before the branch)`
 export async function open(kit: Kit, io: Io, args: string[]): Promise<Landed> {
   const { landing, rest } = parseLanding(COMMAND.open, args)
@@ -351,8 +353,8 @@ async function tabsOf(kit: Kit, io: Io, dir: string) {
   )
 }
 
-// rm: remove a worktree (-f: even with changes), then close the tabs working
-// in it, except yours (see actions.closeTabs).
+// rm: remove the worktree of a branch, folder name or path (-f: even with
+// uncommitted changes), then close the tabs working in it, except yours.
 export async function remove(kit: Kit, io: Io, args: string[]) {
   const force = args[0] === "-f" || args[0] === "--force"
   const arg = args[force ? 1 : 0]
@@ -388,11 +390,10 @@ async function mergedPr(kit: Kit, io: Io, repo: Repository, branch: string) {
   return pr ? `merged PR #${pr}` : undefined
 }
 
-// prune: remove the worktrees whose branch's remote branch was deleted (its
-// upstream is "gone"; branches that never had one are new work and stay), and
-// with -m those merged through a PR (GitHub only); never the default branch's
-// or the one you are in. Fetches with --prune first (-n: not), lists them,
-// then asks (-y: doesn't).
+// prune: remove the worktrees whose remote branch was deleted (a branch that
+// never had one is new work, and stays), and with -m those merged through a
+// GitHub PR; never the default branch's or the one you are in. Fetches first
+// (-n: doesn't), lists them, then asks (-y: doesn't).
 const PRUNE_USAGE = `usage: ${COMMAND.prune} [-y] [-n|--no-fetch] [-m|--merged]`
 export async function prune(kit: Kit, io: Io, args: string[]) {
   let yes = false
@@ -461,8 +462,8 @@ export async function prune(kit: Kit, io: Io, args: string[]) {
   if (failed) throw new Failed()
 }
 
-// clone: a repository from `url`, laid out for worktrees as the config
-// says (a layout without a way of its own: a normal clone).
+// clone: clone the repository at `url`, laid out for the configured layout
+// (a normal clone for a layout without a way of its own).
 export async function clone(kit: Kit, io: Io, args: string[]) {
   const [url, given] = args
   if (!url) throw new Failed(`usage: ${COMMAND.clone} <url> [dir]`)
@@ -479,9 +480,9 @@ export async function clone(kit: Kit, io: Io, args: string[]) {
 }
 
 // Into a layout without a conversion of its own (sibling, inside, yours): the
-// clone stays as it is; its worktrees move to where the layout puts them.
-// Refused for a bare repository, or one recorded with this layout already.
-// Lands where the caller's folder is now.
+// clone stays where it is, and its worktrees move to where the layout puts
+// them. Refused for a bare repository, or one using this layout already. Goes
+// to where the caller's folder is now.
 async function relayout(kit: Kit, io: Io, layout: Layout, choice: string, yes: boolean): Promise<Landed> {
   const repo = await repositoryOf(kit, io)
   if (!repo || line(await query(kit, io, ["rev-parse", "--is-inside-work-tree"])) !== "true")
@@ -523,8 +524,8 @@ async function relayout(kit: Kit, io: Io, layout: Layout, choice: string, yes: b
   return { dir: here, cd: true }
 }
 
-// convert: the normal clone you are in (one not set up for worktrees yet),
-// into the configured layout (-y: without asking first).
+// convert: turn the normal clone you are in into the configured layout,
+// after showing what will change and asking (-y: without asking).
 export async function convert(kit: Kit, io: Io, args: string[]): Promise<Landed> {
   const yes = args[0] === "-y" || args[0] === "--yes"
   const choice = kit.config.worktrees.layout
@@ -546,8 +547,9 @@ export type Listed = {
   tab: "sure" | "unsure" | null // see tabsIn; null outside a multiplexer
 }
 
-// The repository's worktrees (no bare repository, no folder deleted by hand),
-// for `ls --json` and the plugin's status.
+// The repository's worktrees (not a bare repository, nor a worktree whose
+// folder was deleted), each with its branch, uncommitted changes, commits
+// ahead and behind worktrees.base, and tab: `ls --json` and the status tool.
 export async function list(kit: Kit, io: Io): Promise<Listed[]> {
   if ((await query(kit, io, ["rev-parse", "--git-dir"])) === undefined)
     throw new Failed(`${COMMAND.ls}: not inside a git repo`)
