@@ -2,6 +2,7 @@
 
 # Core terminal IDE stack
 cask "iterm2"
+cask "font-jetbrains-mono-nerd-font" # the terminal font: Nerd Font icons in the bar, Yazi, starship
 brew "helix"
 brew "yazi"
 brew "zellij"

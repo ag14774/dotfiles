@@ -11,6 +11,7 @@ PACKAGES=(
   zsh-autosuggestions     # fish-style suggestions from history
   zsh-syntax-highlighting # command-line syntax colouring
   ghostty
+  ttf-jetbrains-mono-nerd # the terminal font: Nerd Font icons
   helix
   yazi
   zellij
