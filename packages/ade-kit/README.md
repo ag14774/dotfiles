@@ -65,6 +65,8 @@ Layouts (`worktrees.layout`):
 - `inside`: in `repo/.worktrees/<branch>`, kept out of `git status`.
 - A file of your own: `"layout": "~/.config/ade/my-layout.ts"`, exporting
   `(kit) => ({ ...kit.builtin.layout("sibling"), name: "mine", path: (repo, name) => ... })`.
+  It can have its own `clone` and `convert` too, with `kit.git` and
+  `kit.fail` (as `src/layouts/bare.ts` does), so it needs no fork.
 
 A repository keeps its layout when the config changes: ade records it in the
 repository's git config (`ade.layout`) when it clones or converts it or makes
@@ -117,9 +119,11 @@ refuses one written for another `api`, or missing a required operation, and
 says what is missing. The interfaces are in `src/types.ts` (import them with
 `import type`, which Node strips, so nothing has to resolve at run time). The
 kit gives adapters what they need without imports: `run`, quoting, keys, the
-config and their options (`kit.options("mine", defaults)`), the helpers
-`typedEditor` (an editor reached by typing into its pane) and `pasteAgent`, and
-the built-ins to start from.
+config and their options (`kit.options("mine", defaults)`), git (`kit.git`)
+and the error that ends a command (`kit.fail`), the helpers `typedEditor` (an
+editor reached by typing into its pane) and `pasteAgent`, and the built-ins to
+start from. An adapter of your own lives outside the repository and is named
+in the config by its path, so most changes need no fork.
 
 Programs are reached through the worktree: an editor or agent without its own
 remote control through its pane in the worktree's tab (so it needs a
@@ -133,7 +137,7 @@ path (`workspace.session`).
 | `src/index.ts` | the public surface; everything else is internal |
 | `src/cli.ts` | the `ade` command, a thin layer over the actions |
 | `src/actions.ts` | open, send, review, workspace, tabs, closeTabs |
-| `src/worktrees.ts`, `src/worktree-cli.ts` | the worktree commands |
+| `src/worktrees.ts`, `src/worktree-cli.ts`, `src/git.ts` | the worktree commands, and running git |
 | `src/config.ts`, `src/load.ts`, `src/builtins.ts`, `src/kit.ts` | the config, loading adapters, the built-ins, what adapters get |
 | `src/workspace.ts`, `src/multiplexer.ts` | where the caller is; pane logic for every multiplexer |
 | `src/editor.ts`, `src/agent.ts`, `src/review.ts` | the helpers, and what a review covers |

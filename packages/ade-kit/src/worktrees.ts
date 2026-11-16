@@ -2,13 +2,13 @@
 // plugins also run in-process. Messages name the command ("ade worktree open:
 // ..."). Nothing here changes the process's folder or reads its environment:
 // both come with the Io.
-import { spawn } from "node:child_process"
 import { accessSync, constants, cpSync, existsSync, mkdirSync, readdirSync, readFileSync } from "node:fs"
 import { basename, dirname, join, resolve } from "node:path"
 import type { TabIn } from "./actions.ts"
 import { closeTabs, tabs, workspace } from "./actions.ts"
 import { builtins } from "./builtins.ts"
 import { onPath } from "./editor.ts"
+import { Failed, line, loud, query, worktreeRecords } from "./git.ts"
 import { labelOf, loadAgent, loadLayout } from "./load.ts"
 import type { Kit, Layout, Repository, WorktreeIo } from "./types.ts"
 import { isDirectory, multiplexerAt, outside, realPath } from "./workspace.ts"
@@ -27,32 +27,6 @@ export const COMMAND = {
   convert: "ade worktree convert",
 }
 
-// A command failed; its message (if any) is the line to show. Git's own error
-// has been shown already when the message is empty.
-export class Failed extends Error {}
-
-// A git query: its output, or undefined when it fails. In English, as it is
-// parsed ("[gone]"). No timeout: a status in a big repository can be slow.
-export async function query(kit: Kit, io: Io, args: string[], cwd = io.cwd) {
-  const result = await kit.run(["git", ...args], { cwd, env: { ...io.env, LC_ALL: "C" }, timeout: 0 })
-  return result.ok ? result.stdout : undefined
-}
-export const line = (text: string | undefined) => text?.replace(/\n$/, "")
-
-// A git command whose own output you see. Never on stdout: callers capture
-// `open -s`'s path, and a background job git starts must not hold it open.
-export async function loud(kit: Kit, io: Io, args: string[], cwd = io.cwd): Promise<boolean> {
-  if (io.passthrough)
-    return new Promise((done) => {
-      const child = spawn("git", args, { cwd, env: io.env as NodeJS.ProcessEnv, stdio: ["inherit", 2, 2] })
-      child.on("error", () => done(false))
-      child.on("close", (code) => done(code === 0))
-    })
-  const result = await kit.run(["git", ...args], { cwd, env: io.env, timeout: 0 })
-  for (const text of `${result.stdout}${result.stderr}`.split("\n")) if (text) io.say(text)
-  return result.ok
-}
-
 // The repository the caller is in (see Repository).
 export async function repositoryOf(kit: Kit, io: Io, cwd = io.cwd): Promise<Repository | undefined> {
   const common = line(await query(kit, io, ["rev-parse", "--path-format=absolute", "--git-common-dir"], cwd))
@@ -60,20 +34,6 @@ export async function repositoryOf(kit: Kit, io: Io, cwd = io.cwd): Promise<Repo
   const bare = line(await query(kit, io, ["--git-dir", common, "config", "--bool", "core.bare"], cwd)) === "true"
   return { common, root: dirname(common), bare }
 }
-
-// `git worktree list --porcelain`, record by record.
-export type WorktreeRecord = { path: string; branch?: string; bare: boolean }
-export function records(porcelain: string): WorktreeRecord[] {
-  const found: WorktreeRecord[] = []
-  for (const record of porcelain.split("\n")) {
-    if (record.startsWith("worktree ")) found.push({ path: record.slice(9), bare: false })
-    else if (record.startsWith("branch refs/heads/") && found.length) found[found.length - 1].branch = record.slice(18)
-    else if (record === "bare" && found.length) found[found.length - 1].bare = true
-  }
-  return found
-}
-export const worktreeRecords = async (kit: Kit, io: Io, cwd: string, ...gitDir: string[]) =>
-  records((await query(kit, io, [...gitDir, "worktree", "list", "--porcelain"], cwd)) ?? "")
 
 // The worktree checked out on `branch`, wherever it is.
 export const worktreeOf = async (kit: Kit, io: Io, repo: Repository, branch: string) =>

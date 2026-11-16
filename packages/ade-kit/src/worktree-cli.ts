@@ -4,8 +4,9 @@
 // folder to change to is written there instead (a shell function then cds).
 import { writeFileSync } from "node:fs"
 import type { Kit } from "./types.ts"
+import { Failed } from "./git.ts"
 import type { Io, Landed } from "./worktrees.ts"
-import { clone, convert, Failed, list, open, prune, remove } from "./worktrees.ts"
+import { clone, convert, list, open, prune, remove } from "./worktrees.ts"
 
 export type CommandIo = Io & { out(text: string): void }
 

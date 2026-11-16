@@ -5,6 +5,7 @@ import { pasteAgent } from "./agent.ts"
 import { builtin } from "./builtins.ts"
 import { merge, readConfig } from "./config.ts"
 import { typedEditor } from "./editor.ts"
+import { Failed, gitFor } from "./git.ts"
 import type { Config, Key, Kit, RunOptions, RunResult } from "./types.ts"
 
 const TIMEOUT_MS = 10_000
@@ -69,6 +70,8 @@ export function makeKit(
     quote,
     keys,
     options: <T>(name: string, defaults: T) => merge(structuredClone(defaults), kit.config[name]) as T,
+    git: gitFor({ run: (argv, options) => kit.run(argv, options) }),
+    fail: (message) => new Failed(message),
     tabName: (template, dir) => tabName(kit.run, template, dir),
     typedEditor,
     pasteAgent,

@@ -9,7 +9,8 @@ import { makeKit, run } from "../src/kit.ts"
 import type { Config, Kit, Pane } from "../src/types.ts"
 import { worktreeCommand } from "../src/worktree-cli.ts"
 import type { Io } from "../src/worktrees.ts"
-import { clone, convert, Failed, globIn, layoutFor, list, open, parseLanding, prune, query, records, remove, repositoryOf, seedsFor, worktreeFor } from "../src/worktrees.ts"
+import { Failed, query, records } from "../src/git.ts"
+import { clone, convert, globIn, layoutFor, list, open, parseLanding, prune, remove, repositoryOf, seedsFor, worktreeFor } from "../src/worktrees.ts"
 
 const temp = realpathSync(mkdtempSync(join(tmpdir(), "ade-worktrees-")))
 const git = (cwd: string, ...args: string[]) =>
@@ -385,4 +386,27 @@ test("query: git's output in English, as it is parsed", async () => {
   const recording = makeKit({ config: structuredClone(DEFAULTS), run: async (_argv, o) => (seen.push(o?.env), { ok: true, stdout: "x\n", stderr: "" }) })
   assert.equal(await query(recording, ioIn("/", { LANG: "de_DE.UTF-8", KEEP: "1" }).io, ["status"]), "x\n")
   assert.deepEqual([seen[0]?.LC_ALL, seen[0]?.LANG, seen[0]?.KEEP], ["C", "de_DE.UTF-8", "1"])
+})
+
+test("a layout of your own clones and fails with the kit alone, no imports", async () => {
+  const cloned = join(temp, "own-layout")
+  mkdirSync(cloned)
+  const mine = join(temp, "cloning-layout.ts")
+  writeFileSync(
+    mine,
+    `export default (kit) => ({
+      api: 1, name: "cloning",
+      path: (repo, name) => repo.root + "-" + name,
+      clone: async (url, dir, io) => {
+        if (!(await kit.git.loud(io, ["clone", "-q", url, dir]))) throw kit.fail("cloning: clone failed")
+        io.say("on " + (await kit.git.value(io, ["-C", dir, "symbolic-ref", "--short", "HEAD"])))
+        io.say("worktrees: " + (await kit.git.worktrees(io, dir)).length)
+      },
+    })`,
+  )
+  const r = ioIn(cloned)
+  await clone(kitLaid({ layout: mine }), r.io, [origin, "mine"])
+  assert.deepEqual(r.said.slice(-2), ["on main", "worktrees: 1"])
+  assert.equal(layoutOf(join(cloned, "mine")), mine)
+  await assert.rejects(clone(kitLaid({ layout: mine }), ioIn(cloned).io, [join(temp, "missing"), "none"]), new Failed("cloning: clone failed"))
 })

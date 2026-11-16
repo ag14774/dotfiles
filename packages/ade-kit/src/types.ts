@@ -154,6 +154,9 @@ export type WorktreeIo = {
   confirm?(question: string): Promise<boolean> // a yes/no question; absent without a terminal
 }
 
+// A worktree, as `git worktree list --porcelain` describes it.
+export type WorktreeRecord = { path: string; branch?: string; bare: boolean }
+
 // A repository, as the worktree commands see it.
 export type Repository = {
   common: string // its Git common folder (.bare, .git)
@@ -221,6 +224,19 @@ export type Kit = {
   // An adapter's options: the config's section `name` merged over `defaults`
   // (objects key by key; anything else replaces the default). Unchecked.
   options<T>(name: string, defaults: T): T
+  // Git, for a layout's clone or convert: query returns the output, in
+  // English (undefined when git fails), value the same without its last
+  // newline, loud shows git's own output as it runs (true when it worked),
+  // worktrees lists the repository's worktrees.
+  git: {
+    query(io: WorktreeIo, args: string[], cwd?: string): Promise<string | undefined>
+    value(io: WorktreeIo, args: string[], cwd?: string): Promise<string | undefined>
+    loud(io: WorktreeIo, args: string[], cwd?: string): Promise<boolean>
+    worktrees(io: WorktreeIo, cwd: string, ...gitDir: string[]): Promise<WorktreeRecord[]>
+  }
+  // The error that ends a command: its message is the line to show (none: git
+  // has said why).
+  fail(message?: string): Error
   // A tab's name for the worktree `dir`, from a template: {worktree} is the
   // worktree folder's name, {project} its repository's root folder's.
   tabName(template: string, dir: string): Promise<string>
