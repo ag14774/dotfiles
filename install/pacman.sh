@@ -40,6 +40,8 @@ PACKAGES=(
   # Tooling
   curl
   stow
+  uv
+  rustup
   git-delta
   tuicr
   github-cli

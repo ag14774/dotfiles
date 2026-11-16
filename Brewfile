@@ -34,6 +34,8 @@ brew "node" # provides npm for the JS-based LSPs (TypeScript/yaml/json/bash)
 
 # Tooling
 brew "stow"      # symlink manager for the config/ package
+brew "uv"        # Python tools (pyright) and goto-super.py
+brew "rustup"    # Rust, for cargo install (jinja-lsp); keg-only
 brew "git-delta" # delta: syntax-highlighted git diffs for reviewing changes (see ~/.config/git/config)
 brew "tuicr"     # code review TUI: Alt-v reviews the tab's worktree, comments go to OpenCode
 brew "gh"        # GitHub CLI: merged-worktree pruning (`wtprune -m`)

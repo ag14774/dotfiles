@@ -92,17 +92,17 @@ if [[ $LOGIN_SHELL != */zsh ]]; then
 fi
 
 command -v curl >/dev/null 2>&1 || {
-  echo "curl is required to install uv, OpenCode, and rustup." >&2
+  echo "curl is required to install OpenCode." >&2
   exit 1
 }
 
-echo "==> uv (official installer)"
-if [ -x "$HOME/.local/bin/uv" ]; then
-  UV_NO_MODIFY_PATH=1 "$HOME/.local/bin/uv" self update >/dev/null
-else
-  curl -LsSf https://astral.sh/uv/install.sh | UV_NO_MODIFY_PATH=1 sh
-fi
+# uv and rustup come from the package manager (on Debian, uv from apt.sh).
+# Copies from their own installers, in ~/.local/bin and ~/.cargo/bin, come
+# first on PATH; rustup's is used as it is.
 export PATH="$HOME/.local/bin:$PATH"
+if [ "$PACKAGE_INSTALLER" != apt ] && [ -x "$HOME/.local/bin/uv" ]; then
+  echo "note: ~/.local/bin/uv, from uv's own installer, comes before the package manager's uv; remove it and ~/.local/bin/uvx to use that one" >&2
+fi
 
 echo "==> pyright (uv tool)"
 uv tool install --upgrade pyright >/dev/null
@@ -122,16 +122,19 @@ echo "==> OpenCode 2 (official installer and app settings)"
 export PATH="$HOME/.opencode/bin:$PATH"
 bash "$DOTFILES/install/opencode.sh"
 
-echo "==> Rust toolchain (rustup)"
-if [ ! -x "$HOME/.cargo/bin/rustup" ]; then
-  curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --no-modify-path
+echo "==> Rust toolchain (rustup) and Cargo-based language servers"
+if [ -x "$HOME/.cargo/bin/rustup" ]; then
+  RUSTUP="$HOME/.cargo/bin/rustup"
+elif [ "$PACKAGE_INSTALLER" = brew ]; then
+  RUSTUP="$(brew --prefix rustup)/bin/rustup" # keg-only
+else
+  RUSTUP=rustup
 fi
+"$RUSTUP" update stable >/dev/null
+"$RUSTUP" default stable >/dev/null
+# Into ~/.cargo/bin, with the versions its lock file names.
+"$RUSTUP" run stable cargo install --locked jinja-lsp >/dev/null
 export PATH="$HOME/.cargo/bin:$PATH"
-"$HOME/.cargo/bin/rustup" update stable >/dev/null
-"$HOME/.cargo/bin/rustup" default stable >/dev/null
-
-echo "==> Cargo-based language servers"
-cargo install jinja-lsp >/dev/null
 
 echo "==> Symlink config/ into ~/.config and ~/.local/bin (stow)"
 mkdir -p "$HOME/.config"
