@@ -6,6 +6,7 @@
 set -eu
 
 ROOT=${0:A:h:h}
+ADE=$ROOT/packages/ade-kit/src/cli.ts
 TMP=$(mktemp -d)
 TMP=${TMP:A}
 trap 'rm -rf "$TMP"' EXIT
@@ -46,7 +47,7 @@ export FAKE_PANES=$(jq -cn --arg repo "$TMP/repo" --arg other "$TMP/other" '[
 
 ade_open() { # $1 = caller pane, $2 = directory; output in $FAKE_LOG and $TMP/err
   : > "$FAKE_LOG"
-  (cd "$2" && ZELLIJ_PANE_ID=$1 "$ROOT/config/.local/bin/ade" open notes.md) 2>"$TMP/err"
+  (cd "$2" && ZELLIJ_PANE_ID=$1 "$ADE" open notes.md) 2>"$TMP/err"
 }
 called() { grep -q -- "$1" "$FAKE_LOG"; }
 

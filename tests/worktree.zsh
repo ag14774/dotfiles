@@ -3,6 +3,7 @@
 set -eu
 
 ROOT=${0:A:h:h}
+ADE=$ROOT/packages/ade-kit/src/cli.ts
 TMP=$(mktemp -d)
 TMP=${TMP:A}
 trap 'rm -rf "$TMP"' EXIT
@@ -20,7 +21,7 @@ assert_eq() {
 }
 
 core() { # `ade worktree` with these arguments: stdout in $out, stderr in $TMP/err
-  out=$("$ROOT/config/.local/bin/ade" worktree "$@" 2>"$TMP/err")
+  out=$("$ADE" worktree "$@" 2>"$TMP/err")
 }
 said() { grep -qxF -- "$1" "$TMP/err" || fail "expected the message '$1', got: $(<"$TMP/err")"; }
 
@@ -159,7 +160,7 @@ cd "$project"
 # Called directly, the engine prints only the worktree path on stdout (progress,
 # such as seeding .env, goes to stderr).
 cd "$project/main"
-out=$("$ROOT/config/.local/bin/ade" worktree open direct 2>/dev/null)
+out=$("$ADE" worktree open direct 2>/dev/null)
 assert_eq "$out" "$project/direct"
 assert_eq "$PWD" "$project/main"
 wtrm direct >/dev/null 2>&1
@@ -538,7 +539,7 @@ wtrm sessioned-quiet >/dev/null 2>&1
 # the dev layout in the worktree, named after it.
 engine() { # `ade worktree open` with these arguments; stdout in $out, stderr in $TMP/err
   : > "$ZJ_STATE/log"
-  out=$("$ROOT/config/.local/bin/ade" worktree open "$@" 2>"$TMP/err")
+  out=$("$ADE" worktree open "$@" 2>"$TMP/err")
 }
 called_with() { # $1=zellij command, then words one call of it must include
   local cmd=$1 line word found
@@ -592,7 +593,7 @@ assert_eq "${${pane#*|}#* }" '--prompt -x "quoted" prompt'
 assert_eq "${${${pane#*|}%% *}:A}" "$ROOT/config/.local/bin/opencode-pane"
 
 # Without the caller's pane ID (a script naming only the session), the same.
-env -u ZELLIJ_PANE_ID "$ROOT/config/.local/bin/ade" worktree open -b nopane >/dev/null 2>&1 \
+env -u ZELLIJ_PANE_ID "$ADE" worktree open -b nopane >/dev/null 2>&1 \
   || fail "wt -b without ZELLIJ_PANE_ID failed"
 [[ -n $(tab_in "$project/nopane") ]] || fail "wt -b without ZELLIJ_PANE_ID should open a tab"
 
@@ -700,7 +701,7 @@ done
 # empty); it closes nothing when the worktree can't be removed.
 rm_engine() { # `ade worktree rm` with these arguments; stdout in $out, stderr in $TMP/err
   : > "$ZJ_STATE/log"
-  out=$("$ROOT/config/.local/bin/ade" worktree rm "$@" 2>"$TMP/err")
+  out=$("$ADE" worktree rm "$@" 2>"$TMP/err")
 }
 has_tab() { grep -q "^$1	" "$ZJ_STATE/tabs"; }
 wt -b two >/dev/null 2>&1
@@ -748,19 +749,19 @@ zellij action close-tab-by-id "$paneless"
 # ls --json reports each worktree's branch, changes and tab, for the plugin.
 wt -b listed >/dev/null 2>&1
 print change > "$project/listed/notes.md"
-json=$("$ROOT/config/.local/bin/ade" worktree ls --json)
+json=$("$ADE" worktree ls --json)
 entry() { jq -c --arg p "$project/$1" '.[] | select(.path == $p) | {branch, base, changed, ahead, behind, tab}' <<< "$json"; }
 assert_eq "$(entry listed)" '{"branch":"listed","base":"origin/HEAD","changed":1,"ahead":0,"behind":0,"tab":"sure"}'
 assert_eq "$(entry main)" '{"branch":"main","base":"origin/HEAD","changed":0,"ahead":0,"behind":0,"tab":null}'
 # Without the caller's pane the tabs are found all the same; outside Zellij
 # there are none. A live pane that reports no directory makes a tab "unsure".
-json=$(env -u ZELLIJ_PANE_ID "$ROOT/config/.local/bin/ade" worktree ls --json)
+json=$(env -u ZELLIJ_PANE_ID "$ADE" worktree ls --json)
 assert_eq "$(entry listed | jq -r .tab)" sure
-json=$(env -u ZELLIJ "$ROOT/config/.local/bin/ade" worktree ls --json)
+json=$(env -u ZELLIJ "$ADE" worktree ls --json)
 assert_eq "$(entry listed | jq -r .tab)" null
 listed_tab=$(tab_in "$project/listed")
 printf '62\t%s\tstarting\t\t-\n' "$listed_tab" >> "$ZJ_STATE/panes"
-json=$("$ROOT/config/.local/bin/ade" worktree ls --json)
+json=$("$ADE" worktree ls --json)
 assert_eq "$(entry listed | jq -r .tab)" unsure
 assert_eq "$(entry main | jq -r .tab)" null
 wtrm -f listed >/dev/null 2>&1
@@ -773,7 +774,7 @@ cd "$TMP/plain"
 wt -b inner >/dev/null 2>&1
 inner_tab=$(tab_in "$TMP/plain/inner")
 [[ -n $inner_tab ]] || fail "wt -b should open a tab for the nested worktree"
-json=$("$ROOT/config/.local/bin/ade" worktree ls --json)
+json=$("$ADE" worktree ls --json)
 assert_eq "$(jq -c '[.[] | {path, tab}]' <<< "$json")" \
   "$(jq -cn --arg p "$TMP/plain" '[{path: $p, tab: null}, {path: ($p + "/inner"), tab: "sure"}]')"
 zellij action go-to-tab-by-id 1
