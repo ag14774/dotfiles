@@ -138,24 +138,30 @@ mkdir -p "$HOME/.config"
 # Restow, so links to files removed from the repository go too.
 stow --no-folding --restow -d "$DOTFILES" -t "$HOME" config
 
-echo "==> ade (github.com/ag14774/ade): the ade command and the OpenCode plugins"
-# The ade commit these dotfiles are tested with. Without ADE_HOME, the
-# installer keeps its own clone there; with ADE_HOME set (say in
-# ~/.config/zsh/local.zsh), that checkout is yours: it is linked, never changed.
-ADE_REF=83797e295e3e180ec518e76abcc5c7ed0a910487
+echo "==> ade: the ade command and the OpenCode plugins"
+# Without ADE_HOME, the installer keeps its own clone of ADE_REPO in
+# ~/.local/share/ade, at the latest commit of its main branch (ADE_REF: that
+# commit or branch instead) until the next run. With ADE_HOME set (say in
+# ~/.config/zsh/local.zsh), that checkout is yours: linked, never changed.
+ADE_REPO=${ADE_REPO:-https://github.com/ag14774/ade.git}
 if [[ -n ${ADE_HOME:-} ]]; then
   [[ -x $ADE_HOME/install.sh ]] || {
     echo "ADE_HOME=$ADE_HOME is not a checkout of ade" >&2
     exit 1
   }
-  git -C "$ADE_HOME" merge-base --is-ancestor "$ADE_REF" HEAD 2>/dev/null ||
-    echo "warning: $ADE_HOME does not have ade $ADE_REF yet, which these dotfiles expect" >&2
 else
   ADE_HOME=$HOME/.local/share/ade
-  [[ -d $ADE_HOME/.git ]] || git clone -q https://github.com/ag14774/ade.git "$ADE_HOME"
+  [[ -d $ADE_HOME/.git ]] || git clone -q "$ADE_REPO" "$ADE_HOME"
+  git -C "$ADE_HOME" remote set-url origin "$ADE_REPO"
   git -C "$ADE_HOME" fetch -q origin
-  git -C "$ADE_HOME" checkout -q --detach "$ADE_REF"
+  ade_before=$(git -C "$ADE_HOME" rev-parse HEAD)
+  git -C "$ADE_HOME" checkout -q --detach "${ADE_REF:-origin/main}"
+  if [[ $(git -C "$ADE_HOME" rev-parse HEAD) != "$ade_before" ]]; then
+    echo "ade moved from ${ade_before:0:7} to $(git -C "$ADE_HOME" log -1 --format='%h (%s)')."
+    echo "  What changed, and what to do: $ADE_HOME/CHANGELOG.md"
+  fi
 fi
+echo "ade at $(git -C "$ADE_HOME" log -1 --format='%h %cs') in $ADE_HOME"
 # npm links ade's packages (downloading nothing), then ade and the plugins are
 # linked into ~/.local/bin and ~/.config/opencode/plugins.
 "$ADE_HOME/install.sh"
@@ -183,7 +189,8 @@ mkdir -p "$HOME/.config/zsh"
 [ -f "$HOME/.config/zsh/secrets.zsh" ] || cp "$DOTFILES/secrets.zsh.example" "$HOME/.config/zsh/secrets.zsh"
 
 echo "==> ~/.zshrc managed block"
-if [ -f "$ZSHRC" ]; then
+# The ~/.zshrc from before the first run, kept once.
+if [ -f "$ZSHRC" ] && [ ! -e "$ZSHRC.dotfiles-bak" ]; then
   cp "$ZSHRC" "$ZSHRC.dotfiles-bak"
 fi
 {
@@ -198,6 +205,9 @@ fi
   printf '  export EDITOR=helix\n'
   printf 'fi\n'
   printf 'export VISUAL="$EDITOR"\n'
+  # Before Zellij starts, so its panes have them too (agents, restored panes).
+  printf '[ -f "$HOME/.config/zsh/secrets.zsh" ] && source "$HOME/.config/zsh/secrets.zsh"\n'
+  printf '[ -f "$HOME/.config/zsh/local.zsh" ] && source "$HOME/.config/zsh/local.zsh"\n'
   printf 'if [[ -z "${ZELLIJ:-}" && "${ZELLIJ_AUTO_START:-true}" == true ]] && command -v zellij >/dev/null 2>&1; then\n'
   # Resurrect a saved "main" with its allow-listed commands running (config.kdl).
   # Not exec: if Zellij fails (e.g. an unreadable saved session), stay in a shell.
@@ -226,10 +236,8 @@ fi
   printf 'source "%s/shell/completions.zsh"\n' "$DOTFILES" # CLI completions that need compinit (opencode, ...)
   printf 'eval "$(zoxide init zsh --cmd j)"\n'             # zoxide (j / ji); also feeds yazi's z
   printf 'source "$HOME/.config/fzf/fzf.env"\n'            # fzf file list: respect .gitignore (Alt-g toggles); also sourced by yazi-picker.sh
-  printf '[ -f "$HOME/.config/zsh/secrets.zsh" ] && source "$HOME/.config/zsh/secrets.zsh"\n'
-  printf '[ -f "$HOME/.config/zsh/local.zsh" ] && source "$HOME/.config/zsh/local.zsh"\n' # machine-local, gitignored (e.g. work fns, tool completions); after compinit
-  printf 'source "%s/shell/aliases.zsh"\n' "$DOTFILES"                                    # rm/cp/mv -i, coloured ls and grep
-  printf 'source "%s/shell/worktree.zsh"\n' "$DOTFILES" # wt*: short names for ade worktree
+  printf 'source "%s/shell/aliases.zsh"\n' "$DOTFILES"     # rm/cp/mv -i, coloured ls and grep
+  printf 'source "%s/shell/worktree.zsh"\n' "$DOTFILES"    # wt*: short names for ade worktree
   printf 'source "%s/shell/ocreload.zsh"\n' "$DOTFILES"
   printf 'source "%s/shell/cheatsheet.zsh"\n' "$DOTFILES"
   printf 'source "%s/shell/git.zsh"\n' "$DOTFILES" # ggpush/ggpull + gcai
