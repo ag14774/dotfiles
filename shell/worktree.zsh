@@ -1,18 +1,22 @@
 # worktree.zsh
-# Git worktree helpers for parallel development: short names for
-# `ade worktree` (packages/ade-kit/src/worktree-cli.ts) that also `cd` where it
-# reports.
+# Git worktree commands: short names for `ade worktree` that also cd where it
+# says (`wthelp` lists every option).
 #
-#   wtclone <url> [dir]   ade worktree clone
-#   wt <branch> [base]    ade worktree open (cds into the worktree; -s stays,
-#                         -t/-b open its tab, -p starts the agent on a prompt)
-#   wtrm [-f] <name>      ade worktree rm
-#   wtprune [-ynm]        ade worktree prune
-#   wtls                  ade worktree ls
-#   wtconvert [-y]        ade worktree convert
-#   wthelp                ade worktree help
+#   wtclone <url> [dir]   clone a repository laid out for worktrees
+#   wt <branch> [base]    cd into the branch's worktree, making it if needed;
+#                         -s stays and prints its path, -t goes to its tab,
+#                         -b opens the tab in the background, -p PROMPT opens
+#                         a background tab whose agent starts on PROMPT
+#   wtrm [-f] <name>      remove a worktree and close its tabs, except yours
+#   wtprune [-ynm]        remove the worktrees whose remote branch was deleted
+#                         (-m: also those merged through a GitHub PR)
+#   wtls                  list the worktrees
+#   wtconvert [-y]        turn the normal clone you are in into the configured
+#                         layout, and cd into it
+#   wthelp                show every option
 #
-# They run this checkout's ade. ADE_SEED may be a zsh array here.
+# They run this checkout's ade. ADE_SEED (the seed patterns) may be a zsh
+# array here.
 
 typeset -g _WT_ADE=${${(%):-%x}:A:h:h}/config/.local/bin/ade
 

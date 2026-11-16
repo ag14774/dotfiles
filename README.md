@@ -59,14 +59,14 @@ the shell once a file is opened.
 | --- | --- |
 | `wt <branch>` | cd into the branch's worktree, creating it; `-s` stays and prints its path, `-t` goes to its tab, `-b` opens the tab in the background |
 | `wt -p "task" <branch>` | a background tab whose OpenCode starts on the task (`--session ID`: on an existing conversation) |
-| `wtrm`, `wtprune [-m]`, `wtls`, `wtclone`, `wtconvert` | remove a worktree (and its tabs), remove those whose branch is gone or merged, list, clone or convert a repository for worktrees (`wthelp`) |
+| `wtrm`, `wtprune [-m]`, `wtls`, `wtclone`, `wtconvert` | remove a worktree and close its tabs; remove the worktrees whose remote branch was deleted (`-m`: or merged); list them; clone a repository for worktrees; turn a normal clone into one (`wthelp`: every option) |
 | `Alt-y` | Yazi as a picker; files open in the tab's Helix |
 | Helix `+` `a` | ask the tab's OpenCode about the line or the selection |
 | `Alt-v` | review everything the worktree changed, committed or not, in tuicr; `y` hands your comments to OpenCode, `e` opens a file in Helix |
 | "delegate this", `/delegate` | OpenCode starts the work in a new worktree tab ("with the context" carries the conversation over) |
 | "how are the other worktrees doing?" | OpenCode's `status` tool |
-| `ocreload` | restart the tab's OpenCode in the current folder |
-| `zreset` | delete `main`, saved copy included, for a clean start |
+| `ocreload` | restart the tab's OpenCode in the current folder, after reloading the OpenCode service's config |
+| `zreset` | end the session and delete its saved copy; the next terminal starts a fresh one |
 | `mdview [FILE]`, Helix `+` `m` | Markdown in the browser |
 | `cheat`, `Alt-/` | the cheatsheet ([CHEATSHEET.md](CHEATSHEET.md): all the keys) |
 | `/btw` | a side question in OpenCode, outside the conversation |
@@ -92,8 +92,9 @@ change: `Ctrl-r` reloads them all, dropping unsaved edits.
   - `ade/config.json`: what differs from ade-kit's defaults (OpenCode through
     `opencode-pane`, tabs named `{project}: {worktree}`).
 - `config/.local/bin/`: `ade` (a link to `packages/ade-kit/src/cli.ts`),
-  `opencode-pane` (OpenCode in a pane, restorable after a restart) and
-  `zellij-sync-bars`.
+  `opencode-pane` (OpenCode in a pane that continues its conversation after a
+  restart) and `zellij-sync-bars` (gives saved sessions the bar from
+  `dev.kdl`).
 - `shell/*.zsh`: the zsh setup, the `wt*` functions (short names for `ade
   worktree`), `ocreload`, `zreset`, `gcai`, `mdview` and `cheat`.
 - [`packages/`](packages), npm workspaces:

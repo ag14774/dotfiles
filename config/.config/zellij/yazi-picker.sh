@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # ~/.config/zellij/yazi-picker.sh
 #
-# Alt-y summons this in a floating pane. Yazi runs as a chooser; `ade open`
-# routes the picked file(s) into this tab's named "editor" (Helix) pane, or
-# spawns one.
+# Alt-y: pick files in Yazi, in a floating pane; they open in this tab's
+# editor (`ade open`), which is started if the tab has none. Yazi starts in
+# the folder you last left it in, per repository.
 #
 # Debug: `touch ~/.cache/yazi-picker/DEBUG` to log to last-run.log; `rm` to silence.
 set -u

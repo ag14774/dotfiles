@@ -4,9 +4,10 @@
   git symbolic-ref --quiet --short HEAD 2>/dev/null || git rev-parse --short HEAD 2>/dev/null
 }
 
-# Push/pull the configured upstream when one exists (such as a contributor's
-# fork). New branches still default to origin and record an upstream so
-# `wtprune` can later recognize a deleted remote branch. Refuse a detached HEAD.
+# ggpush, ggpull: push or pull the branch's upstream when it has one (a
+# contributor's fork, say). A branch without one is pushed to origin, which
+# becomes its upstream, so `wtprune` can tell once it is deleted there.
+# Both refuse a detached HEAD.
 ggpush() {
   emulate -L zsh
   local branch
