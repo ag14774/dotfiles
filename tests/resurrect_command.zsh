@@ -17,7 +17,7 @@ hook=$(sed -n 's/^post_command_discovery_hook "\(.*\)"$/\1/p' "$ROOT/config/.con
 mkdir -p "$TMP/home/.config/zellij"
 ln -s "$ROOT/config/.config/zellij/resurrect-command.sh" "$TMP/home/.config/zellij/"
 run_hook() { RESURRECT_COMMAND=$1 HOME=$2 sh -c "$hook"; }
-resume="$TMP/home/.local/bin/opencode-pane --resume"
+resume="$TMP/home/.local/bin/ade agent --resume"
 
 # discovered command | expected replacement (empty: plain shell)
 cases=(

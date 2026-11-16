@@ -23,8 +23,8 @@ layout {
             tab_active    "#[fg=#89b4fa,bold] {attention}{name} "
             tab_separator "#[fg=#45475a]⋮"
 
-            // What agents report to Zellij themselves (OSC 7501; the ADE status
-            // plugin, packages/opencode-ade-status, adds done and failed for
+            // What agents report to Zellij themselves (OSC 7501; ade's status
+            // plugin, opencode-ade-status, adds done and failed for
             // OpenCode), not Zellij's own guesses about other programs. Nerd
             // Font icons in Catppuccin Mocha: bell, times-circle, check,
             // timer-sand. "done" and "failed" last until you have seen the pane.
@@ -58,13 +58,13 @@ layout {
         plugin location="zellij:status-bar"
     }
     // CONTENT: main shell (left ~70%) | opencode (right 30%).
-    // opencode-pane (config/.local/bin) keeps OpenCode restorable after a
-    // restart; without it on PATH, plain OpenCode starts.
+    // `ade agent` runs OpenCode so that a restored pane carries on with its
+    // conversation (sh, for $HOME: Zellij doesn't expand it).
     pane_template name="workspace" split_direction="vertical" {
         pane name="main" focus=true
         pane name="opencode" size="30%" {
             command "sh"
-            args "-c" "command -v opencode-pane >/dev/null && exec opencode-pane; exec zsh -i -c opencode"
+            args "-c" "exec \"$HOME/.local/bin/ade\" agent"
             close_on_exit true
         }
     }

@@ -1,11 +1,5 @@
 # ocreload.zsh
-# ocreload: restart this tab's OpenCode in the current folder. The shared
-# OpenCode service outlives the pane, so its config is reloaded first, once it
-# has let go of the folders it served that are gone (removed worktrees): its
-# reload fails on them.
+# ocreload: restart this tab's OpenCode in the current folder, after its
+# service has let go of folders that are gone and reloaded its configuration.
 
-ocreload() {
-  command ade forget-gone >/dev/null
-  command opencode reload || return
-  command ade restart-agent "$PWD"
-}
+ocreload() { command ade restart-agent --reload "$@"; }

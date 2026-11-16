@@ -60,15 +60,15 @@ rm, ls, prune and convert, and cd where it reports (wt without -s/-t/-b/-p).
 # run the shell function `_fn`". Inside _fn we build an array of candidates and
 # hand them to `compadd`, which shows/inserts them.
 
-# Complete `wt`'s -s/-t/-b/-p options. Returns 0 when the current word was one
-# of them (or the free-text prompt after -p).
+# Complete `wt`'s -s/-t/-b/-p/--session options. Returns 0 when the current
+# word was one of them (or the prompt or conversation ID after one).
 _wt_landing_options() {
-  if [[ ${words[CURRENT-1]} == (-p|--prompt) ]]; then
-    _message 'prompt for OpenCode'
-    return 0
-  fi
+  case ${words[CURRENT-1]} in
+    (-p|--prompt) _message 'prompt for OpenCode'; return 0 ;;
+    (--session) _message 'OpenCode conversation ID'; return 0 ;;
+  esac
   [[ $PREFIX == -* ]] || return 1
-  compadd -- -s --stay -t --tab -b --background -p --prompt
+  compadd -- -s --stay -t --tab -b --background -p --prompt --session
 }
 
 # complete `wt` with local + origin/* branch names
