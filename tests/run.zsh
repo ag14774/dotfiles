@@ -1,7 +1,8 @@
 #!/usr/bin/env zsh
-# The tests that need no Zellij session, OpenCode service or model: the zsh
-# and python tests with stand-ins. The live tests run on their own (README,
-# "Tests"); ade's tests are in its repository.
+# The tests of the functions and scripts here: zsh and python, with stand-ins
+# for Zellij, OpenCode and ade, so none reaches a session, service or model.
+#
+#   zsh tests/run.zsh
 
 ROOT=${0:A:h:h}
 # Stand-ins only: nothing here may reach the Zellij session this runs in.

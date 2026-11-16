@@ -11,6 +11,10 @@ indent_size = 2
 [*.{kdl,py}]
 indent_size = 4
 
+# As shfmt -i 2 -ci (config/ has an .editorconfig of its own).
+[*.sh]
+switch_case_indent = true
+
 [*.md]
 trim_trailing_whitespace = false
 
