@@ -11,6 +11,7 @@ import { located, makeKit, open, worktreeCommand } from "ade-kit"
 import { serverDigest } from "./digest.ts"
 import { environmentFor } from "./environment.ts"
 import { Ade } from "./rpc.ts"
+import { rootOf } from "./sessions.ts"
 
 type Copy = { sessionID: string; before?: string; compact: boolean; prepare: string[] }
 type Request = {
@@ -70,19 +71,10 @@ export default Plugin.define({
       parents.set(sessionID, info.parentID ?? undefined)
       return info.parentID ?? undefined
     }
-    const rootOf = async (sessionID: string) => {
-      let id = sessionID
-      for (let depth = 0; depth < 16; depth++) {
-        const parent = await parentOf(id)
-        if (!parent) return id
-        id = parent
-      }
-      return id
-    }
     const shows = async (sessionID: string) => {
       const route = context.ui.router.current()
       if (route.type !== "session") return false
-      return (await rootOf(sessionID)) === (await rootOf(route.sessionID))
+      return (await rootOf(sessionID, parentOf)) === (await rootOf(route.sessionID, parentOf))
     }
 
     // `ade worktree ARGS`, as the command would answer.

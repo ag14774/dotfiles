@@ -6,7 +6,8 @@ import { readFileSync, realpathSync } from "node:fs"
 import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
 
-const files = ["opencode-ade/src/server.ts", "opencode-ade/src/rpc.ts", "opencode-ade/src/digest.ts"]
+// The server part's own files: server.ts and what it imports from src/.
+export const SERVER_FILES = ["server.ts", "rpc.ts", "digest.ts", "delegate.ts", "worktrees.ts"]
 
 export function serverDigest(): string | undefined {
   try {
@@ -14,7 +15,7 @@ export function serverDigest(): string | undefined {
     // in plugins/, not from its real place.
     const packages = join(dirname(realpathSync(fileURLToPath(import.meta.url))), "../..")
     const hash = createHash("sha256")
-    for (const file of files) hash.update(readFileSync(join(packages, file)))
+    for (const file of SERVER_FILES) hash.update(readFileSync(join(packages, "opencode-ade", "src", file)))
     return hash.digest("hex").slice(0, 16)
   } catch {
     return undefined

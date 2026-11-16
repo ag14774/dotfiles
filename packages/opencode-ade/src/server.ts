@@ -12,25 +12,14 @@ import { statSync } from "node:fs"
 import { homedir } from "node:os"
 import { isAbsolute, resolve } from "node:path"
 import { Plugin } from "@opencode/plugin"
+import type { Copy, Task } from "./delegate.ts"
+import { delegated, delegation } from "./delegate.ts"
 import { serverDigest } from "./digest.ts"
 import { Ade } from "./rpc.ts"
+import type { Conversation, Worktree } from "./worktrees.ts"
+import { describe, excerpt, stateOf } from "./worktrees.ts"
 
 type Action = "show_file" | "delegate" | "status"
-// Copy conversation sessionID (up to message `before`) into the worktree that
-// `prepare` creates, and run the request's command on the copy (delegate).
-type Copy = { sessionID: string; before?: string; compact: boolean; prepare: string[] }
-type Task = { branch: string; brief: string; base?: string; context?: "none" | "full" | "compact"; directory?: string }
-// From `ade worktree ls --json`, plus the worktree's latest conversation.
-type Worktree = {
-  path: string
-  branch: string | null
-  base: string
-  changed: number
-  ahead: number | null
-  behind: number | null
-  tab: "sure" | "unsure" | null
-}
-type Conversation = { id: string; title?: string; state: string; last?: string }
 // ran: the pane ran the command (otherwise `message` says why not).
 type Result = { ok: boolean; ran: boolean; stdout: string; message: string }
 type Pending = { claimed: boolean; finish: (result: Result) => void }
@@ -167,36 +156,13 @@ export default Plugin.define({
 
     // `before`: copy the conversation up to this message (the request to delegate).
     const delegate = async (sessionID: string, task: Task, signal: AbortSignal, before?: string) => {
-      const names = [task.branch, task.base ?? ""]
-      if (!task.branch.trim() || names.some((name) => name.startsWith("-") || /\s/.test(name)))
-        return { ok: false, message: "Nothing was delegated: branch and base must be names without spaces." }
+      const planned = delegation(sessionID, task, before)
+      if ("error" in planned) return { ok: false, message: planned.error }
       const cwd = folderFor(task.directory)
       if (!cwd) return { ok: false, message: `Nothing was delegated: ${task.directory} is not a folder.` }
-      const base = task.base ? [task.base] : []
-      const mode = task.context ?? "none"
-      const copy =
-        mode === "none"
-          ? undefined
-          : {
-              sessionID,
-              ...(before ? { before } : {}),
-              compact: mode === "compact",
-              prepare: ["open", "--stay", task.branch, ...base],
-            }
-      const brief = copy
-        ? `This conversation was copied into the worktree for branch ${task.branch}, which is now its ` +
-          "folder, to work on the task below. The original conversation goes on in its own tab; work only " +
-          `here, and don't delegate this again.\n\n${task.brief}`
-        : task.brief
-      const result = await ask(sessionID, "delegate", ["open", "--prompt", brief, task.branch, ...base], cwd, signal, copy)
-      if (result.ok)
-        return {
-          ok: true,
-          message:
-            `Opened a background tab for ${task.branch} (worktree ${result.stdout.trim()}); its OpenCode is ` +
-            (copy ? `working on the brief in a ${copy.compact ? "compacted " : ""}copy of this conversation. ` : "working on the brief. ") +
-            "You are not told when it finishes; the user follows it in that tab.",
-        }
+      const copy: Copy | undefined = planned.copy
+      const result = await ask(sessionID, "delegate", planned.args, cwd, signal, copy)
+      if (result.ok) return { ok: true, message: delegated(task, result.stdout.trim(), copy) }
       if (!result.ran) return { ok: false, message: result.message }
       return { ok: false, message: `Nothing was delegated: ${result.message || "the worktree command failed."}` }
     }
@@ -209,45 +175,9 @@ export default Plugin.define({
       if (!info) return null
       const messages = (await ctx.session.context({ sessionID: info.id })) as any[]
       const last = messages.findLast((message) => message.type === "assistant")
-      const pending = waiting.has(info.id)
-      // A question asked before this plugin copy loaded.
-      const asking = last?.content?.some(
-        (part: any) => part.type === "tool" && part.name === "question" && part.state?.status === "running",
-      )
-      const busy = info.time.busy !== undefined && (info.time.idle === undefined || info.time.busy > info.time.idle)
-      const state =
-        pending || asking
-          ? "waiting for the user"
-          : busy
-            ? "working"
-            : info.outcome === "failed" || last?.error
-              ? "failed"
-              : info.outcome === "interrupted"
-                ? "interrupted"
-                : "idle"
-      const text = (last?.content ?? [])
-        .filter((part: any) => part.type === "text")
-        .map((part: any) => part.text)
-        .join(" ")
-        .replace(/\s+/g, " ")
-        .trim()
-      const excerpt = text.length > 160 ? `${text.slice(0, 159)}…` : text
-      return { id: info.id, ...(info.title ? { title: info.title } : {}), state, ...(excerpt ? { last: excerpt } : {}) }
-    }
-
-    const describe = (worktree: Worktree & { conversation: Conversation | null }) => {
-      const here = ctx.location.directory === worktree.path || ctx.location.directory.startsWith(`${worktree.path}/`)
-      const parts = [
-        worktree.branch ? `branch ${worktree.branch}` : "detached HEAD",
-        worktree.changed ? `${worktree.changed} changed file${worktree.changed === 1 ? "" : "s"}` : "no changes",
-      ]
-      if (worktree.ahead !== null) parts.push(`${worktree.ahead} ahead, ${worktree.behind} behind ${worktree.base}`)
-      parts.push(worktree.tab === "sure" ? "tab open" : worktree.tab === "unsure" ? "tab probably open" : "no tab")
-      const conversation = worktree.conversation
-      const talk = conversation
-        ? `conversation ${conversation.state}${conversation.last ? `: "${conversation.last}"` : ""}`
-        : "no conversation"
-      return `- ${worktree.path}${here ? " (this conversation)" : ""}: ${parts.join(", ")}; ${talk}`
+      const state = stateOf(info, last, waiting.has(info.id))
+      const text = excerpt(last)
+      return { id: info.id, ...(info.title ? { title: info.title } : {}), state, ...(text ? { last: text } : {}) }
     }
 
     const status = async (sessionID: string, signal: AbortSignal, directory?: string) => {
@@ -262,7 +192,8 @@ export default Plugin.define({
           conversation: await conversationIn(worktree.path).catch(() => null),
         })),
       )
-      return { ok: true, message: [`Worktrees (${worktrees.length}):`, ...worktrees.map(describe)].join("\n"), worktrees }
+      const lines = worktrees.map((worktree) => describe(worktree, ctx.location.directory))
+      return { ok: true, message: [`Worktrees (${worktrees.length}):`, ...lines].join("\n"), worktrees }
     }
 
     await ctx.tool.transform((editor) => {
