@@ -4,7 +4,8 @@
 #   git clone <repo> ~/dotfiles && ~/dotfiles/install.sh && exec zsh
 #
 # It installs platform packages + developer tools/language servers and the Yazi flavor,
-# symlinks config/ into ~/.config and ~/.local/bin via stow, and
+# symlinks config/ into ~/.config and ~/.local/bin via stow, links ade
+# (github.com/ag14774/ade: the ade command and the OpenCode plugins), and
 # maintains small idempotent blocks at the start and end of ~/.zshrc. (The top
 # bar, ade-zjstatus, is loaded by dev.kdl directly from its release URL.)
 # Shell expressions written into ~/.zshrc must remain literal until zsh loads it.
@@ -137,10 +138,27 @@ mkdir -p "$HOME/.config"
 # Restow, so links to files removed from the repository go too.
 stow --no-folding --restow -d "$DOTFILES" -t "$HOME" config
 
-echo "==> Link the packages in packages/ for the OpenCode plugins (npm workspaces)"
-# Makes node_modules/ade-kit a link to packages/ade-kit; downloads nothing
-# (OpenCode provides the plugins' optional peers; the rest is for development).
-(cd "$DOTFILES" && npm install --omit=dev --omit=optional --omit=peer --no-audit --no-fund >/dev/null)
+echo "==> ade (github.com/ag14774/ade): the ade command and the OpenCode plugins"
+# The ade commit these dotfiles are tested with. Without ADE_HOME, the
+# installer keeps its own clone there; with ADE_HOME set (say in
+# ~/.config/zsh/local.zsh), that checkout is yours: it is linked, never changed.
+ADE_REF=1d7f86155a98884bd47bd5fcd30ee36990c3cee7
+if [[ -n ${ADE_HOME:-} ]]; then
+  [[ -x $ADE_HOME/starter/link.sh ]] || {
+    echo "ADE_HOME=$ADE_HOME is not a checkout of ade" >&2
+    exit 1
+  }
+  git -C "$ADE_HOME" merge-base --is-ancestor "$ADE_REF" HEAD 2>/dev/null ||
+    echo "warning: $ADE_HOME does not have ade $ADE_REF yet, which these dotfiles expect" >&2
+else
+  ADE_HOME=$HOME/.local/share/ade
+  [[ -d $ADE_HOME/.git ]] || git clone -q https://github.com/ag14774/ade.git "$ADE_HOME"
+  git -C "$ADE_HOME" fetch -q origin
+  git -C "$ADE_HOME" checkout -q --detach "$ADE_REF"
+fi
+# npm links ade's packages (downloading nothing), then ade and the plugins are
+# linked into ~/.local/bin and ~/.config/opencode/plugins.
+"$ADE_HOME/starter/link.sh" --core
 
 echo "==> Yazi flavor (catppuccin-mocha, from package.toml)"
 if ! YAZI_PACKAGE_OUTPUT="$(ya pkg install 2>&1)"; then
@@ -211,8 +229,7 @@ fi
   printf '[ -f "$HOME/.config/zsh/secrets.zsh" ] && source "$HOME/.config/zsh/secrets.zsh"\n'
   printf '[ -f "$HOME/.config/zsh/local.zsh" ] && source "$HOME/.config/zsh/local.zsh"\n' # machine-local, gitignored (e.g. work fns, tool completions); after compinit
   printf 'source "%s/shell/aliases.zsh"\n' "$DOTFILES"                                    # rm/cp/mv -i, coloured ls and grep
-  printf 'source "%s/shell/worktree.zsh"\n' "$DOTFILES"
-  printf 'source "%s/shell/ocreload.zsh"\n' "$DOTFILES"
+  printf '[ -r "${ADE_HOME:-$HOME/.local/share/ade}/starter/shell/ade.zsh" ] && source "${ADE_HOME:-$HOME/.local/share/ade}/starter/shell/ade.zsh"\n' # wt*, ocreload
   printf 'source "%s/shell/cheatsheet.zsh"\n' "$DOTFILES"
   printf 'source "%s/shell/git.zsh"\n' "$DOTFILES" # ggpush/ggpull + gcai
   printf 'source "%s/shell/reset.zsh"\n' "$DOTFILES"

@@ -3,19 +3,8 @@
   "private": true,
   "license": "MIT",
   "type": "module",
-  "workspaces": [
-    "packages/*"
-  ],
   "scripts": {
     "test": "zsh tests/run.zsh",
-    "check": "tsc -p .",
-    "format": "prettier --write \"packages/*/src/**/*.ts\" \"packages/*/test/**/*.ts\" && shfmt -w -i 2 -ci install.sh install/*.sh shell/*.sh config/.config/zellij/*.sh config/.config/helix/*.sh config/.local/bin/opencode-pane config/.local/bin/gh"
-  },
-  "devDependencies": {
-    "@opencode/plugin": "^2.2.5",
-    "@types/node": "^26.6.6",
-    "prettier": "^3.10.1",
-    "solid-js": "^1.9.19",
-    "typescript": "^7.0.2"
+    "format": "shfmt -w -i 2 -ci install.sh install/*.sh shell/*.sh config/.config/zellij/*.sh config/.config/helix/*.sh config/.local/bin/opencode-pane config/.local/bin/gh"
   }
 }

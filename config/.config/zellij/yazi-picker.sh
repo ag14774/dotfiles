@@ -15,9 +15,7 @@ set -u
 # shellcheck source=/dev/null
 [ -f "$HOME/.config/fzf/fzf.env" ] && . "$HOME/.config/fzf/fzf.env"
 
-# This checkout's ade (stowed to ~/.local/bin), found through the stow
-# symlink of this script.
-ADE="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/../../.local/bin/ade"
+ADE="$HOME/.local/bin/ade"
 CACHE="${XDG_CACHE_HOME:-$HOME/.cache}/yazi-picker"
 mkdir -p "$CACHE"
 LOG="$CACHE/last-run.log"

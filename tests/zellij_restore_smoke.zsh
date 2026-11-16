@@ -5,16 +5,19 @@
 #
 #   zsh tests/zellij_restore_smoke.zsh
 #
-# It drives a throwaway session through a headless terminal, in a sandbox
-# (tests/lib/zellij-sandbox.zsh): its own Zellij server, HOME and config, so it
-# never reaches your session and leaves nothing in your Zellij cache. It uses
-# this checkout's Zellij config and hook with a 1-second save interval, and
-# this checkout's commands (opencode-pane) as installed. OpenCode runs against
-# a private service with an empty config; no model is called.
+# It drives a throwaway session through a headless terminal, in ade's sandbox
+# ($ADE_HOME/tests/lib/zellij-sandbox.zsh): its own Zellij server, HOME and
+# config, so it never reaches your session and leaves nothing in your Zellij
+# cache. It uses this checkout's Zellij config and hook with a 1-second save
+# interval, this checkout's commands (opencode-pane) as installed, and ade's
+# `ade`. OpenCode runs against a private service with an empty config; no
+# model is called.
 
 set -eu
 
 ROOT=${0:A:h:h}
+ADE_HOME=${ADE_HOME:-$HOME/.local/share/ade}
+ADE=$ADE_HOME/packages/ade-kit/src/cli.ts
 fail() {
   print -u2 "FAIL: $*"
   exit 1
@@ -31,7 +34,9 @@ TMP=$(mktemp -d)
 TMP=${TMP:A}
 session=dotfiles-smoke-$$
 cfg=$TMP/zellij
-source "$ROOT/tests/lib/zellij-sandbox.zsh"
+[[ -r $ADE_HOME/tests/lib/zellij-sandbox.zsh ]] || fail "no ade checkout in $ADE_HOME (install.sh makes it)"
+SANDBOX_CONFIG=$ROOT/config/.config SANDBOX_BIN=$ROOT/config/.local/bin
+source "$ADE_HOME/tests/lib/zellij-sandbox.zsh"
 sandbox_init "$cfg"
 cleanup() {
   sandbox_cleanup "$session"
@@ -63,8 +68,8 @@ git -C "$TMP/seed" -c user.name=t -c user.email=t@t commit -qm init
 git -C "$TMP/seed" branch -M main
 git -C "$TMP/seed" push -q "$TMP/origin.git" main
 git --git-dir="$TMP/origin.git" symbolic-ref HEAD refs/heads/main
-(cd "$TMP" && "$ROOT/config/.local/bin/ade" worktree clone "$TMP/origin.git" proj >/dev/null 2>&1)
-(cd "$TMP/proj" && "$ROOT/config/.local/bin/ade" worktree open main >/dev/null 2>&1)
+(cd "$TMP" && "$ADE" worktree clone "$TMP/origin.git" proj >/dev/null 2>&1)
+(cd "$TMP/proj" && "$ADE" worktree open main >/dev/null 2>&1)
 main=$TMP/proj/main
 
 # A headless client; text appended to $TMP/keys becomes keystrokes.
@@ -133,7 +138,7 @@ sandbox_dismiss_welcome "$session"
 wait_for 60 running 0 opencode || fail "the new session did not start OpenCode"
 
 step "open a worktree tab, a long command in a shell, and a file in Helix"
-out=$(cd "$main" && in_session "$ROOT/config/.local/bin/ade" worktree open -b feat 2>&1) || fail "wt -b failed: $out"
+out=$(cd "$main" && in_session "$ADE" worktree open -b feat 2>&1) || fail "wt -b failed: $out"
 feat_tab=$(value_of 30 tab_in "$TMP/proj/feat") \
   || fail "wt -b did not open a tab in the worktree ($out): $(panes | jq -c '[.[] | {tab_id, title, pane_cwd}]')"
 tab_info() { zj list-tabs --json 2>/dev/null | jq -r --argjson t "$feat_tab" '.[] | select(.tab_id == $t) | [.name, .active] | join(" ")'; }
@@ -144,7 +149,7 @@ main_pane=$(value_of 30 pane_field 0 main '.id') || fail "no main pane in tab 0"
 zj write-chars --pane-id "terminal_$main_pane" 'sleep 9131'
 zj write --pane-id "terminal_$main_pane" 13
 wait_for 10 pgrep -fx 'sleep 9131' || fail "the shell did not start the long command"
-(cd "$main" && in_session env ZELLIJ_PANE_ID="$main_pane" "$ROOT/config/.local/bin/ade" open notes.md) \
+(cd "$main" && in_session env ZELLIJ_PANE_ID="$main_pane" "$ADE" open notes.md) \
   || fail "ade open could not open a file"
 wait_for 30 running 0 editor || fail "ade open did not start Helix"
 wait_for 10 editor_on_top 0 \
@@ -175,7 +180,7 @@ wait_for 30 cwd_is 0 main "$main" || fail "the restored shell is not in its dire
 
 step "wt -t finds the restored worktree tab"
 before=$(tab_count)
-(cd "$main" && in_session "$ROOT/config/.local/bin/ade" worktree open -t feat >/dev/null 2>&1) || fail "wt -t failed"
+(cd "$main" && in_session "$ADE" worktree open -t feat >/dev/null 2>&1) || fail "wt -t failed"
 [[ $(tab_count) == "$before" ]] || fail "wt -t opened a duplicate of the restored tab"
 
 step "Alt-t in the restored session opens a running dev tab"
@@ -203,7 +208,7 @@ fi
 # Alt-y runs in the tab you are on, and Alt-t moved you to a new one (ade open
 # never switches you to another tab).
 zj go-to-tab-by-id 0
-(cd "$main" && in_session env ZELLIJ_PANE_ID="$main_pane" "$ROOT/config/.local/bin/ade" open other.md) \
+(cd "$main" && in_session env ZELLIJ_PANE_ID="$main_pane" "$ADE" open other.md) \
   || fail "ade open failed on a stopped editor pane"
 wait_for 30 running 0 editor \
   || fail "ade open did not restart Helix in the editor pane: $(panes | jq -c '[.[] | select(.title == "editor") | {id, tab_id, exited, is_held, terminal_command}]')"

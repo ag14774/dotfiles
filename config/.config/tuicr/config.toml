@@ -1,5 +1,5 @@
 # tuicr: code review in the terminal. Alt-v in Zellij runs it on the tab's
-# worktree, through `ade review` (packages/ade-kit/src/reviewers/tuicr.ts).
+# worktree, through `ade review` (ade-kit's src/reviewers/tuicr.ts, github.com/ag14774/ade).
 # Options: tuicr's docs/CONFIG.md.
 theme = "catppuccin-mocha"
 # The package manager updates it; this also skips a network call at startup.

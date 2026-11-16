@@ -1,7 +1,7 @@
 #!/usr/bin/env zsh
-# The tests that need no Zellij session, OpenCode service or model: the
-# packages' node tests, and the zsh and python tests with stand-ins. The live
-# tests run on their own (README, "Tests").
+# The tests that need no Zellij session, OpenCode service or model: the zsh
+# and python tests with stand-ins. The live tests run on their own (README,
+# "Tests"); ade's tests are in its repository.
 
 ROOT=${0:A:h:h}
 # Stand-ins only: nothing here may reach the Zellij session this runs in.
@@ -22,10 +22,7 @@ check() { # $1 = name, then the command
   rm -f "$log"
 }
 
-for package in "$ROOT"/packages/*(/); do
-  check "${package:t}: node --test" zsh -c 'cd "$1" && node --test test/*.test.ts' zsh "$package"
-done
-for test in ade_open ade_send ade_review_scope worktree resurrect_command gcai gh; do
+for test in resurrect_command gcai gh git; do
   check "$test.zsh" zsh "$ROOT/tests/$test.zsh"
 done
 check zellij_sync_bars.py python3 "$ROOT/tests/zellij_sync_bars.py"
