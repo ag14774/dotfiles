@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
 import { execFileSync } from "node:child_process"
-import { mkdirSync, mkdtempSync, realpathSync, writeFileSync } from "node:fs"
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { test } from "node:test"
@@ -28,9 +28,40 @@ git(project, "remote", "set-head", "origin", "--auto")
 git(project, "worktree", "add", "-q", "main", "main")
 writeFileSync(join(project, "main", ".env"), "secret\n")
 
+// A stand-in for the OpenCode CLI, so that no test reaches your service: its
+// service runs at FAKE_OPENCODE_URL with the locations
+// FAKE_OPENCODE_LOCATIONS, and each call is logged to FAKE_OPENCODE_LOG.
+const bin = join(temp, "bin")
+mkdirSync(bin)
+writeFileSync(
+  join(bin, "opencode"),
+  `#!/bin/sh
+echo "$*" >> "$FAKE_OPENCODE_LOG"
+case "$1 $2" in
+  "service status") echo "$FAKE_OPENCODE_URL" ;;
+  "api get") echo "$FAKE_OPENCODE_LOCATIONS" ;;
+  "api delete") ;;
+  *) exit 1 ;;
+esac
+`,
+  { mode: 0o755 },
+)
+const log = join(temp, "opencode.log")
+
 const data = join(temp, "data")
-// No ADE config of your own: the defaults (the bare layout).
-const env = { PATH: process.env.PATH, HOME: temp, XDG_DATA_HOME: data, XDG_CONFIG_HOME: join(temp, "config") }
+// No ADE config of your own: the defaults (the bare layout). OpenCode's
+// service has a location in each worktree removed below, and in main.
+const env = {
+  PATH: `${bin}:${process.env.PATH}`,
+  HOME: temp,
+  XDG_DATA_HOME: data,
+  XDG_CONFIG_HOME: join(temp, "config"),
+  FAKE_OPENCODE_URL: "http://127.0.0.1:4096",
+  FAKE_OPENCODE_LOCATIONS: JSON.stringify(
+    ["main", "feat-x", "seeded"].map((name) => ({ directory: join(project, name) })),
+  ),
+  FAKE_OPENCODE_LOG: log,
+}
 class ForceRequired extends Error {}
 const s = strategy({ env, projectID: "abcdef0123", forceRequired: (message) => new ForceRequired(message) })
 const suggested = (name: string) => join(data, "opencode", "worktree", "abcdef", name)
@@ -78,7 +109,7 @@ test("list: the repository's worktrees, its first entry as the root", async () =
   ])
 })
 
-test("remove: a worktree with changes needs force (OpenCode asks); then it goes", async () => {
+test("remove: a worktree with changes needs force (OpenCode asks); then it goes, and the service lets go of it", async () => {
   for (const name of ["feat-x", "seeded"]) {
     await assert.rejects(s.remove({ directory: join(project, name), force: false }), ForceRequired)
     await s.remove({ directory: join(project, name), force: true })
@@ -86,6 +117,16 @@ test("remove: a worktree with changes needs force (OpenCode asks); then it goes"
   assert.deepEqual(
     (await s.list(join(project, "main"))).map((w) => w.directory),
     [join(project, ".bare"), join(project, "main")],
+  )
+  // OpenCode keeps a removed worktree's location, and its reload fails on it.
+  const evicted = readFileSync(log, "utf8")
+    .split("\n")
+    .filter((call) => call.startsWith("api delete"))
+  assert.deepEqual(
+    [...new Set(evicted)],
+    ["feat-x", "seeded"].map(
+      (name) => `api delete /api/debug/location?location%5Bdirectory%5D=${encodeURIComponent(join(project, name))}`,
+    ),
   )
   await assert.rejects(
     s.remove({ directory: join(project, "gone"), force: false }),

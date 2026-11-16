@@ -1,6 +1,15 @@
 import assert from "node:assert/strict"
 import { execFileSync } from "node:child_process"
-import { mkdirSync, mkdtempSync, readdirSync, realpathSync, rmSync, writeFileSync } from "node:fs"
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { test } from "node:test"
@@ -58,11 +67,32 @@ const fake = join(temp, "fake.ts")
 const kitWith = (multiplexer = "none"): Kit =>
   makeKit({ config: { ...structuredClone(DEFAULTS), multiplexer } as Config, run })
 
+// A stand-in for the OpenCode CLI, first on every io's PATH, so that no test
+// reaches your service: its service runs at FAKE_OPENCODE_URL (unset:
+// stopped) with the locations FAKE_OPENCODE_LOCATIONS, its API fails with
+// FAKE_OPENCODE_FAIL set, and each call is logged to FAKE_OPENCODE_LOG.
+const bin = join(temp, "bin")
+mkdirSync(bin)
+writeFileSync(
+  join(bin, "opencode"),
+  `#!/bin/sh
+[ -z "$FAKE_OPENCODE_LOG" ] || echo "$*" >> "$FAKE_OPENCODE_LOG"
+fail() { [ -z "$FAKE_OPENCODE_FAIL" ] || { echo "Error: boom" >&2; exit 1; }; }
+case "$1 $2" in
+  "service status") echo "\${FAKE_OPENCODE_URL:-stopped}" ;;
+  "api get") fail; echo "\${FAKE_OPENCODE_LOCATIONS:-[]}" ;;
+  "api delete") fail ;;
+  *) exit 1 ;;
+esac
+`,
+  { mode: 0o755 },
+)
+
 const ioIn = (cwd: string, env: Record<string, string | undefined> = {}) => {
   const said: string[] = []
   let out = ""
   const io: Io & { out(text: string): void } = {
-    env: { PATH: process.env.PATH, HOME: process.env.HOME, ...env },
+    env: { PATH: `${bin}:${process.env.PATH}`, HOME: process.env.HOME, ...env },
     cwd,
     say: (line) => void said.push(line),
     out: (text) => void (out += text),
@@ -352,6 +382,34 @@ test("remove and prune: the worktree goes, with their messages", async () => {
     prune(kitWith(), ioIn(main).io, ["-x"]),
     new Failed("usage: ade worktree prune [-y] [-n|--no-fetch] [-m|--merged]"),
   )
+})
+
+test("remove: OpenCode's service lets go of the removed worktree (its reload fails on it); a failure there only warns", async () => {
+  const main = join(project, "main")
+  const log = join(temp, "opencode.log")
+  const service = (served: string, more: Record<string, string> = {}) => ({
+    FAKE_OPENCODE_URL: "http://127.0.0.1:4096",
+    FAKE_OPENCODE_LOCATIONS: JSON.stringify([{ directory: main }, { directory: served }]),
+    FAKE_OPENCODE_LOG: log,
+    ...more,
+  })
+  git(project, "worktree", "add", "-q", "-b", "served", "served", "main")
+  let r = ioIn(main, service(join(project, "served")))
+  await remove(kitWith(), r.io, ["served"])
+  assert.deepEqual(r.said, ["removed served"])
+  assert.deepEqual(readFileSync(log, "utf8").split("\n").filter(Boolean), [
+    "service status",
+    "api get /api/debug/location",
+    `api delete /api/debug/location?location%5Bdirectory%5D=${encodeURIComponent(join(project, "served"))}`,
+  ])
+  git(project, "worktree", "add", "-q", "-b", "served-too", "served-too", "main")
+  r = ioIn(main, service(join(project, "served-too"), { FAKE_OPENCODE_FAIL: "1" }))
+  await remove(kitWith(), r.io, ["served-too"])
+  assert.deepEqual(r.said, [
+    "removed served-too",
+    "ade worktree rm: warning: could not list OpenCode's locations: Error: boom",
+  ])
+  assert.equal(existsSync(join(project, "served-too")), false)
 })
 
 // A kit whose config has these worktree options.

@@ -32,6 +32,7 @@ everything.
 | `ade review` | Reviews what the worktree changed since `worktrees.base`, committed or not, in the configured reviewer (tuicr by default), in the terminal it runs in. When you end the review, your comments go to the tab's agent: filled in for you to send, or sent (`review.deliver`). With nothing to review, it says so. If the tab already has a review open, it shows that one. The worktree is that of the folder `ade where` prints. |
 | `ade review --scope` | Prints what a review here covers: `-r BASE..HEAD` for the commits since `worktrees.base`, `-w` for uncommitted changes. |
 | `ade restart-agent [DIR]` | Replaces the tab's agent with a fresh one started in `DIR` (default: the current folder), in the same place; a tab without an agent gets one (with Zellij, on the right: `zellij.newPanes`). Focus stays where it is. |
+| `ade forget-gone` | Lets the agent forget the folders that no longer exist, such as worktrees deleted by hand, and prints them. OpenCode's shared service keeps a location for every folder it served, also once the folder is gone, and its reload then fails; only a running service is asked. `ade worktree rm` does this too. |
 | `ade where` | Prints the folder of the focused tiled pane of its own tab; if that pane reports no folder, the tab's agent pane's, then its shell pane's. Outside a multiplexer, or when that folder no longer exists, it prints the folder it was started in. So in a tiled pane you get your own folder, and in a floating pane opened by a key (which starts in the session's folder) the folder of the focused tiled pane underneath. |
 | `ade worktree COMMAND` | Creates, opens, lists and removes worktrees: below. |
 
@@ -53,12 +54,13 @@ Set `ADE_LOG=FILE` to append each command `ade` runs to a file, and
   instead, `-b` stays, and `-p` fails.
 - `ade worktree rm [-f] NAME`: removes the worktree of a branch, folder name or
   path (`-f`: even with uncommitted changes) and closes its tabs, except yours
-  and except when an agent runs it.
+  and except when an agent runs it. Then the agent forgets it, as with
+  `ade forget-gone` (a failure there is only a warning).
 - `ade worktree prune [-y] [-n] [-m]`: removes the worktrees whose remote
   branch was deleted (`-m`: also those merged through a GitHub PR, matched by
   the branch's exact last commit), never the one you are in or the default
   branch's. It fetches first (`-n`: doesn't), lists them and asks (`-y`:
-  doesn't), and closes their tabs as `rm` does.
+  doesn't), and removes each one as `rm` does.
 - `ade worktree ls [--json]`: lists the worktrees; `--json` gives each one's
   branch, number of changed files, commits ahead of and behind
   `worktrees.base`, and whether it has a tab.
