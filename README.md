@@ -140,7 +140,8 @@ when it starts (`ocreload`).
 `npm test` runs every test that needs no Zellij session, OpenCode service or
 model: the packages' node tests, and the zsh and python tests with stand-ins
 for Zellij and OpenCode. `npm install && npm run check` type-checks the
-packages.
+packages, and `npm run format` formats them (Prettier) and the bash scripts
+(shfmt); `.editorconfig` has the rest.
 
 The live tests take a few minutes each. They run in a sandbox
 (`tests/lib/zellij-sandbox.zsh`: their own Zellij server, HOME and OpenCode
