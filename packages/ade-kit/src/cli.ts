@@ -9,8 +9,8 @@ import { once } from "node:events"
 import { appendFileSync } from "node:fs"
 import { homedir } from "node:os"
 import { createInterface } from "node:readline"
-import type { Terminal, WorkspaceOptions } from "./actions.ts"
-import { closeTabs, open, review, send, tabs, workspace } from "./actions.ts"
+import type { Terminal } from "./actions.ts"
+import { open, restartAgent, review, send, where } from "./actions.ts"
 import { makeKit, run } from "./kit.ts"
 import { scopeOf, scopeWords } from "./review.ts"
 import type { RunOptions } from "./types.ts"
@@ -28,17 +28,10 @@ const USAGE = `usage: ade open FILE[:LINE[:COLUMN]]...
          your comments
        ade review --scope
          what a review here covers: -r BASE..HEAD (commits), -w (uncommitted changes)
-       ade workspace DIR [--background] [--session ID] [--prompt TEXT]
-         go to the tab of the worktree DIR, or open one there (with --background, without going to
-         it); a new tab's agent starts on the conversation ID and/or TEXT; prints the tab's ID
-       ade tabs DIR
-         the tabs working in the worktree DIR (all their running panes are inside it), one per
-         line: ID:sure, or ID:unsure when one of its panes didn't say where it is
-       ade tabs --json DIR...
-         the same for each DIR, as JSON: {"DIR": [{"tab": "ID", "sure": true}, ...], ...}
-       ade close-tabs DIR [ID:sure|ID:unsure...]
-         close the tabs of the removed worktree DIR (those ade tabs found before it was
-         removed, else its tabs now), except yours and the unsure ones; none when an agent runs it
+       ade restart-agent [DIR]
+         start this tab's agent afresh in DIR (default: here), in place of its pane
+       ade where
+         the folder of the pane you were in (for a key's floating pane)
        ade worktree [--cwd-file FILE] COMMAND [ARGS...]
          create, open, list and remove worktrees (see: ade worktree help)`
 
@@ -139,41 +132,13 @@ async function main(command: string | undefined, args: string[]) {
       if (args.length) throw new UsageError()
       return review(kit(), caller, terminal)
     }
-    case "workspace": {
-      const o: Partial<WorkspaceOptions> & { focus: boolean } = { focus: true }
-      for (let i = 0; i < args.length; i++) {
-        const arg = args[i]
-        if (arg === "--background") o.focus = false
-        else if (arg === "--session" || arg === "--prompt") {
-          if (i + 1 >= args.length) throw new UsageError()
-          o[arg === "--session" ? "session" : "prompt"] = args[++i]
-        } else if (!arg.startsWith("-") && o.dir === undefined) o.dir = arg
-        else throw new UsageError()
-      }
-      if (o.dir === undefined) throw new UsageError()
-      const { tab } = await workspace(kit(), { ...o, dir: o.dir }, caller, say)
-      process.stdout.write(`${tab}\n`)
+    case "restart-agent":
+      if (args.length > 1) throw new UsageError()
+      return restartAgent(kit(), args[0] ?? caller.cwd, caller)
+    case "where":
+      if (args.length) throw new UsageError()
+      process.stdout.write(`${await where(kit(), caller)}\n`)
       return
-    }
-    case "tabs": {
-      const json = args[0] === "--json"
-      const dirs = json ? args.slice(1) : args
-      if (json ? !dirs.length : dirs.length !== 1) throw new UsageError()
-      const found = await tabs(kit(), dirs, caller)
-      if (json) process.stdout.write(`${JSON.stringify(found)}\n`)
-      else for (const { tab, sure } of found[dirs[0]]) process.stdout.write(`${tab}:${sure ? "sure" : "unsure"}\n`)
-      return
-    }
-    case "close-tabs": {
-      const [dir, ...listed] = args
-      if (dir === undefined || dir.startsWith("-")) throw new UsageError()
-      const found = listed.map((entry) => {
-        const [, tab, state] = /^(\w+):(sure|unsure)$/.exec(entry) ?? []
-        if (!tab) throw new UsageError()
-        return { tab, sure: state === "sure" }
-      })
-      return closeTabs(kit(), dir, listed.length ? found : undefined, caller, say)
-    }
     case "worktree": {
       const io = {
         ...caller,

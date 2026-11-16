@@ -31,9 +31,8 @@ everything.
 | `ade send --text [--submit] < TEXT` | Paste text as it is; `--submit` also sends it. |
 | `ade review` | Review the worktree of the pane you were in with the reviewer, in the terminal it runs in (a key can start it in a floating pane), then give the agent your comments (`review.deliver`). One review per tab: a second one shows the open review. |
 | `ade review --scope` | What a review here covers: `-r BASE..HEAD` for the commits since `worktrees.base`, `-w` for uncommitted changes. |
-| `ade workspace DIR [--background] [--session ID] [--prompt TEXT]` | Go to the tab working in `DIR`, or open one with the configured layout; a new tab's agent can start on a conversation or a prompt. Prints the tab's ID. |
-| `ade tabs DIR` / `ade tabs --json DIR...` | The tabs working in a worktree: all their running panes are inside it (`ID:sure`), or one pane didn't say where it is (`ID:unsure`). Found by folders, never by tab names. |
-| `ade close-tabs DIR [ID:sure\|ID:unsure...]` | Close the tabs of a removed worktree, except yours and the unsure ones; none when an agent runs it. |
+| `ade restart-agent [DIR]` | Start the tab's agent afresh in `DIR` (default: here), in place of its agent pane; focus stays where it is. |
+| `ade where` | The folder of the pane you were in (a key's floating pane starts in the session's folder). |
 | `ade worktree COMMAND` | `clone`, `open`, `rm`, `ls [--json]`, `prune`, `convert`: below. |
 
 Set `ADE_LOG=FILE` to append each command `ade` runs to a file, and

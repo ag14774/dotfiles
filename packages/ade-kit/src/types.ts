@@ -55,7 +55,7 @@ export interface Multiplexer {
   // Paste as a terminal does (bracketed), so nothing is submitted.
   paste(pane: string, text: string): Promise<void>
   focus(pane: string): Promise<void>
-  // Optional, for a tab per worktree (ade workspace): a new tab in the
+  // Optional, for a tab per worktree (ade worktree open -t/-b): a new tab in the
   // worktree `dir` with the layout's panes (the agent's and the shell's),
   // named after it, in front or in the background; with `agent`, the agent
   // pane runs that command instead of its own. Fails only if no tab opened.

@@ -12,29 +12,29 @@ const ade = (...args: string[]) => spawnSync(process.execPath, [cli, ...args], {
 test("ade help names every command", () => {
   const help = ade("help")
   assert.equal(help.status, 0)
-  for (const command of ["open", "send", "review", "workspace", "tabs", "close-tabs"])
-    assert.match(help.stdout, new RegExp(`^(usage: | {7})ade ${command} `, "m"))
+  for (const command of ["open", "send", "review", "restart-agent", "where", "worktree"])
+    assert.match(help.stdout, new RegExp(`^(usage: | {7})ade ${command}( |$)`, "m"))
 })
 
 test("wrong usage: the usage on stderr, exit status 2", () => {
-  for (const args of [["nonsense"], ["tabs"], ["tabs", "a", "b"], ["workspace"], ["workspace", "a", "--prompt"], ["close-tabs", "a", "1:maybe"]]) {
+  for (const args of [["nonsense"], ["open"], ["review", "x"], ["restart-agent", "a", "b"], ["where", "x"], ["tabs", "."]]) {
     const result = ade(...args)
     assert.equal(result.status, 2, args.join(" "))
     assert.match(result.stderr, /^usage: ade open/)
   }
 })
 
-test("the actions on tabs need a multiplexer session: exit status 1, saying so", () => {
-  const result = ade("tabs", ".")
+test("the actions in a tab need a multiplexer session: exit status 1, saying so", () => {
+  const result = ade("restart-agent")
   assert.equal(result.status, 1)
-  assert.equal(result.stderr, "ade tabs: not inside Zellij\n")
+  assert.equal(result.stderr, "ade restart-agent: not inside Zellij\n")
 })
 
 test("ade works from a folder that is gone (ade worktree rm run inside the worktree it removes)", () => {
   const gone = mkdtempSync(join(realpathSync(tmpdir()), "ade-gone-"))
-  const result = spawnSync("sh", ["-c", 'cd "$1" && rmdir "$1" && exec "$2" "$3" tabs /x', "sh", gone, process.execPath, cli], {
+  const result = spawnSync("sh", ["-c", 'cd "$1" && rmdir "$1" && exec "$2" "$3" restart-agent /', "sh", gone, process.execPath, cli], {
     encoding: "utf8",
     env: { ...process.env, ZELLIJ: "" },
   })
-  assert.equal(result.stderr, "ade tabs: not inside Zellij\n")
+  assert.equal(result.stderr, "ade restart-agent: not inside Zellij\n")
 })

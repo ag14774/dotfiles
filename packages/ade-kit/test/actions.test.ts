@@ -5,7 +5,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { test } from "node:test"
 import type { Terminal } from "../src/actions.ts"
-import { ADE, fileRef, open, pastes, review, send, tabs as tabsOf, workspace, closeTabs } from "../src/actions.ts"
+import { ADE, fileRef, open, pastes, restartAgent, review, send, tabs as tabsOf, where, workspace, closeTabs } from "../src/actions.ts"
 import { DEFAULTS } from "../src/config.ts"
 import { makeKit, run } from "../src/kit.ts"
 import type { Config, Key, Multiplexer, Pane, Role, Tab } from "../src/types.ts"
@@ -498,4 +498,31 @@ test("closeTabs closes nothing for the agent's commands or when your tab is unkn
   assert.deepEqual([calls, messages], [[["closeTab", "1"]], ["warning: could not close the tab of gone"]])
   record(nested)
   await assert.rejects(closeTabs(kitWith(), "/p/gone", before, from("7")), /^Error: the multiplexer "fake" lacks: closeTab$/)
+})
+
+test("where: the folder of the pane you were in, else the caller's", async () => {
+  const elsewhere = join(temp, "elsewhere")
+  mkdirSync(elsewhere, { recursive: true })
+  record(session.map((p) => (p.id === "1" ? { ...p, focused: true, cwd: elsewhere } : p)))
+  assert.equal(await where(kitWith(), from("9")), dir) // pane 9 is in no tab
+  assert.equal(await where(kitWith(), from(undefined)), dir)
+  record([...session.map((p) => (p.id === "1" ? { ...p, focused: true, cwd: elsewhere } : p)), pane("9", "1", undefined, { floating: true })])
+  assert.equal(await where(kitWith(), from("9", "/")), elsewhere)
+})
+
+test("restartAgent: the configured agent in place of the tab's agent pane, in the folder; focus stays", async () => {
+  const command = join(temp, "bin", "opencode-pane")
+  writeFileSync(command, "#!/bin/sh\n")
+  chmodSync(command, 0o755)
+  const viaPane = { opencode: { command: ["opencode-pane"] } } as Partial<Config>
+  const withPath = (pane: string) => ({ env: { FAKE_PANE: pane, PATH: process.env.PATH }, cwd: dir })
+  let calls = record()
+  await restartAgent(kitWith(viaPane), temp, withPath("1"))
+  assert.deepEqual(calls, [["start", { tab: "1", role: "agent", argv: [command], focus: false, replace: "5", cwd: temp }]])
+  // A tab without an agent pane gets a new one; focus comes back to you.
+  calls = record()
+  await restartAgent(kitWith(viaPane), ".", withPath("3"))
+  assert.deepEqual(calls, [["start", { tab: "2", role: "agent", argv: [command], focus: true, cwd: dir }], ["focus", "3"]])
+  await assert.rejects(restartAgent(kitWith(viaPane), "missing", withPath("1")), /is not a folder$/)
+  await assert.rejects(restartAgent(kitWith(viaPane), ".", from(undefined)), /^Error: not inside Fake$/)
 })

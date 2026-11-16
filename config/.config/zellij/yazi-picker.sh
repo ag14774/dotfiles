@@ -35,22 +35,17 @@ log() {
   printf '%s %s\n' "$(date +%H:%M:%S)" "$*" >>"$LOG"
 }
 
-log "=== picker start === session=${ZELLIJ_SESSION_NAME:-<unset>}"
-
-# The tab Alt-y was pressed in: the picker runs in a floating pane whose id is
-# $ZELLIJ_PANE_ID; look it up to get our tab_id (used for the project lookup
-# below; `ade open` scopes the editor lookup the same way). Empty => any tab.
-TAB="$(zellij action list-panes --json 2>>"$ERRTO" | jq -r --arg me "${ZELLIJ_PANE_ID:-}" '.[]|select(.is_plugin==false and (.id|tostring)==$me)|.tab_id' | head -n1)"
-log "current tab=[$TAB] (my pane_id=${ZELLIJ_PANE_ID:-<unset>})"
+log "=== picker start === session=${ZELLIJ_SESSION_NAME:-<unset>} pane=${ZELLIJ_PANE_ID:-<unset>}"
 
 chooser="$(mktemp "${TMPDIR:-/tmp}/yazi-picker.XXXXXX")"
 trap 'rm -f "$chooser"' EXIT
 
 # Persist Yazi's last directory PER PROJECT so the next Alt-y reopens where you
 # left off (no re-walking deep folders for a sibling file). Key the state file by
-# the git root of this tab's `main` pane (fallback: the picker's own cwd), so each
-# repo/worktree remembers its own last folder. --cwd-file writes it back on exit.
-projdir="$(zellij action list-panes --json 2>>"$ERRTO" | jq -r --arg t "${TAB:-}" '.[]|select(.is_plugin==false and .title=="main")|select($t=="" or ((.tab_id|tostring)==$t))|.pane_cwd' | head -n1)"
+# the git root of the pane Alt-y was pressed in (`ade where`; fallback: the
+# picker's own cwd), so each repo/worktree remembers its own last folder.
+# --cwd-file writes it back on exit.
+projdir="$("$ADE" where 2>>"$ERRTO")"
 [ -n "$projdir" ] && [ -d "$projdir" ] || projdir="$PWD"
 projroot="$(git -C "$projdir" rev-parse --show-toplevel 2>/dev/null || printf '%s' "$projdir")"
 projkey="$(printf '%s' "$projroot" | cksum)"

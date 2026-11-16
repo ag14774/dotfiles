@@ -243,6 +243,27 @@ export async function send(kit: Kit, what: Sending, caller: Caller) {
   await mux.focus(pane.id)
 }
 
+// The folder of the pane you were in (see callerDir), else the caller's: for
+// a key's floating pane, which starts in the session's folder.
+export async function where(kit: Kit, caller: Caller) {
+  const at = await located(kit, caller.env)
+  return callerFolder(at && (await at.mux.panes()), at?.where, caller.cwd)
+}
+
+// Start the agent of the caller's tab afresh in `dir`, in place of its agent
+// pane (a new pane when the tab has none). Focus stays where it is.
+export async function restartAgent(kit: Kit, dir: string, caller: Caller) {
+  const agent = await loadAgent(kit)
+  const cwd = resolve(caller.cwd, dir)
+  if (!isDirectory(cwd)) throw new Error(`${cwd} is not a folder`)
+  const { where: at, mux, panes, tab } = await callerTab(kit, caller, `${labelOf(agent)} runs in a pane`)
+  const argv = agentCommand(agent, {}, caller.env)
+  const pane = paneWith(panes, tab, "agent")
+  if (pane) return void (await mux.start({ tab, role: "agent", argv, focus: false, replace: pane.id, cwd }))
+  await mux.start({ tab, role: "agent", argv, focus: true, cwd })
+  if (at.pane !== undefined) await mux.focus(at.pane)
+}
+
 // What `review` needs from the terminal it runs in.
 export type Terminal = {
   // Run an interactive command here; its stdout is collected (error: it
